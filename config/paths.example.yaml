@@ -1,0 +1,14 @@
+# Example local path configuration (tracked)
+#
+# Copy this file to `config/paths.yaml` and edit values for your machine.
+# Do not commit `config/paths.yaml`.
+
+# Root folder on an internal/external drive (outside the repo)
+data_root: "D:/adaptive_matb_2026_data"
+
+# Recommended subfolders (create as needed)
+raw_dir: "${data_root}/raw"
+interim_dir: "${data_root}/interim"
+processed_dir: "${data_root}/processed"
+derived_dir: "${data_root}/derived"
+checks_dir: "${data_root}/checks"
