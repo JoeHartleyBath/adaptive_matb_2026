@@ -13,7 +13,6 @@ Research repository for the 2026 adaptive MATB study: experiment code, analysis 
 - `scripts/` — one-off and helper scripts (data munging, utilities)
 - `src/` — source code
 	- `src/matlab/`, `src/python/`, `src/r/`
-- `unity/` — Unity project and experiment runtime assets
 
 ## Data boundaries
 

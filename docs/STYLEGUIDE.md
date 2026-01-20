@@ -46,12 +46,6 @@ This is the enforceable naming specification for this repository.
 - Pattern: `results/model_cards/<model_name>__<variant>__YYYY-MM-DD.md`
 - Example (good): `results/model_cards/rt_predictor__baseline__2026-01-20.md`
 
-### Unity assets (`unity/`)
-
-- File names must still be lowercase + snake_case (Unity accepts this).
-- Include asset type only when helpful: `_prefab`, `_scene`, `_material`, `_script`.
-- Examples (good): `unity/matb_scene_main.unity`, `unity/task_panel_prefab.prefab`
-
 ### Decisions (`docs/decisions/`) and lab notes (`docs/lab-notes/`)
 
 - Decisions pattern: `docs/decisions/YYYY-MM-DD_<short_slug>.md`

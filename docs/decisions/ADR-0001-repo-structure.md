@@ -8,7 +8,7 @@ Accepted — 2026-01-20
 
 This project (“adaptive_matb_2026”) combines:
 
-- A Unity-based experimental runtime (`unity/`).
+- An experimental runtime (implementation details may evolve; keep runtime code discoverable and separate from analysis).
 - Analysis workflows (notebooks and reports) that turn collected logs into derived metrics and figures (`analysis/`, `results/`).
 - Multi-language source code used for utilities and analysis (`src/` with `python/`, `matlab/`, `r/`).
 - Study/paper documentation, lab notes, and design rationale (`docs/`).
@@ -27,7 +27,6 @@ Use a **single monorepo** with **strict separation of concerns** across top-leve
 - `src/` — reusable source code (Python/MATLAB/R)
 - `analysis/` — notebooks and analysis reports
 - `results/` — derived, shareable artifacts (figures, tables, metrics, model cards)
-- `unity/` — Unity project and experiment runtime assets
 
 Additionally, enforce explicit **data boundaries**:
 
