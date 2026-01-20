@@ -61,6 +61,15 @@ cd src/python/vendor/openmatb
 python main.py
 ```
 
+### Switch language (English/French)
+
+OpenMATB reads its locale from `language` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini).
+
+- English: `language=en_EN`
+- French: `language=fr_FR`
+
+After changing `config.ini`, restart OpenMATB.
+
 Controls:
 - `Esc` prompts exit.
 - `P` pauses (via a modal dialog).
