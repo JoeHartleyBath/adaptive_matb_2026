@@ -24,7 +24,6 @@ See `docs/DATA_MANAGEMENT.md` for the approved external-data workflow.
   - `src/` reusable code
   - `analysis/` notebooks + analysis reports
   - `results/` derived, shareable artifacts only
-  - `unity/` Unity runtime
   - `scripts/` one-off helpers
 - Do not write to ignored paths (respect `.gitignore`).
 

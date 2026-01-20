@@ -8,7 +8,7 @@ This document describes the day-to-day working rules for this repository.
 - Work happens on short-lived branches.
 - Branch name format:
   - `<type>/<short_slug>`
-  - Types: `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `analysis/`, `unity/`
+  - Types: `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `analysis/`
   - Slug: lowercase + snake_case or kebab-case (pick one and stay consistent within a branch name).
 - Examples:
   - `analysis/rt_qc_summary`
