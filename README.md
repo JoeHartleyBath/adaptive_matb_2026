@@ -32,3 +32,13 @@ This repository is intentionally scoped to shareable research code and derived a
 ## Naming conventions
 
 Naming and style conventions are defined in `docs/STYLEGUIDE.md` (canonical source).
+
+## OpenMATB (MATB-II-style) docs
+
+OpenMATB is integrated as a third-party submodule and documented here:
+
+- Docs index: [docs/openmatb/index.md](docs/openmatb/index.md)
+- Architecture/session flow: [docs/openmatb/OVERVIEW.md](docs/openmatb/OVERVIEW.md)
+- Setup/run + log paths: [docs/openmatb/SETUP_AND_RUN.md](docs/openmatb/SETUP_AND_RUN.md)
+- Instrumentation + event schema: [docs/openmatb/INSTRUMENTATION_POINTS.md](docs/openmatb/INSTRUMENTATION_POINTS.md)
+- Closed-loop adaptation design: [docs/openmatb/ADAPTATION_DESIGN.md](docs/openmatb/ADAPTATION_DESIGN.md)
