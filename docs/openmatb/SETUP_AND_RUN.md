@@ -78,9 +78,15 @@ Options that require no new files:
 
 ## 5) Where output/logs are written
 
-By default OpenMATB writes to a local `sessions/` folder *relative to its working directory*:
-- Session CSV logs: [src/python/vendor/openmatb/sessions/](../../src/python/vendor/openmatb/sessions/)
-- Scenario validation errors: [src/python/vendor/openmatb/last_scenario_errors.log](../../src/python/vendor/openmatb/last_scenario_errors.log)
+By default OpenMATB writes outside the repo to:
+
+`C:/data/adaptive_matb/openmatb/<participant>/<session>/`
+
+Within that folder:
+- Session CSV logs: `.../sessions/YYYY-MM-DD/<n>_<timestamp>.csv`
+- Scenario validation errors: `.../last_scenario_errors.log`
+
+The participant/session folder names come from environment variables (see next section).
 
 The CSV columns are written by `core.logger.Logger`:
 - Source: [src/python/vendor/openmatb/core/logger.py](../../src/python/vendor/openmatb/core/logger.py)
@@ -89,27 +95,21 @@ The CSV columns are written by `core.logger.Logger`:
 
 Per repo policy, large runs/logs should live outside git (see [docs/DATA_MANAGEMENT.md](../DATA_MANAGEMENT.md)).
 
-Because OpenMATB uses a fixed relative `sessions/` directory, the cleanest “no-upstream-modifications” approach is to replace `sessions/` with a directory junction (Windows) pointing into your external data root.
-
-Example (PowerShell; adjust target path to your machine):
+OpenMATB supports this via environment variables. Example (PowerShell):
 
 ```powershell
-# From repo root
-$target = "D:\adaptive_matb_2026_data\raw\openmatb_sessions"
+cd src/python/vendor/openmatb
 
-# Ensure target exists
-New-Item -ItemType Directory -Force -Path $target | Out-Null
+$env:OPENMATB_OUTPUT_ROOT = "C:\data\adaptive_matb"   # default if unset
+$env:OPENMATB_PARTICIPANT = "P001"
+$env:OPENMATB_SESSION = "S001"
 
-# Remove the existing sessions folder (only if you’re OK losing local logs)
-Remove-Item -Recurse -Force "src/python/vendor/openmatb/sessions"
-
-# Create a junction so OpenMATB still writes to "sessions/", but it lands outside git
-New-Item -ItemType Junction -Path "src/python/vendor/openmatb/sessions" -Target $target
+python main.py
 ```
 
 Notes:
-- Junctions/symlinks are not committed as regular files in typical workflows, but confirm with `git status`.
-- Keep the target path under your external data root (e.g., `D:/adaptive_matb_2026_data/…`).
+- Optional: set `OPENMATB_OUTPUT_SUBDIR` to insert an extra folder under the root (must be a relative path).
+- `OPENMATB_PARTICIPANT_ID`/`OPENMATB_SESSION_ID` are also accepted.
 
 ## 7) LSL streaming
 
