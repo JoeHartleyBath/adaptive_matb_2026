@@ -78,15 +78,13 @@ Options that require no new files:
 
 ## 5) Where output/logs are written
 
-By default OpenMATB writes outside the repo to:
+This repo’s default workflow is to write OpenMATB logs outside the repo under:
 
 `C:/data/adaptive_matb/openmatb/<participant>/<session>/`
 
 Within that folder:
 - Session CSV logs: `.../sessions/YYYY-MM-DD/<n>_<timestamp>.csv`
 - Scenario validation errors: `.../last_scenario_errors.log`
-
-The participant/session folder names come from environment variables (see next section).
 
 The CSV columns are written by `core.logger.Logger`:
 - Source: [src/python/vendor/openmatb/core/logger.py](../../src/python/vendor/openmatb/core/logger.py)
@@ -95,21 +93,25 @@ The CSV columns are written by `core.logger.Logger`:
 
 Per repo policy, large runs/logs should live outside git (see [docs/DATA_MANAGEMENT.md](../DATA_MANAGEMENT.md)).
 
-OpenMATB supports this via environment variables. Example (PowerShell):
+Use the repo wrapper to enforce IDs and set the correct output layout. Example (PowerShell):
 
 ```powershell
 cd src/python/vendor/openmatb
 
-$env:OPENMATB_OUTPUT_ROOT = "C:\data\adaptive_matb"   # default if unset
-$env:OPENMATB_PARTICIPANT = "P001"
-$env:OPENMATB_SESSION = "S001"
+.
+# Activate your OpenMATB venv (recommended)
+.\.venv\Scripts\Activate.ps1
 
-python main.py
+# Required
+python ..\..\run_openmatb.py --participant P001 --session S001
+
+# Optional: override the data root
+# python ..\..\run_openmatb.py --participant P001 --session S001 --output-root C:\data\adaptive_matb
 ```
 
 Notes:
-- Optional: set `OPENMATB_OUTPUT_SUBDIR` to insert an extra folder under the root (must be a relative path).
-- `OPENMATB_PARTICIPANT_ID`/`OPENMATB_SESSION_ID` are also accepted.
+- The wrapper sets `OPENMATB_OUTPUT_ROOT` (default: `C:\data\adaptive_matb`) and `OPENMATB_OUTPUT_SUBDIR=openmatb/P001/S001`.
+- If you run `python main.py` directly, you must set `OPENMATB_OUTPUT_ROOT` and `OPENMATB_OUTPUT_SUBDIR` yourself.
 
 ## 7) LSL streaming
 
