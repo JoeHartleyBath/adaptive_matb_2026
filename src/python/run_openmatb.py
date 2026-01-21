@@ -108,12 +108,29 @@ def main() -> int:
         print(f"OpenMATB directory not found: {openmatb_dir}", file=sys.stderr)
         return 2
 
+    def _git_rev_parse_head(cwd: Path) -> str:
+        try:
+            out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(cwd), stderr=subprocess.STDOUT)
+        except Exception as exc:
+            raise RuntimeError(f"Unable to determine git commit hash in {cwd}: {exc}") from exc
+        return out.decode("utf-8", errors="replace").strip()
+
+    try:
+        repo_commit = _git_rev_parse_head(repo_root)
+        submodule_commit = _git_rev_parse_head(openmatb_dir)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
     os.environ["OPENMATB_OUTPUT_ROOT"] = str(output_root_path)
     os.environ["OPENMATB_OUTPUT_SUBDIR"] = str(Path("openmatb") / participant / session)
 
     # Preserve for downstream tooling, even if OpenMATB itself doesn't use them.
     os.environ["OPENMATB_PARTICIPANT"] = participant
     os.environ["OPENMATB_SESSION"] = session
+
+    os.environ["OPENMATB_REPO_COMMIT"] = repo_commit
+    os.environ["OPENMATB_SUBMODULE_COMMIT"] = submodule_commit
 
     return subprocess.call([sys.executable, "main.py"], cwd=str(openmatb_dir))
 
