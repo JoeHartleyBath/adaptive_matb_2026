@@ -43,7 +43,7 @@ Dependencies are pinned in [src/python/vendor/openmatb/requirements.txt](../../s
   - If you do not need the physical parallel-port trigger path, a pragmatic local workaround is:
 
 ```powershell
-pip install pyglet==1.5.26 rstr==3.1.0 pylsl==1.16.1
+python -m pip install pyglet==1.5.26 rstr==3.1.0 pylsl==1.16.1
 ```
 
   - In that case, the `parallelport` plugin will not function (and may display an error), but the rest of OpenMATB can still run.
@@ -53,12 +53,18 @@ pip install pyglet==1.5.26 rstr==3.1.0 pylsl==1.16.1
 
 ## 3) Run OpenMATB
 
+Recommended: use the repo wrapper (supported entrypoint in this repo).
+
 ```powershell
 cd src/python/vendor/openmatb
 .\.venv\Scripts\Activate.ps1
 
-python main.py
+python ..\..\run_openmatb.py --participant P001 --session S001
 ```
+
+Notes:
+- The wrapper sets `OPENMATB_OUTPUT_ROOT` / `OPENMATB_OUTPUT_SUBDIR` and also injects `OPENMATB_REPO_COMMIT` / `OPENMATB_SUBMODULE_COMMIT`.
+- This repo’s OpenMATB logger writes a `.manifest.json` alongside the CSV and requires those git commit env vars; running `python main.py` directly will typically error unless you set them yourself.
 
 ### English-only (study constraint)
 
@@ -81,16 +87,21 @@ Because OpenMATB is scenario-driven, the “smoke test” is simply running a sh
 
 Options that require no new files:
 - Use the default scenario and exit after a few seconds with `Esc`.
-- Switch to a shorter built-in scenario by editing `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) (e.g., `basic.txt`), then run `python main.py`.
+- Switch to a shorter built-in scenario by editing `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) (e.g., `basic.txt`), then run OpenMATB (see above).
 
 ## 5) Where output/logs are written
 
-This repo’s default workflow is to write OpenMATB logs outside the repo under:
+OpenMATB writes logs outside the repo by default (Windows default):
+
+`C:/data/adaptive_matb/openmatb/`
+
+When you run via the repo wrapper (recommended), logs are further organized under:
 
 `C:/data/adaptive_matb/openmatb/<participant>/<session>/`
 
 Within that folder:
 - Session CSV logs: `.../sessions/YYYY-MM-DD/<n>_<timestamp>.csv`
+- Session manifest: `.../sessions/YYYY-MM-DD/<n>_<timestamp>.manifest.json`
 - Scenario validation errors: `.../last_scenario_errors.log`
 
 The CSV columns are written by `core.logger.Logger`:
@@ -105,7 +116,6 @@ Use the repo wrapper to enforce IDs and set the correct output layout. Example (
 ```powershell
 cd src/python/vendor/openmatb
 
-.
 # Activate your OpenMATB venv (recommended)
 .\.venv\Scripts\Activate.ps1
 
@@ -118,7 +128,7 @@ python ..\..\run_openmatb.py --participant P001 --session S001
 
 Notes:
 - The wrapper sets `OPENMATB_OUTPUT_ROOT` (default: `C:\data\adaptive_matb`) and `OPENMATB_OUTPUT_SUBDIR=openmatb/P001/S001`.
-- If you run `python main.py` directly, you must set `OPENMATB_OUTPUT_ROOT` and `OPENMATB_OUTPUT_SUBDIR` yourself.
+- If you run `python main.py` directly, you may still get external output (defaults to `C:\data\adaptive_matb\openmatb`), but you will typically need to set `OPENMATB_REPO_COMMIT` and `OPENMATB_SUBMODULE_COMMIT` to avoid logger startup errors.
 
 ## 7) LSL streaming
 
@@ -128,5 +138,5 @@ OpenMATB includes a Lab Streaming Layer (LSL) *outlet* plugin:
 Confirm outputs are ignored by git (inside the OpenMATB submodule):
 
 ```powershell
-git -C src/python/vendor/openmatb check-ignore -v sessions/ last_scenario_errors.log
+git -C src/python/vendor/openmatb check-ignore -v sessions/ last_scenario_errors.log .venv/
 ```
