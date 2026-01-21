@@ -65,6 +65,11 @@ python main.py
 
 OpenMATB reads its locale from `language` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini).
 
+Study policy (this repo):
+- Use English-only for UI/audio/questionnaires.
+- Do not delete or modify French assets; they remain available upstream.
+- Do not commit local `config.ini` tweaks.
+
 - English: `language=en_EN`
 - French: `language=fr_FR`
 
