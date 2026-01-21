@@ -16,6 +16,17 @@ Goal: ensure the OpenMATB submodule gitlink in the parent repo points to a commi
 - Submodule gitlink at `src/python/vendor/openmatb`: `e3f77226907424e9711e95967c118c959fa01903`
 - Submodule remote: `origin https://github.com/JoeHartleyBath/OpenMATB.git`
 
+### Remediation performed (to make the gitlink reachable)
+
+Commands run (submodule):
+
+- `git -C src/python/vendor/openmatb checkout -b fix/manifest-compliance e3f77226907424e9711e95967c118c959fa01903`
+- `git -C src/python/vendor/openmatb push -u origin fix/manifest-compliance`
+
+Result:
+
+- Submodule branch created/pushed: `origin/fix/manifest-compliance` (contains `e3f7722…`).
+
 Commands run:
 
 - `git ls-tree HEAD src/python/vendor/openmatb`
@@ -24,11 +35,11 @@ Commands run:
 
 Result:
 
-- `git branch -r --contains ...` returned **no remote branches**.
+- `git branch -r --contains ...` returned `origin/fix/manifest-compliance`.
 
-**Status: FAIL**
+**Status: PASS**
 
-**Merge recommendation**: do not merge until the submodule commit `e3f7722…` is pushed to a remote branch and/or has a PR on the upstream repo, or the parent repo gitlink is moved back to a reachable upstream commit.
+**Merge recommendation**: OK to merge (submodule commit is now reachable on `origin/fix/manifest-compliance`).
 
 ## Check 2 — Single-run artifact verification (PASS/FAIL)
 
@@ -90,7 +101,7 @@ Required key presence check:
 
 ## Overall gate
 
-- Check 1 (submodule reachability): **FAIL**
+- Check 1 (submodule reachability): **PASS**
 - Check 2 (artifacts + manifest compliance): **PASS**
 
-**Overall: DO NOT MERGE** until Check 1 is resolved.
+**Overall: MERGE OK**.
