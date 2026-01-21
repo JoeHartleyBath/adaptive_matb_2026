@@ -3,7 +3,6 @@
 Related docs:
 - [OVERVIEW.md](OVERVIEW.md)
 - [INSTRUMENTATION_POINTS.md](INSTRUMENTATION_POINTS.md)
-- Repo data boundary rules: [docs/DATA_MANAGEMENT.md](../DATA_MANAGEMENT.md)
 
 OpenMATB lives at: `src/python/vendor/openmatb/`
 
@@ -61,27 +60,19 @@ cd src/python/vendor/openmatb
 python main.py
 ```
 
-### Switch language (English/French)
+### English-only (study constraint)
 
 OpenMATB reads its locale from `language` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini).
 
-Study policy (this repo):
-- Use English-only for UI/audio/questionnaires.
-- Do not delete or modify French assets; they remain available upstream.
-- Do not commit local `config.ini` tweaks.
-
-- English: `language=en_EN`
-- French: `language=fr_FR`
-
-After changing `config.ini`, restart OpenMATB.
+- Set `language=en_EN`.
+- Do not delete or modify French assets.
+- Do not commit local `config.ini` changes.
 
 Controls:
 - `Esc` prompts exit.
 - `P` pauses (via a modal dialog).
 
 ## 4) Smoke test mode (minimal confidence run)
-
-Because OpenMATB is scenario-driven, the “smoke test” is running a short scenario and verifying:
 
 Procedure (no new files; do not commit local config changes):
 
@@ -95,34 +86,15 @@ cd src/python/vendor/openmatb
 python main.py
 ```
 
+Pass criteria (basic smoke test):
+- Tasks run for about 60 seconds then stop.
+- Communications audio is English.
+- NASA-TLX appears after the task block.
+- A CSV is written under `sessions/YYYY-MM-DD/`.
 - `last_scenario_errors.log` ends with “No error”.
 
-## 5) Where output/logs are written
-
-By default OpenMATB writes to a local `sessions/` folder *relative to its working directory*:
-- Session CSV logs: [src/python/vendor/openmatb/sessions/](../../src/python/vendor/openmatb/sessions/)
-- Scenario validation errors: [src/python/vendor/openmatb/last_scenario_errors.log](../../src/python/vendor/openmatb/last_scenario_errors.log)
-
-The CSV columns are written by `core.logger.Logger`:
-- Source: [src/python/vendor/openmatb/core/logger.py](../../src/python/vendor/openmatb/core/logger.py)
-
-## 6) Confirm logs remain untracked
-
-This repository must not commit raw session logs. For the smoke test, OpenMATB should still write logs locally, but git must ignore them.
-
-Verify ignore rules inside the submodule:
+Confirm outputs are ignored by git (inside the OpenMATB submodule):
 
 ```powershell
 git -C src/python/vendor/openmatb check-ignore -v sessions/ last_scenario_errors.log
 ```
-
-## 7) LSL streaming
-
-OpenMATB includes a Lab Streaming Layer (LSL) *outlet* plugin:
-- Plugin source: [src/python/vendor/openmatb/plugins/labstreaminglayer.py](../../src/python/vendor/openmatb/plugins/labstreaminglayer.py)
-
-Two modes exist:
-- Push explicit markers (`marker` parameter).
-- Stream the full CSV rows by enabling `streamsession=True`.
-
-This is scenario-controlled; see [INSTRUMENTATION_POINTS.md](INSTRUMENTATION_POINTS.md).
