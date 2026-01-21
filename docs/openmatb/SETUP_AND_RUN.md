@@ -74,24 +74,56 @@ Controls:
 
 ## 4) Smoke test mode (minimal confidence run)
 
-Procedure (no new files; do not commit local config changes):
+Because OpenMATB is scenario-driven, the “smoke test” is simply running a short built-in scenario and verifying:
+- the window opens
+- tasks appear
+- a session log is written
+
+Options that require no new files:
+- Use the default scenario and exit after a few seconds with `Esc`.
+- Switch to a shorter built-in scenario by editing `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) (e.g., `basic.txt`), then run `python main.py`.
+
+## 5) Where output/logs are written
+
+This repo’s default workflow is to write OpenMATB logs outside the repo under:
+
+`C:/data/adaptive_matb/openmatb/<participant>/<session>/`
+
+Within that folder:
+- Session CSV logs: `.../sessions/YYYY-MM-DD/<n>_<timestamp>.csv`
+- Scenario validation errors: `.../last_scenario_errors.log`
+
+The CSV columns are written by `core.logger.Logger`:
+- Source: [src/python/vendor/openmatb/core/logger.py](../../src/python/vendor/openmatb/core/logger.py)
+
+## 6) Redirect logs to the external data root (recommended)
+
+Per repo policy, large runs/logs should live outside git (see [docs/DATA_MANAGEMENT.md](../DATA_MANAGEMENT.md)).
+
+Use the repo wrapper to enforce IDs and set the correct output layout. Example (PowerShell):
 
 ```powershell
 cd src/python/vendor/openmatb
+
+.
+# Activate your OpenMATB venv (recommended)
 .\.venv\Scripts\Activate.ps1
 
-# Ensure config.ini points at the built-in basic scenario (adjust if your repo uses a different relative path)
-# scenario_path=includes/scenarios/basic.txt
+# Required
+python ..\..\run_openmatb.py --participant P001 --session S001
 
-python main.py
+# Optional: override the data root
+# python ..\..\run_openmatb.py --participant P001 --session S001 --output-root C:\data\adaptive_matb
 ```
 
-Pass criteria (basic smoke test):
-- Tasks run for about 60 seconds then stop.
-- Communications audio is English.
-- NASA-TLX appears after the task block.
-- A CSV is written under `sessions/YYYY-MM-DD/`.
-- `last_scenario_errors.log` ends with “No error”.
+Notes:
+- The wrapper sets `OPENMATB_OUTPUT_ROOT` (default: `C:\data\adaptive_matb`) and `OPENMATB_OUTPUT_SUBDIR=openmatb/P001/S001`.
+- If you run `python main.py` directly, you must set `OPENMATB_OUTPUT_ROOT` and `OPENMATB_OUTPUT_SUBDIR` yourself.
+
+## 7) LSL streaming
+
+OpenMATB includes a Lab Streaming Layer (LSL) *outlet* plugin:
+- Plugin source: [src/python/vendor/openmatb/plugins/labstreaminglayer.py](../../src/python/vendor/openmatb/plugins/labstreaminglayer.py)
 
 Confirm outputs are ignored by git (inside the OpenMATB submodule):
 
