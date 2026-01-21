@@ -14,8 +14,8 @@ From the repo root:
 ```powershell
 cd src/python/vendor/openmatb
 
-# Prefer Python 3.9 (upstream expectation)
-py -3.9 -m venv .venv
+# Validated on Windows with Python 3.10
+py -3.10 -m venv .venv
 
 # Activate
 .\.venv\Scripts\Activate.ps1
@@ -76,14 +76,21 @@ Controls:
 
 ## 4) Smoke test mode (minimal confidence run)
 
-Because OpenMATB is scenario-driven, the “smoke test” is simply running a short built-in scenario and verifying:
-- the window opens
-- tasks appear
-- a session log is written
+Because OpenMATB is scenario-driven, the “smoke test” is running a short scenario and verifying:
 
-Options that require no new files:
-- Use the default scenario and exit after a few seconds with `Esc`.
-- Switch to a shorter built-in scenario by editing `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) (e.g., `basic.txt`), then run `python main.py`.
+Procedure (no new files; do not commit local config changes):
+
+```powershell
+cd src/python/vendor/openmatb
+.\.venv\Scripts\Activate.ps1
+
+# Ensure config.ini points at the built-in basic scenario (adjust if your repo uses a different relative path)
+# scenario_path=includes/scenarios/basic.txt
+
+python main.py
+```
+
+- `last_scenario_errors.log` ends with “No error”.
 
 ## 5) Where output/logs are written
 
@@ -94,31 +101,15 @@ By default OpenMATB writes to a local `sessions/` folder *relative to its workin
 The CSV columns are written by `core.logger.Logger`:
 - Source: [src/python/vendor/openmatb/core/logger.py](../../src/python/vendor/openmatb/core/logger.py)
 
-## 6) Redirect logs to the external data root (recommended)
+## 6) Confirm logs remain untracked
 
-Per repo policy, large runs/logs should live outside git (see [docs/DATA_MANAGEMENT.md](../DATA_MANAGEMENT.md)).
+This repository must not commit raw session logs. For the smoke test, OpenMATB should still write logs locally, but git must ignore them.
 
-Because OpenMATB uses a fixed relative `sessions/` directory, the cleanest “no-upstream-modifications” approach is to replace `sessions/` with a directory junction (Windows) pointing into your external data root.
-
-Example (PowerShell; adjust target path to your machine):
+Verify ignore rules inside the submodule:
 
 ```powershell
-# From repo root
-$target = "D:\adaptive_matb_2026_data\raw\openmatb_sessions"
-
-# Ensure target exists
-New-Item -ItemType Directory -Force -Path $target | Out-Null
-
-# Remove the existing sessions folder (only if you’re OK losing local logs)
-Remove-Item -Recurse -Force "src/python/vendor/openmatb/sessions"
-
-# Create a junction so OpenMATB still writes to "sessions/", but it lands outside git
-New-Item -ItemType Junction -Path "src/python/vendor/openmatb/sessions" -Target $target
+git -C src/python/vendor/openmatb check-ignore -v sessions/ last_scenario_errors.log
 ```
-
-Notes:
-- Junctions/symlinks are not committed as regular files in typical workflows, but confirm with `git status`.
-- Keep the target path under your external data root (e.g., `D:/adaptive_matb_2026_data/…`).
 
 ## 7) LSL streaming
 
