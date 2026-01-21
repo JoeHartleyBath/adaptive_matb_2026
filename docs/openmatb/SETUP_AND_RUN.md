@@ -3,7 +3,6 @@
 Related docs:
 - [OVERVIEW.md](OVERVIEW.md)
 - [INSTRUMENTATION_POINTS.md](INSTRUMENTATION_POINTS.md)
-- Repo data boundary rules: [docs/DATA_MANAGEMENT.md](../DATA_MANAGEMENT.md)
 
 OpenMATB lives at: `src/python/vendor/openmatb/`
 
@@ -14,8 +13,8 @@ From the repo root:
 ```powershell
 cd src/python/vendor/openmatb
 
-# Prefer Python 3.9 (upstream expectation)
-py -3.9 -m venv .venv
+# Validated on Windows with Python 3.10
+py -3.10 -m venv .venv
 
 # Activate
 .\.venv\Scripts\Activate.ps1
@@ -60,6 +59,14 @@ cd src/python/vendor/openmatb
 
 python main.py
 ```
+
+### English-only (study constraint)
+
+OpenMATB reads its locale from `language` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini).
+
+- Set `language=en_EN`.
+- Do not delete or modify French assets.
+- Do not commit local `config.ini` changes.
 
 Controls:
 - `Esc` prompts exit.
@@ -118,8 +125,8 @@ Notes:
 OpenMATB includes a Lab Streaming Layer (LSL) *outlet* plugin:
 - Plugin source: [src/python/vendor/openmatb/plugins/labstreaminglayer.py](../../src/python/vendor/openmatb/plugins/labstreaminglayer.py)
 
-Two modes exist:
-- Push explicit markers (`marker` parameter).
-- Stream the full CSV rows by enabling `streamsession=True`.
+Confirm outputs are ignored by git (inside the OpenMATB submodule):
 
-This is scenario-controlled; see [INSTRUMENTATION_POINTS.md](INSTRUMENTATION_POINTS.md).
+```powershell
+git -C src/python/vendor/openmatb check-ignore -v sessions/ last_scenario_errors.log
+```

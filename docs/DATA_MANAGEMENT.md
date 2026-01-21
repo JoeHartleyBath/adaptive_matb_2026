@@ -58,3 +58,16 @@ Workflow:
 - Checkpoints, training snapshots, or serialized model weights
 
 Rule of thumb: if it’s not safe to email to a collaborator without special handling, it does not belong in git.
+
+## 5) OpenMATB session logs
+
+OpenMATB writes session outputs under `src/python/vendor/openmatb/` (submodule):
+
+- `sessions/` (CSV session logs)
+- `last_scenario_errors.log` (scenario validation summary)
+
+These files must remain untracked (ignored by git). Confirm with:
+
+```powershell
+git -C src/python/vendor/openmatb check-ignore -v sessions/ last_scenario_errors.log
+```
