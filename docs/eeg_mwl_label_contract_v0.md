@@ -59,6 +59,8 @@ Boundary handling:
 
 All admissible datasets must be mapped to a common MWL target space under the following rules:
 
+Harmonisation is within-dataset only: each dataset’s labels may be transformed using rules in this section without using information from other datasets.
+
 - The contract assumes that MWL labels provide at least a valid monotonic ordering with respect to the MWL semantic definition in Section 2.
 - Absolute numeric comparability across datasets is not assumed unless the dataset explicitly declares a common, shared scale definition that is consistent across datasets.
 
