@@ -8,6 +8,17 @@ This is the enforceable naming specification for this repository.
 - Use ISO dates: `YYYY-MM-DD`.
 - Keep names short and specific; include only the minimum needed identifiers.
 
+### Exception: standard / must-read docs
+
+To make “must-read” governance docs visually distinctive (similar to `README.md`), a small, curated set of repository-level policy/standard documents in `docs/` MAY use **SCREAMING_SNAKE_CASE**.
+
+Requirements for this exception:
+
+- Only use this for repo-wide standards/policies/checklists (not general prose).
+- The filename MUST still be snake_case (underscores only), just in all caps.
+- The set MUST be small and stable; do not introduce new SCREAMING_SNAKE_CASE docs without a clear reason.
+- These docs SHOULD be linked from `README.md` (or another obvious index) so they remain discoverable.
+
 ### Prohibited patterns
 
 - No spaces.
