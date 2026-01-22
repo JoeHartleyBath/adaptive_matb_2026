@@ -89,6 +89,13 @@ Options that require no new files:
 - Use the default scenario and exit after a few seconds with `Esc`.
 - Switch to a shorter built-in scenario by editing `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) (e.g., `basic.txt`), then run OpenMATB (see above).
 
+Study-owned scenarios (recommended for this repo):
+
+- Store repo-managed scenarios under `src/python/scenarios/openmatb/`.
+- Point `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) at a relative path that traverses from `vendor/openmatb/includes/scenarios/` to `src/python/scenarios/openmatb/`.
+  - Use forward slashes for portability.
+  - Example pattern: `../../../..` (to `src/python/`) + `/scenarios/openmatb/<scenario>.txt`.
+
 ## 5) Where output/logs are written
 
 OpenMATB writes logs outside the repo by default (Windows default):
