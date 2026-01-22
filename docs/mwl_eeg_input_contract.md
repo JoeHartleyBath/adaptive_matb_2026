@@ -12,7 +12,6 @@ This input contract guarantees that *the exact same model-ready input unit* is p
 
 The **canonical model input unit** is a single, fixed-geometry window of EEG transformed into a fixed-length representation.
 
-- **Window duration (seconds):** `TBD_FIXED_WINDOW_S` (must be constant everywhere; suggested default: `2.0`)
 - **Window duration (seconds):** `TBD_FIXED_WINDOW_S` (must be constant everywhere; suggested default: `5.0`)
 - **Step size (seconds):** `TBD_STEP_SIZE_S` (must be constant everywhere; suggested default: `0.25`)
 - **Effective sampling rate (Hz):** `TBD_EFFECTIVE_FS_HZ` (must be constant everywhere; suggested default: `250`)
@@ -30,7 +29,6 @@ Normative timing rule:
 All steps below MUST be applied identically (same rules and outcomes) across public datasets, calibration sessions, and online inference.
 
 - **Resampling rule:** all signals are resampled to `TBD_EFFECTIVE_FS_HZ`. If the native sampling rate differs, the output must be time-aligned to the resampled clock and use deterministic resampling settings.
-- **Filtering:**
 - **Filtering:**
   - **Causality requirement:** filtering MUST be causal (forward-only) in all contexts to avoid future-sample leakage. Offline preprocessing MUST use the same causal filtering behaviour (do not use zero-phase / forward-backward filtering).
   - **Bandpass:** apply a bandpass of `TBD_BANDPASS_HZ = [0.5, 40.0]` (inclusive endpoints) before feature extraction.
@@ -50,13 +48,10 @@ Normalisation is applied to the per-window feature vector `x` after feature extr
 
 - **Statistics used for normalisation:** per-feature mean and standard deviation (`μ ∈ R^D`, `σ ∈ R^D`) for z-scoring: `x_norm = (x - μ) / (σ + ε)`, with `ε = 1e-8`.
 - **When and from which data they are computed:**
-- **When and from which data they are computed:**
   - **Pretraining:** compute **global** (`population`) statistics on the pretraining corpus *training split only*, restricted to windows that pass validity rules (bad-channel/artifact policies).
   - **Participant calibration:** compute **participant** statistics on a participant’s **baseline/reference segment(s)** collected during calibration (e.g., a fixed resting segment), using the same window definition and preprocessing invariants. The baseline/reference segment definition MUST be declared as `TBD_BASELINE_REFERENCE_SEGMENTS_V0` and applied consistently.
 - **Fixed or adaptive during runtime:**
-- **Fixed or adaptive during runtime:**
   - v0 is **fixed during runtime**: once baseline/reference segments are collected and `μ, σ` are computed, they do not update online.
-- **Required behaviour if baseline data are missing or invalid:**
 - **Required behaviour if baseline/reference data are missing or invalid:**
   - If participant baseline/reference segments are missing/invalid (insufficient valid windows, non-finite values), fall back to **global** statistics.
   - If global statistics are also missing, use identity normalisation (`μ = 0`, `σ = 1`) and mark the window output as **low-trust** with a required flag `normalization_source = none`.
