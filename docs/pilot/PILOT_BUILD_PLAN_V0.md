@@ -40,7 +40,9 @@ Scenario selection and scenario file location:
 
 - Scenario path is selected via `scenario_path` in `src/python/vendor/openmatb/config.ini`.
 - Scenario files are loaded from `src/python/vendor/openmatb/includes/scenarios/` (relative paths allowed).
-  - Example scenarios: `src/python/vendor/openmatb/includes/scenarios/basic.txt`, `.../default.txt`.
+  - Upstream demo scenarios present in-tree (not to be used/referenced by pilot scenarios):
+    - `src/python/vendor/openmatb/includes/scenarios/basic.txt`
+    - `src/python/vendor/openmatb/includes/scenarios/default.txt`
 - Scenario parser logs the active scenario path into the CSV as a manual record:
   - `Scenario.__init__` in `src/python/vendor/openmatb/core/scenario.py` calls `logger.log_manual_entry(..., key='scenario_path')`.
 
@@ -77,18 +79,27 @@ Workload manipulation lever:
 - Primary lever is event rate + overlap (concurrency), while keeping the task set constant across levels.
 - Use >2 workload levels to reduce inverted-U ambiguity: Low / Moderate / High.
 
+v0 workload targets (authoritative; must match the study spec + scenario contract):
+
+- Total event-rate targets (events/min): `LOW`=3, `MODERATE`=8, `HIGH`=18.
+- Scaling rule (v0): `HIGH` total event rate is ~5–6× `LOW` (operationalized as 18/3 = 6×).
+
 Order control:
 
-- Workload level order must be randomized/counterbalanced across participants (or explicitly justified if fixed).
-- Randomization must be reproducible and checkable from the run manifest or session metadata.
+- Workload level order must be counterbalanced across participants via retained `seq_id` assignment (`SEQ1|SEQ2|SEQ3`).
+- `seq_id` applies to retained block order only; training is invariant across participants and does not depend on `seq_id`.
+- The repo uses three combined session scenario files (one per `seq_id`) that each embed the same training segment, followed by retained blocks ordered per `seq_id`.
+- Order assignment must be reproducible and checkable from the run manifest or session metadata (at minimum: recorded `seq_id`).
 
 Training:
 
 - Provide structured training (recommended: 3 × 5 minutes) and document it as part of the operator run sheet.
+- The scenario must present a participant ID entry popup before training begins and must not proceed until a valid ID is submitted.
 
 Subjective validation:
 
-- NASA-TLX after each block.
+- NASA-TLX after each retained block (B1–B3); TLX is not administered during training in v0.
+- NASA-TLX is untimed and requires interaction with all sliders before continuing.
 - Use OpenMATB `genericscales` + `nasatlx_en.txt` as the in-task questionnaire mechanism.
 
 Objective validation:
@@ -263,7 +274,12 @@ Files touched:
 Success criteria:
 
 - Exactly which scenarios are used is specified by path and filename.
-- For each scenario (level), all manipulated parameters and event rate targets are recorded.
+- Scenario set is exactly three combined session scenario files (v0; one per retained `seq_id`), loaded via `scenario_path`:
+  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq1.txt` (for `SEQ1`)
+  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq2.txt` (for `SEQ2`)
+  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq3.txt` (for `SEQ3`)
+- Each scenario file begins with the same training segment (T1–T3; `LOW`→`MODERATE`→`HIGH`), then runs retained blocks (B1–B3) ordered per `seq_id`.
+- For each workload level within the session, all manipulated parameters and event-rate targets are recorded.
 - Level durations are fixed and bounded.
 
 Failure modes:
@@ -298,7 +314,7 @@ Failure modes:
 
 Objective:
 
-- Capture subjective MWL per block using a consistent, in-task instrument.
+- Capture subjective MWL after each retained block (B1–B3) using a consistent, in-task instrument.
 
 Files touched:
 
@@ -308,12 +324,14 @@ Files touched:
 Success criteria:
 
 - NASA-TLX starts after each block and is bounded by explicit markers.
+- NASA-TLX is untimed and the continue action is blocked until all sliders are interacted with.
 - The operator run sheet includes when the participant is instructed to complete it.
 
 Failure modes:
 
 - questionnaire timing not bracketed by markers
 - questionnaire skipped without being detectable from logs
+- questionnaire allows continuation without slider interaction
 
 ### 7) Declare contract resolutions (replace all `TBD_*` with concrete values)
 
@@ -502,18 +520,86 @@ This is the operator-facing run procedure for both dry run and pilot sessions (p
 - Run structured training: 3 × 5 minutes (Low → Moderate → High), with short breaks.
 - Confirm the participant can operate the joystick and respond to communications prompts.
 
+## Instruction assets (English-only) — build requirement
+
+### Goal
+All on-screen instruction content used by the pilot one-shot scenario MUST be in English and stored in-repo. The French demo instruction screens shipped with OpenMATB MUST NOT be referenced by any pilot scenario.
+
+### Required deliverables (one-shot build outputs)
+The one-shot build must produce study-owned English instruction screens:
+
+- welcome_screen_en.txt
+- sysmon_en.txt
+- track_en.txt
+- communications_en.txt
+- resman_en.txt
+- scheduling_en.txt
+- full_en.txt
+
+These files must be placed in a location resolvable by OpenMATB scenario includes via relative paths (same resolution mechanism used by default/demo scenarios).
+
+`nasatlx_en.txt` is already present and must remain the TLX screen.
+
+### Content constraints
+- Concise, on-screen readable (heading + ≤6 bullets).
+- Include controls and success criteria per task; no theory, no workload/hypothesis language.
+- Training/familiarisation screens may guide; retained-phase screens must not provide performance strategies.
+
+### Hard disallow list (must not be referenced by pilot scenarios)
+Pilot scenarios must not reference any of:
+- welcome_screen.txt
+- sysmon.txt
+- track.txt
+- communications.txt
+- resman.txt
+- scheduling.txt
+- full.txt
+
+### Acceptance checks (must pass before running participants)
+- Repo search shows ZERO references in pilot scenarios to the disallowed French filenames.
+- Spot-check: all *_en.txt files contain only English (no French strings).
+- Dry run: instruction screens render correctly in the OpenMATB UI.
+
+Example mechanical checks:
+- `rg -n "welcome_screen\.txt|sysmon\.txt|track\.txt|communications\.txt|resman\.txt|scheduling\.txt|full\.txt" <pilot_scenario_dir>`
+- `rg -n "Présentation|tâche|logiciel|l'écran|automation" <path_to_english_instructions>`
+
+### Instruction language requirements (participant-facing)
+
+All on-screen instructions must be written in clear, participant-facing plain English.
+
+Mandatory rules:
+- Instructions must NOT reference internal task names, plugin names, or system labels
+  (e.g., SYSMON, RESMAN, COMM, scheduling, automation).
+- Instructions must NOT use developer-style phrasing
+  (e.g., “Do X to Y”, “Respond to SYSMON alerts”).
+- Instructions must describe only:
+  - what appears on the screen,
+  - what the participant should do,
+  - what counts as a correct response.
+- Instructions must assume no prior knowledge.
+
+Tone and structure:
+- Short sentences.
+- Imperative voice.
+- One task per instruction screen.
+- Concise and readable on screen.
+
+Violation of these rules is a build blocker.
+
+
 ### Start of recording
 
 - Start EEG recording.
 - Start LSL recording (if used); confirm OpenMATB marker stream will be recorded.
 - Launch OpenMATB via wrapper with participant/session IDs.
-- Confirm OpenMATB window appears and tasks start.
+- Confirm the participant ID entry popup appears and is completed before training begins.
 
 ### During the run
 
 - Monitor for abort criteria (below).
 - Do not change scenario parameters mid-run.
-- After each block: ensure the NASA-TLX screen is completed.
+- After each block: ensure the NASA-TLX screen is completed and all sliders are interacted with before continuing.
 
 ### Stop / clean exit
 
@@ -579,16 +665,17 @@ Must be true before pilot recruitment/recording:
    - Alternative: 50 ms (if acquisition/LSL path introduces unavoidable jitter; must be justified).
 
 3) Workload block durations and full session structure
-   - Default: 3 blocks × 5 minutes (Low/Moderate/High) + NASA-TLX after each, with 1–2 minute breaks.
+  - Default: session structure is exactly as defined in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (training T1–T3 with breaks; retained B1–B3 with TLX after each retained block and breaks).
    - Alternative: 3 × 7 minutes if more stable EEG windows are needed; keep total session bounded.
 
 4) Event rate targets per level (per task)
-   - Default: define per-task event rates and scale them monotonically across levels (e.g., Low=1×, Moderate=1.5×, High=2×) while keeping task set constant.
-   - Alternative: keep event rates constant but increase overlap probability; only if overlap rules can be enforced deterministically.
+  - v0 targets are fixed and must match `docs/pilot/PILOT_STUDY_SPEC_V0.md` and `docs/contracts/training_scenario_contract_v0.md`.
+  - Total event-rate targets (events/min): `LOW`=3, `MODERATE`=8, `HIGH`=18.
+  - Scaling rule (v0): `HIGH` total event rate is ~5–6× `LOW` (operationalized as 18/3 = 6×).
+  - Scheduling is deterministic and must follow the contract’s authoritative per-block template (integer second offsets, guard bands, collision rules).
 
 5) Counterbalancing scheme
-   - Default: Latin-square over the 3 workload levels across participants.
-   - Alternative: fully random permutation per participant with the chosen order recorded in the manifest/metadata.
+  - v0 retained counterbalancing is exactly the 3-sequence Latin-square defined by `seq_id` in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (`SEQ1|SEQ2|SEQ3`).
 
 6) Label target space choice under label contract
    - Default: 3-level ordinal label `{LOW, MODERATE, HIGH}` with `TBD_MWL_NUM_LEVELS_V0 = 3`.

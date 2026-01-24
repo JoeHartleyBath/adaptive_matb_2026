@@ -19,6 +19,11 @@ Operational context (implementation already present in repo):
 - Run OpenMATB via wrapper: `src/python/run_openmatb.py`.
 - Scenario selection via: `src/python/vendor/openmatb/config.ini` (`scenario_path=...`).
 - Scenario files live under: `src/python/vendor/openmatb/includes/scenarios/`.
+- v0 pilot scenarios are exactly three combined session scenario files (one per retained `seq_id`):
+  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq1.txt` (for `SEQ1`)
+  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq2.txt` (for `SEQ2`)
+  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq3.txt` (for `SEQ3`)
+- Each scenario file begins with the same training segment (T1–T3), then runs retained blocks (B1–B3) ordered per `seq_id`.
 - Primary event log is CSV + adjacent `.manifest.json` written externally (outside repo).
 - LSL outlet plugin exists: `src/python/vendor/openmatb/plugins/labstreaminglayer.py`.
 
@@ -43,6 +48,8 @@ Session phases (exact):
 
 Goal: stabilize task proficiency before any retained data.
 
+- A participant ID entry popup appears before T1, and the scenario does not proceed until a valid ID is submitted.
+
 - Training Block T1: **Low** workload, **5:00**
 - Break: **1:00** (quiet rest; no tasks)
 - Training Block T2: **Moderate** workload, **5:00**
@@ -60,24 +67,25 @@ NASA-TLX during training (exact):
 Goal: collect comparable blocks at multiple workload levels with deterministic boundaries + subjective ratings.
 
 - Retained Block B1: workload level per counterbalancing (see Section 2), **5:00**
-- NASA-TLX: immediately after B1, **self-paced**, max **3:00**
+- NASA-TLX: immediately after B1, **self-paced**, untimed; all sliders must be interacted with before continuing
 - Break: **1:00**
 - Retained Block B2: per counterbalancing, **5:00**
-- NASA-TLX: immediately after B2, **self-paced**, max **3:00**
+- NASA-TLX: immediately after B2, **self-paced**, untimed; all sliders must be interacted with before continuing
 - Break: **1:00**
 - Retained Block B3: per counterbalancing, **5:00**
-- NASA-TLX: immediately after B3, **self-paced**, max **3:00**
+- NASA-TLX: immediately after B3, **self-paced**, untimed; all sliders must be interacted with before continuing
 
 Total planned retained time (excluding setup):
 
 - Task time: 15:00
-- TLX time: up to 9:00
+- TLX time: self-paced (no fixed maximum)
 - Breaks: 2:00
 
 Pause policy (exact):
 
-- The participant must not use pause unless instructed.
-- If pause occurs, the run is still recorded but must be flagged during QC as a protocol deviation; pause handling must be explicitly reflected in markers (see marker list).
+- No pausing during retained blocks B1–B3.
+  - If an interruption occurs or pause would be needed during B1–B3, the operator must abort the run and restart (do not pause/resume within a retained block).
+- Pause/resume state changes may still appear in OpenMATB CSV/runtime logs and/or operator notes, but they are not emitted as `STUDY/V0/` markers (see Section 4).
 
 ---
 
@@ -123,24 +131,37 @@ Overlap rules (exact):
 
 - Communications prompts must respect audio non-overlap constraints.
 - Minimum spacing between communications prompts: **8 seconds**.
-- Within a level, events may coincide across tasks (e.g., sysmon failure at same time as resman pump failure) except where the communications spacing rule would be violated.
+- No two events (across Sysmon, Communications, Resman) may share the same integer second offset within a block.
 
 Per-level event-rate targets (exact):
 
-| Component | Knob / event type | LOW | MODERATE | HIGH | Notes / invariants |
-|---|---:|---:|---:|---:|---|
-| Sysmon | Gauge failure onsets (count per minute) | 2 / min | 4 / min | 6 / min | Implement via `scales-*-failure` / `lights-*-failure` schedule; keep failure types comparable across levels |
-| Communications | Radio prompts (count per minute) | 2 / min | 3 / min | 4 / min | Enforce ≥8s spacing; mix of `own` vs `other` prompts fixed ratio (see below) |
-| Communications | Target:distractor prompt ratio | 80:20 | 80:20 | 80:20 | Keep task set constant; change rate, not semantics |
-| Resman | Pump failures (count per minute) | 1 / min | 2 / min | 3 / min | Use `pump-*-state;failure` events; keep tank targets constant |
-| Resman | Automation availability | On | On | On | Keep automation policy constant; do not introduce new controls across levels |
-| Track | Target proportion | fixed | fixed | fixed | Keep tracking geometry constant; objective is overlap/rate elsewhere |
-| Scheduling | Display | On | On | On | Keep constant |
+Definition (exact): the **total event rate** (events/min) is the sum of per-task event rates for:
+
+- Sysmon gauge failure onsets
+- Communications radio prompts
+- Resman pump failures
+
+Scaling guidance (Option A; review-aligned): the intended total event-rate increase from LOW to HIGH is **~6×**, operationalised as **18/3 = 6×**.
+
+Workload level event-rate targets (Option A; exact, replicable):
+
+- **LOW** (total = **3 events/min**)
+  - Sysmon: **1 event/min**
+  - Communications: **1 event/min** (target:distractor = **80:20**; minimum spacing between prompts **≥ 8 s**)
+  - Resman: **1 event/min**
+- **MODERATE** (total = **8 events/min**)
+  - Sysmon: **3 events/min**
+  - Communications: **3 events/min** (target:distractor = **80:20**; minimum spacing between prompts **≥ 8 s**)
+  - Resman: **2 events/min**
+- **HIGH** (total = **18 events/min**)
+  - Sysmon: **6 events/min**
+  - Communications: **6 events/min** (target:distractor = **80:20**; minimum spacing between prompts **≥ 8 s**)
+  - Resman: **6 events/min**
 
 Notes:
 
 - These are **targets** for scenario design; the scenario files must be deterministic once authored.
-- “Count per minute” is defined over the active 5:00 block duration, excluding TLX and breaks.
+- “Events/min” is defined over the active 5:00 block duration, excluding TLX and breaks.
 
 ---
 
@@ -161,7 +182,7 @@ Marker naming format (exact):
 
 Marker payload template (exact):
 
-- `STUDY/V0/<MARKER_NAME>;pid=<P>;sid=<S>;seq=<SEQ>`
+- `STUDY/V0/<MARKER_NAME>|pid=<P>|sid=<S>|seq=<SEQ>`
 
 Markers (exact list):
 
@@ -188,13 +209,13 @@ Markers (exact list):
 | `TLX/B3/END` | immediately after TLX for B3 | Yes | Yes | brackets TLX |
 | `SESSION_END` | immediately before clean OpenMATB exit | Yes | Yes | anchors session end |
 | `ABORT` | if run is aborted early | Yes | Yes | makes early termination machine-detectable |
-| `PAUSE` | if pause is engaged | Yes | Yes | flags protocol deviation |
-| `RESUME` | when resuming after pause | Yes | Yes | flags protocol deviation |
 
 Notes:
 
 - `<LEVEL>` must be one of `LOW|MODERATE|HIGH`.
 - Training markers exist for completeness but training blocks are not intended for analysis.
+- Pause/resume state changes may appear in OpenMATB CSV/runtime logs and operator notes, but they are not represented as `STUDY/V0/` markers; interruptions during B1–B3 must be handled via `ABORT` + restart.
+- Marker payloads MUST NOT contain semicolons (;). Semicolons are reserved for OpenMATB scenario field separation.
 
 ---
 
