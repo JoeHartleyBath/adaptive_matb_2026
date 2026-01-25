@@ -127,11 +127,11 @@ Task set (constant across all levels):
 - Resource management (`resman`)
 - Scheduling display (`scheduling`) enabled as per scenario defaults
 
-Overlap rules (exact):
+Overlap rules:
 
-- Communications prompts must respect audio non-overlap constraints.
-- Minimum spacing between communications prompts: **8 seconds**.
-- No two events (across Sysmon, Communications, Resman) may share the same integer second offset within a block.
+- Distribution is determined by the OpenMATB difficulty logic / Vendor Logic generator.
+- Minimum spacing between communications prompts: **8 seconds** (best effort target).
+- Exact integer second non-overlap is not enforced.
 
 Per-level event-rate targets (exact):
 
@@ -142,21 +142,6 @@ Definition (exact): the **total event rate** (events/min) is the sum of per-task
 - Resman pump failures
 
 Scaling guidance (Option A; review-aligned): the intended total event-rate increase from LOW to HIGH is **~6×**, operationalised as **18/3 = 6×**.
-
-Workload level event-rate targets (Option A; exact, replicable):
-
-- **LOW** (total = **3 events/min**)
-  - Sysmon: **1 event/min**
-  - Communications: **1 event/min** (target:distractor = **80:20**; minimum spacing between prompts **≥ 8 s**)
-  - Resman: **1 event/min**
-- **MODERATE** (total = **8 events/min**)
-  - Sysmon: **3 events/min**
-  - Communications: **3 events/min** (target:distractor = **80:20**; minimum spacing between prompts **≥ 8 s**)
-  - Resman: **2 events/min**
-- **HIGH** (total = **18 events/min**)
-  - Sysmon: **6 events/min**
-  - Communications: **6 events/min** (target:distractor = **80:20**; minimum spacing between prompts **≥ 8 s**)
-  - Resman: **6 events/min**
 
 Notes:
 
