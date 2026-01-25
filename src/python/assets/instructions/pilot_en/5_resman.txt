@@ -1,0 +1,7 @@
+<h1>Task 4: Resource Management</h1>
+<p>Keep the fuel level in the main tanks (A & B) around 2500 units.</p>
+<ul>
+    <li>Turn pumps ON/OFF (Keys 1-8) to transfer fuel from reserve tanks.</li>
+    <li>Don't let any tank run dry or overflow.</li>
+</ul>
+<p>Press <b>SPACE</b> to try this task.</p>

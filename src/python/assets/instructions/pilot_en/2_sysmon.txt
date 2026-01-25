@@ -1,0 +1,7 @@
+<h1>Task 1: System Monitoring</h1>
+<p>Watch the lights and scales at the top left.</p>
+<ul>
+    <li><b>Lights:</b> If a light turns OFF (green) or RED, click it or press F1-F6 to reset it.</li>
+    <li><b>Scales:</b> If a pointer moves out of the center zone, click the scale or press F1-F6 to reset it.</li>
+</ul>
+<p>Press <b>SPACE</b> to try this task.</p>

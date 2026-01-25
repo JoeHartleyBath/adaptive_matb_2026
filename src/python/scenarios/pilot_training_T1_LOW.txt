@@ -1,0 +1,36 @@
+# OpenMATB Scenario: pilot_training_T1_LOW.txt
+# Auto-generated Clone (Vendor Logic)
+
+0:00:00;labstreaminglayer;start
+0:00:00;labstreaminglayer;marker;STUDY/V0/TRAINING/T1/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:00:00;scheduling;start
+0:00:00;track;start
+0:00:00;track;targetproportion;0.8
+0:00:00;sysmon;start
+0:00:00;communications;start
+0:00:00;resman;start
+0:00:00;resman;tank-A-lossperminute;320
+0:00:00;resman;tank-B-lossperminute;320
+0:00:33;communications;radioprompt;other
+0:00:35;resman;pump-3-state;failure
+0:00:49;sysmon;lights-2-failure;True
+0:01:18;sysmon;scales-2-failure;True
+0:01:32;sysmon;lights-2-failure;True
+0:01:37;sysmon;scales-2-failure;True
+0:01:50;communications;radioprompt;own
+0:02:03;sysmon;lights-1-failure;True
+0:02:38;sysmon;scales-1-failure;True
+0:02:53;sysmon;lights-2-failure;True
+0:03:19;sysmon;lights-1-failure;True
+0:03:21;sysmon;scales-1-failure;True
+0:03:40;communications;radioprompt;own
+0:03:58;sysmon;scales-2-failure;True
+0:04:07;resman;pump-5-state;failure
+0:04:29;communications;radioprompt;other
+0:05:00;sysmon;stop
+0:05:00;track;stop
+0:05:00;communications;stop
+0:05:00;resman;stop
+0:05:00;scheduling;stop
+0:05:00;labstreaminglayer;marker;STUDY/V0/TRAINING/T1/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;labstreaminglayer;stop
