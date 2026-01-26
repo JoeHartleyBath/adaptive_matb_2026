@@ -377,6 +377,7 @@ def main() -> int:
             args.session,
             "--seq-id",
             args.seq_id,
+            "--verification",
             "--speed",
             str(args.speed),
             "--output-root",

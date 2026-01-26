@@ -32,6 +32,7 @@ def main():
         "--session", args.sid,
         "--seq-id", args.seq,
         "--output-root", str(output_abs),
+        "--verification",
         "--speed", str(args.speed)
     ]
     

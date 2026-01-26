@@ -131,6 +131,54 @@ def _get_playlist(seq_id: str, dry_run: bool) -> list[str]:
     return playlist
 
 
+def _stage_pilot_instruction_files(openmatb_dir: Path, repo_root: Path) -> None:
+    """Copy repo-managed pilot instruction text files into OpenMATB includes.
+
+    OpenMATB validates blocking-plugin filenames by requiring them to exist under
+    includes/instructions/ or includes/questionnaires/.
+    """
+
+    source_dir = repo_root / "instructions"
+    required_names = [
+        "1_welcome.txt",
+        "2_sysmon.txt",
+        "3_track.txt",
+        "4_comm.txt",
+        "5_resman.txt",
+        "6_all_tasks.txt",
+    ]
+
+    missing = [name for name in required_names if not (source_dir / name).exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing required pilot instruction files under <repo>/instructions: " + ", ".join(missing)
+        )
+
+    # Keep pilot assets namespaced to avoid collisions with vendor examples.
+    target_dir = openmatb_dir / "includes" / "instructions" / "pilot_en"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for name in required_names:
+        shutil.copyfile(source_dir / name, target_dir / name)
+
+
+def _rewrite_scenario_paths_for_openmatb_includes(scenario_text: str) -> str:
+    """Rewrite repo-relative asset paths to OpenMATB-acceptable include paths."""
+
+    # The vendor validator requires filenames for blocking plugins to be present under
+    # includes/instructions/ or includes/questionnaires/.
+    # Our repo scenarios may reference historical paths like ../../../../assets/…
+    # Rewrite those to the namespaced include folder we populate.
+    rewrites = [
+        ("../../../../assets/instructions/pilot_en/", "pilot_en/"),
+        ("..\\..\\..\\..\\assets\\instructions\\pilot_en\\", "pilot_en/"),
+        ("..\\..\\..\\..\\assets\\instructions\\pilot_en/", "pilot_en/"),
+        ("../../../../assets/instructions/pilot_en\\", "pilot_en/"),
+    ]
+    for old, new in rewrites:
+        scenario_text = scenario_text.replace(old, new)
+    return scenario_text
+
+
 def _run_single_scenario(
     openmatb_dir: Path,
     scenario_filename: str,
@@ -143,6 +191,13 @@ def _run_single_scenario(
     submodule_commit: str,
 ) -> int:
     repo_root = Path(__file__).resolve().parents[2]
+
+    try:
+        _stage_pilot_instruction_files(openmatb_dir, repo_root)
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
     scenario_source_path = repo_root / "scenarios" / scenario_filename
     if not scenario_source_path.exists():
         print(f"Scenario file not found: {scenario_source_path}", file=sys.stderr)
@@ -150,7 +205,9 @@ def _run_single_scenario(
 
     scenario_target_path = openmatb_dir / "includes" / "scenarios" / scenario_filename
     scenario_target_path.parent.mkdir(parents=True, exist_ok=True)
-    scenario_target_path.write_text(scenario_source_path.read_text(encoding="utf-8"), encoding="utf-8")
+    scenario_text = scenario_source_path.read_text(encoding="utf-8")
+    scenario_text = _rewrite_scenario_paths_for_openmatb_includes(scenario_text)
+    scenario_target_path.write_text(scenario_text, encoding="utf-8")
 
     print(f"\n>>> Starting Scenario Block: {scenario_filename}")
 
@@ -398,13 +455,26 @@ def main() -> int:
         help="Use the deterministic dry-run scenario artifact.",
     )
     parser.add_argument(
+        "--verification",
+        action="store_true",
+        help="Enable fast-forward and other automation-oriented behaviors (verification only).",
+    )
+    parser.add_argument(
         "--speed",
         type=int,
         default=1,
-        help="Fast-forward speed multiplier (e.g. 5) for testing runs.",
+        help="Fast-forward speed multiplier (ignored unless --verification is set).",
     )
 
     args = parser.parse_args()
+
+    if args.speed != 1 and not args.verification:
+        print(
+            f"NOTE: Ignoring --speed={args.speed} because this is an attended run. "
+            "Use --verification to enable fast-forward.",
+            file=sys.stderr,
+        )
+        args.speed = 1
 
     seq_id = args.seq_id or _get_env_first("OPENMATB_SEQ_ID")
     if not seq_id:
