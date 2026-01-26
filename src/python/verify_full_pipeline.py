@@ -42,8 +42,6 @@ def run_verification():
             "--participant", participant,
             "--session", session,
             "--seq-id", seq,
-            "--unattended",
-            "--full-session",
             "--speed", str(SPEED)
         ]
         

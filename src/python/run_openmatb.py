@@ -105,10 +105,10 @@ def _get_playlist(seq_id: str, dry_run: bool) -> list[str]:
 
     # Fixed training sequence
     playlist = [
-        "pilot_familiarisation.txt",
-        "pilot_training_T1_LOW.txt",
-        "pilot_training_T2_MODERATE.txt",
-        "pilot_training_T3_HIGH.txt",
+        "pilot_practice_intro.txt",
+        "pilot_practice_low.txt",
+        "pilot_practice_moderate.txt",
+        "pilot_practice_high.txt",
     ]
 
     # Retained blocks based on counterbalancing sequence
@@ -126,7 +126,7 @@ def _get_playlist(seq_id: str, dry_run: bool) -> list[str]:
 
     levels = retained_levels[seq_id]
     for level in levels:
-        playlist.append(f"pilot_retained_{level}.txt")
+        playlist.append(f"pilot_static_{level.lower()}.txt")
 
     return playlist
 
@@ -142,10 +142,15 @@ def _run_single_scenario(
     repo_commit: str,
     submodule_commit: str,
 ) -> int:
-    scenario_target_path = openmatb_dir / "includes" / "scenarios" / scenario_filename
-    if not scenario_target_path.exists():
-        print(f"Scenario file not found: {scenario_target_path}", file=sys.stderr)
+    repo_root = Path(__file__).resolve().parents[2]
+    scenario_source_path = repo_root / "scenarios" / scenario_filename
+    if not scenario_source_path.exists():
+        print(f"Scenario file not found: {scenario_source_path}", file=sys.stderr)
         return 2
+
+    scenario_target_path = openmatb_dir / "includes" / "scenarios" / scenario_filename
+    scenario_target_path.parent.mkdir(parents=True, exist_ok=True)
+    scenario_target_path.write_text(scenario_source_path.read_text(encoding="utf-8"), encoding="utf-8")
 
     print(f"\n>>> Starting Scenario Block: {scenario_filename}")
 
@@ -158,10 +163,6 @@ def _run_single_scenario(
     env["OPENMATB_SEQ_ID"] = seq_id
     env["OPENMATB_REPO_COMMIT"] = repo_commit
     env["OPENMATB_SUBMODULE_COMMIT"] = submodule_commit
-    env["OPENMATB_UNATTENDED"] = "1" if args.unattended else "0"
-
-    if args.dry_run_timeout_seconds is not None and args.unattended:
-        env["OPENMATB_DRY_RUN_TIMEOUT_SECONDS"] = str(args.dry_run_timeout_seconds)
 
     # Calculate paths specifically for this run
     scenario_rel_path = scenario_filename
@@ -207,90 +208,13 @@ def _run_single_scenario(
         "        seq = os.environ.get('OPENMATB_SEQ_ID') or 'UNKNOWN'\n"
         "        msg = [f'Participant ID: {pid}', f'Session ID: {sid}', f'Sequence ID: {seq}']\n"
         "        self.modal_dialog = ModalDialog(self, msg, 'OpenMATB')\n"
-        "        if os.environ.get('OPENMATB_UNATTENDED') == '1':\n"
-        "            self.modal_dialog.on_delete()\n"
         "Window.display_session_id = _display_session_id\n"
-        "if os.environ.get('OPENMATB_UNATTENDED') == '1':\n"
-        "    from core.logger import logger\n"
-        "    import threading, time as _time\n"
-        "    from plugins.abstractplugin import BlockingPlugin\n"
-        "    from plugins.genericscales import Genericscales\n"
-        "    from plugins.instructions import Instructions\n"
-        "    from plugins.labstreaminglayer import Labstreaminglayer\n"
-        "    import core.scenario as scenario_mod\n"
-        "    _orig_start = BlockingPlugin.start\n"
-        "    def _patched_start(self, *args, **kwargs):\n"
-        "        _orig_start(self, *args, **kwargs)\n"
-        "        if isinstance(self, Labstreaminglayer):\n"
-        "            return\n"
-        "        if isinstance(self, (Instructions, Genericscales)):\n"
-        "            logger.log_manual_entry(f'unattended_skip:{self.alias}', key='unattended')\n"
-        "            self.blocking = False\n"
-        "            self.stop()\n"
-        "    BlockingPlugin.start = _patched_start\n"
-        "    _orig_scenario_init = scenario_mod.Scenario.__init__\n"
-        "    def _patched_scenario_init(self, contents=None):\n"
-        "        _orig_scenario_init(self, contents)\n"
-        "        for name, plugin in self.plugins.items():\n"
-        "            if name != 'communications' and 'automaticsolver' in getattr(plugin, 'parameters', {}):\n"
-        "                plugin.set_parameter('automaticsolver', True)\n"
-        "        logger.log_manual_entry('unattended:automaticsolver_enabled_except_comms', key='unattended')\n"
-        "    scenario_mod.Scenario.__init__ = _patched_scenario_init\n"
-        "    timeout_raw = os.environ.get('OPENMATB_DRY_RUN_TIMEOUT_SECONDS', '')\n"
-        "    timeout_seconds = int(timeout_raw) if timeout_raw else 0\n"
-        "    if timeout_seconds > 0:\n"
-        "        def _timeout_watchdog():\n"
-        "            start = _time.monotonic()\n"
-        "            while _time.monotonic() - start < timeout_seconds:\n"
-        "                _time.sleep(0.2)\n"
-        "            try:\n"
-        "                logger.log_manual_entry(f'DRY RUN TIMEOUT: aborting after {timeout_seconds}s', key='abort')\n"
-        "            except Exception:\n"
-        "                pass\n"
-        "            try:\n"
-        "                if Window.MainWindow is not None:\n"
-        "                    Window.MainWindow.alive = False\n"
-        "            except Exception:\n"
-        "                pass\n"
-        "        threading.Thread(target=_timeout_watchdog, daemon=True).start()\n"
         "runpy.run_path('main.py', run_name='__main__')\n"
     )
 
-    timeout_seconds = args.dry_run_timeout_seconds if args.unattended else None
-    timeout_triggered = False
-    start_time = time.monotonic()
-
     # Pass the modified environment
     proc = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=str(openmatb_dir), env=env)
-
-    if timeout_seconds is None:
-        exit_code = proc.wait()
-    else:
-        grace_seconds = 3
-        deadline = None
-        exit_code = None
-        while True:
-            exit_code = proc.poll()
-            if exit_code is not None:
-                break
-            elapsed = time.monotonic() - start_time
-            if elapsed > timeout_seconds and not timeout_triggered:
-                timeout_triggered = True
-                deadline = time.monotonic() + grace_seconds
-                print(f"TIMEOUT: aborting {scenario_filename} after {timeout_seconds}s")
-            if timeout_triggered and deadline is not None and time.monotonic() >= deadline:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=grace_seconds)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                exit_code = proc.poll()
-                if exit_code is None:
-                    exit_code = 3
-                break
-            time.sleep(0.2)
-        if timeout_triggered and exit_code == 0:
-            exit_code = 3
+    exit_code = proc.wait()
 
     # Post-process manifests
     if exit_code != 0:
@@ -300,10 +224,10 @@ def _run_single_scenario(
             _write_seq_id_into_manifest(
                 new_manifests[0],
                 seq_id=seq_id,
-                unattended=args.unattended,
+                unattended=False,
                 dry_run=args.dry_run,
                 scenario_filename=scenario_filename,
-                abort_reason="timeout" if timeout_triggered else (f"exit_code_{exit_code}"),
+                abort_reason=f"exit_code_{exit_code}",
             )
         return exit_code
 
@@ -320,10 +244,10 @@ def _run_single_scenario(
     _write_seq_id_into_manifest(
         new_manifests[0],
         seq_id=seq_id,
-        unattended=args.unattended,
+        unattended=False,
         dry_run=args.dry_run,
         scenario_filename=scenario_filename,
-        abort_reason="timeout" if timeout_triggered else None,
+        abort_reason=None,
     )
     return 0
 
@@ -361,37 +285,13 @@ def main() -> int:
         help="Use the deterministic dry-run scenario artifact.",
     )
     parser.add_argument(
-        "--full-session",
-        action="store_true",
-        help="Explicitly allow running the full session when unattended.",
-    )
-    parser.add_argument(
-        "--unattended",
-        action="store_true",
-        help="Run without any user input (skip instructions/TLX, enable automation).",
-    )
-    parser.add_argument(
-        "--dry-run-timeout-seconds",
-        type=int,
-        default=None,
-        help="Wall-clock timeout (seconds) for unattended runs only.",
-    )
-    parser.add_argument(
         "--speed",
         type=int,
         default=1,
-        help="Fast-forward speed multiplier (e.g. 20) for unattended/testing runs.",
+        help="Fast-forward speed multiplier (e.g. 5) for testing runs.",
     )
 
     args = parser.parse_args()
-
-    if args.dry_run and args.full_session:
-        print("Use only one of --dry-run or --full-session", file=sys.stderr)
-        return 2
-
-    if args.unattended and not args.dry_run and not args.full_session:
-        print("WARNING: Unattended run without --full-session; defaulting to --dry-run.")
-        args.dry_run = True
 
     participant_raw = args.participant or _get_env_first("OPENMATB_PARTICIPANT", "OPENMATB_PARTICIPANT_ID")
     session_raw = args.session or _get_env_first("OPENMATB_SESSION", "OPENMATB_SESSION_ID")
@@ -429,13 +329,6 @@ def main() -> int:
     if not openmatb_dir.exists():
         print(f"OpenMATB directory not found: {openmatb_dir}", file=sys.stderr)
         return 2
-
-    if args.unattended:
-        print("WARNING: Unattended mode is ON. Inputs, instructions, and TLX will be auto-skipped.")
-        if args.dry_run_timeout_seconds:
-            if args.dry_run_timeout_seconds <= 0:
-               print("--dry-run-timeout-seconds must be a positive integer", file=sys.stderr)
-               return 2
 
     def _git_rev_parse_head(cwd: Path) -> str:
         try:
@@ -481,9 +374,7 @@ def main() -> int:
         
         # Simple separation between blocks
         print(f"Scenario {scenario_filename} completed successfully.")
-        if not args.unattended:
-            # Maybe a small pause or log message?
-            pass
+        # (Interactive UI and blocking dialogs are expected in attended mode)
 
     print("\nAll scenarios in playlist completed successfully.")
     return 0
