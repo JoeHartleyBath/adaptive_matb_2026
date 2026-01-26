@@ -186,6 +186,18 @@ def _rewrite_scenario_paths_for_openmatb_includes(scenario_text: str) -> str:
         lambda m: f"tank-{m.group(1).lower()}-",
         scenario_text,
     )
+
+    # Vendor genericscales plugin expects:
+    #   <t>;genericscales;filename;<questionnaire.txt>
+    #   <t>;genericscales;start
+    # Some generated scenarios used genericscales;create and genericscales;load, which are invalid.
+    scenario_text = re.sub(
+        r"^\s*\d+:\d+:\d+;genericscales;create\s*$\r?\n?",
+        "",
+        scenario_text,
+        flags=re.MULTILINE,
+    )
+    scenario_text = scenario_text.replace(";genericscales;load;", ";genericscales;filename;")
     return scenario_text
 
 
