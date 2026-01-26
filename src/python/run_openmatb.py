@@ -24,6 +24,7 @@ import json
 import os
 import re
 import subprocess
+import shutil
 import sys
 from pathlib import Path
 from typing import Optional
@@ -184,8 +185,6 @@ def _run_single_scenario(
         "    _speed = 1\n"
         "if _speed < 1:\n"
         "    _speed = 1\n"
-        "elif _speed > 10:\n"
-        "    _speed = 10\n"
         "try:\n"
         "    from core.clock import Clock\n"
         "    Clock._speed = _speed\n"
@@ -256,13 +255,112 @@ def _run_single_scenario(
         )
         return 2
 
+    manifest_path = new_manifests[0]
     _write_seq_id_into_manifest(
-        new_manifests[0],
+        manifest_path,
         seq_id=seq_id,
         dry_run=args.dry_run,
         scenario_filename=scenario_filename,
         abort_reason=None,
     )
+
+    # If OpenMATB reports scenario parsing/runtime errors, treat this run as failed.
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        errors_log = Path(manifest.get("paths", {}).get("scenario_errors_log", ""))
+        if errors_log and errors_log.exists() and errors_log.stat().st_size > 0:
+            per_run_errors_log = manifest_path.with_suffix(manifest_path.suffix + ".errors.log")
+            try:
+                shutil.copyfile(errors_log, per_run_errors_log)
+                manifest.setdefault("paths", {})["scenario_errors_log"] = str(per_run_errors_log)
+                _atomic_write_json(manifest_path, manifest)
+            except Exception:
+                per_run_errors_log = errors_log
+            _write_seq_id_into_manifest(
+                manifest_path,
+                seq_id=seq_id,
+                dry_run=args.dry_run,
+                scenario_filename=scenario_filename,
+                abort_reason="scenario_errors",
+            )
+            print(f"Scenario errors detected; see: {per_run_errors_log}", file=sys.stderr)
+            return 2
+
+        # Detect early termination even without explicit errors: if the CSV ends far before
+        # the latest timestamp in the scenario file, treat it as an abort.
+        csv_path_str = manifest.get("paths", {}).get("session_csv")
+        if csv_path_str:
+            csv_path = Path(csv_path_str)
+        else:
+            csv_path = None
+
+        def _scenario_max_time_seconds(path: Path) -> int:
+            max_sec = 0
+            for line in path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                parts = stripped.split(";")
+                if not parts:
+                    continue
+                time_str = parts[0]
+                try:
+                    h, m, s = time_str.split(":")
+                    sec = int(h) * 3600 + int(m) * 60 + int(s)
+                except Exception:
+                    continue
+                if sec > max_sec:
+                    max_sec = sec
+            return max_sec
+
+        def _csv_max_scenario_time_seconds(path: Path) -> float:
+            try:
+                with open(path, "r", encoding="utf-8", newline="") as f_csv:
+                    header = f_csv.readline()
+                    if not header:
+                        return 0.0
+                    cols = [c.strip() for c in header.split(",")]
+                    try:
+                        idx = cols.index("scenario_time")
+                    except ValueError:
+                        return 0.0
+                    max_t = 0.0
+                    for row in f_csv:
+                        parts = row.rstrip("\n").split(",")
+                        if len(parts) <= idx:
+                            continue
+                        try:
+                            t = float(parts[idx])
+                        except Exception:
+                            continue
+                        if t > max_t:
+                            max_t = t
+                    return max_t
+            except Exception:
+                return 0.0
+
+        if csv_path and csv_path.exists():
+            expected_end = _scenario_max_time_seconds(scenario_source_path)
+            observed_end = _csv_max_scenario_time_seconds(csv_path)
+            # Allow some slack (UI pauses, logging granularity), but if we didn't even
+            # reach ~90% of intended time, assume the run ended early.
+            if expected_end >= 10 and observed_end < (expected_end * 0.9):
+                _write_seq_id_into_manifest(
+                    manifest_path,
+                    seq_id=seq_id,
+                    dry_run=args.dry_run,
+                    scenario_filename=scenario_filename,
+                    abort_reason=f"early_exit_observed_{observed_end:.3f}_expected_{expected_end}",
+                )
+                print(
+                    f"Scenario ended early (observed scenario_time={observed_end:.2f}s, expected~{expected_end}s)",
+                    file=sys.stderr,
+                )
+                return 2
+    except Exception:
+        # If we can't read the manifest or error log, do not crash the runner.
+        pass
     return 0
 
 
