@@ -24,7 +24,6 @@ import json
 import os
 import re
 import subprocess
-import time
 import sys
 from pathlib import Path
 from typing import Optional
@@ -70,7 +69,6 @@ def _write_seq_id_into_manifest(
     manifest_path: Path,
     *,
     seq_id: str,
-    unattended: bool,
     dry_run: bool,
     scenario_filename: str,
     abort_reason: Optional[str] = None,
@@ -79,7 +77,7 @@ def _write_seq_id_into_manifest(
         manifest = json.load(f)
 
     manifest["seq_id"] = seq_id
-    manifest["unattended"] = unattended
+    manifest["unattended"] = False
     manifest["dry_run"] = dry_run
     if abort_reason:
         manifest["abort_reason"] = abort_reason
@@ -121,10 +119,10 @@ def _get_playlist(seq_id: str, dry_run: bool) -> list[str]:
         "SEQ3": ["HIGH", "LOW", "MODERATE"],
     }
 
-    if seq_id not in retained_levels:
-        raise ValueError(f"Unknown sequence ID: {seq_id}")
-
-    levels = retained_levels[seq_id]
+    try:
+        levels = retained_levels[seq_id]
+    except KeyError as exc:
+        raise ValueError(f"Unknown sequence ID: {seq_id}") from exc
     for level in levels:
         playlist.append(f"pilot_static_{level.lower()}.txt")
 
@@ -175,6 +173,24 @@ def _run_single_scenario(
         f"sys.argv.extend(['--speed', '{args.speed}'])\n"
         "import gettext, os, runpy\n"
         "from pathlib import Path\n"
+        "\n"
+        "# Wire --speed into the OpenMATB scenario clock (vendor does not parse argv for this).\n"
+        "_speed = 1\n"
+        "try:\n"
+        "    if '--speed' in sys.argv:\n"
+        "        i = sys.argv.index('--speed')\n"
+        "        _speed = int(float(sys.argv[i + 1]))\n"
+        "except Exception:\n"
+        "    _speed = 1\n"
+        "if _speed < 1:\n"
+        "    _speed = 1\n"
+        "elif _speed > 10:\n"
+        "    _speed = 10\n"
+        "try:\n"
+        "    from core.clock import Clock\n"
+        "    Clock._speed = _speed\n"
+        "except Exception:\n"
+        "    pass\n"
         "LOCALE_PATH = Path('.', 'locales')\n"
         "language_iso = [l for l in open('config.ini', 'r').readlines() if 'language=' in l][0].split('=')[-1].strip()\n"
         "language = gettext.translation('openmatb', LOCALE_PATH, [language_iso])\n"
@@ -224,7 +240,6 @@ def _run_single_scenario(
             _write_seq_id_into_manifest(
                 new_manifests[0],
                 seq_id=seq_id,
-                unattended=False,
                 dry_run=args.dry_run,
                 scenario_filename=scenario_filename,
                 abort_reason=f"exit_code_{exit_code}",
@@ -244,7 +259,6 @@ def _run_single_scenario(
     _write_seq_id_into_manifest(
         new_manifests[0],
         seq_id=seq_id,
-        unattended=False,
         dry_run=args.dry_run,
         scenario_filename=scenario_filename,
         abort_reason=None,
