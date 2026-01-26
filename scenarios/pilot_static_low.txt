@@ -1,0 +1,42 @@
+# OpenMATB Scenario: pilot_static_low.txt
+# Auto-generated Clone (Vendor Logic)
+
+0:00:00;labstreaminglayer;start
+0:00:00;labstreaminglayer;marker;STUDY/V0/RETAINED/LOW/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:00:00;scheduling;start
+0:00:00;track;start
+0:00:00;track;targetproportion;0.8
+0:00:00;sysmon;start
+0:00:00;communications;start
+0:00:00;resman;start
+0:00:00;resman;tank-a-lossperminute;320
+0:00:00;resman;tank-b-lossperminute;320
+0:00:02;communications;radioprompt;own
+0:00:03;sysmon;lights-2-failure;True
+0:00:23;sysmon;scales-2-failure;True
+0:01:21;resman;pump-2-state;failure
+0:02:02;sysmon;scales-2-failure;True
+0:02:16;sysmon;lights-2-failure;True
+0:02:18;communications;radioprompt;other
+0:02:56;sysmon;scales-1-failure;True
+0:03:11;sysmon;lights-1-failure;True
+0:03:13;resman;pump-1-state;failure
+0:03:46;sysmon;lights-2-failure;True
+0:03:57;sysmon;scales-1-failure;True
+0:03:58;communications;radioprompt;other
+0:04:11;sysmon;scales-1-failure;True
+0:04:15;communications;radioprompt;own
+0:04:18;sysmon;lights-1-failure;True
+0:05:00;sysmon;stop
+0:05:00;track;stop
+0:05:00;communications;stop
+0:05:00;resman;stop
+0:05:00;scheduling;stop
+0:05:00;labstreaminglayer;marker;STUDY/V0/RETAINED/LOW/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+
+# --- NASA-TLX (Blocking) ---
+0:05:00;labstreaminglayer;marker;STUDY/V0/TLX/RETAINED_LOW/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;genericscales;filename;nasatlx_en.txt
+0:05:00;genericscales;start
+0:05:00;labstreaminglayer;marker;STUDY/V0/TLX/RETAINED_LOW/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;labstreaminglayer;stop

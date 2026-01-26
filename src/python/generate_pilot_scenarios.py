@@ -6,7 +6,7 @@ from random import randint, shuffle, random
 # --------------------------------------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------------------------------------
-OUTPUT_DIR = Path('src/python/scenarios')
+OUTPUT_DIR = Path('scenarios')
 BLOCK_DURATION_SEC = 300
 
 # Targeted Difficulty Config (0.0 - 1.0) to approximate 5/15/30 events
@@ -233,7 +233,8 @@ def add_scenario_phase(scenario_lines, task_difficulty_tuples, start_sec):
                 # cmd = [f'tank-{letter}-lossperminute', int(maximum_single_leakage * difficulty)]
                 # Warning: 'maximum_single_leakage * difficulty' might result in leaks > inputs at high difficulty.
                 # Vendor code does exactly this.
-                cmd = [f'tank-{letter}-lossperminute', int(maximum_single_leakage * difficulty)]
+                # OpenMATB parameter keys are case-sensitive (expects tank-a-..., tank-b-...)
+                cmd = [f"tank-{letter.lower()}-lossperminute", int(maximum_single_leakage * difficulty)]
                 scenario_lines.append(Event(start_line, start_sec, plugin_name, cmd))
 
             # ADDED: Pump Failure Generation
@@ -312,8 +313,8 @@ def write_scenario(filename, lines, marker_name, include_tlx=False):
             
             f.write(f"\n# --- NASA-TLX (Blocking) ---\n")
             f.write(f"{end_h}:{end_m:02}:{end_s:02};labstreaminglayer;marker;{tlx_start_marker}\n")
-            f.write(f"{end_h}:{end_m:02}:{end_s:02};genericscales;create\n")
-            f.write(f"{end_h}:{end_m:02}:{end_s:02};genericscales;load;nasatlx_en.txt\n")
+            # Vendor genericscales plugin expects 'filename' (no create/load methods)
+            f.write(f"{end_h}:{end_m:02}:{end_s:02};genericscales;filename;nasatlx_en.txt\n")
             f.write(f"{end_h}:{end_m:02}:{end_s:02};genericscales;start\n")
             
             # These lines execute AFTER the user submits the questionnaire
@@ -328,6 +329,16 @@ def main():
     print("Generating Pilot Scenarios using Vendor Logic...")
 
     levels = ["LOW", "MODERATE", "HIGH"]
+    practice_filenames = {
+        "LOW": "pilot_practice_low.txt",
+        "MODERATE": "pilot_practice_moderate.txt",
+        "HIGH": "pilot_practice_high.txt",
+    }
+    static_filenames = {
+        "LOW": "pilot_static_low.txt",
+        "MODERATE": "pilot_static_moderate.txt",
+        "HIGH": "pilot_static_high.txt",
+    }
     
     # Generate Training Blocks (T1, T2, T3 fixed order: Low, Mod, High)
     for i, level in enumerate(levels):
@@ -338,7 +349,7 @@ def main():
         
         scen_lines = add_scenario_phase(scen_lines, phase, 0)
         marker_name = f"TRAINING/T{i+1}"
-        write_scenario(f"pilot_training_T{i+1}_{level}.txt", scen_lines, marker_name, include_tlx=False)
+        write_scenario(practice_filenames[level], scen_lines, marker_name, include_tlx=False)
         print(f"Generated Training {level} (Diff {difficulty})")
 
     # Generate Retained Blocks (Generic LOW, MODERATE, HIGH)
@@ -350,7 +361,7 @@ def main():
         
         scen_lines = add_scenario_phase(scen_lines, phase, 0)
         marker_name = f"RETAINED/{level}"
-        write_scenario(f"pilot_retained_{level}.txt", scen_lines, marker_name, include_tlx=True)
+        write_scenario(static_filenames[level], scen_lines, marker_name, include_tlx=True)
         print(f"Generated Retained {level} (Diff {difficulty})")
 
 
