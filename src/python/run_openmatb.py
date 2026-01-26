@@ -327,7 +327,21 @@ def _run_single_scenario(
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
         errors_log = Path(manifest.get("paths", {}).get("scenario_errors_log", ""))
-        if errors_log and errors_log.exists() and errors_log.stat().st_size > 0:
+
+        def _errors_log_has_actionable_errors(path: Path) -> bool:
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                return False
+            stripped = text.strip()
+            if not stripped:
+                return False
+            # OpenMATB writes a sentinel line when there are no validation errors.
+            if stripped.lower() in {"no error", "no errors"}:
+                return False
+            return True
+
+        if errors_log and errors_log.exists() and _errors_log_has_actionable_errors(errors_log):
             per_run_errors_log = manifest_path.with_suffix(manifest_path.suffix + ".errors.log")
             try:
                 shutil.copyfile(errors_log, per_run_errors_log)
