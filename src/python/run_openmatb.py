@@ -162,7 +162,7 @@ def _stage_pilot_instruction_files(openmatb_dir: Path, repo_root: Path) -> None:
 
 
 def _rewrite_scenario_paths_for_openmatb_includes(scenario_text: str) -> str:
-    """Rewrite repo-relative asset paths to OpenMATB-acceptable include paths."""
+    """Rewrite repo scenario text for OpenMATB runtime/validation compatibility."""
 
     # The vendor validator requires filenames for blocking plugins to be present under
     # includes/instructions/ or includes/questionnaires/.
@@ -176,6 +176,16 @@ def _rewrite_scenario_paths_for_openmatb_includes(scenario_text: str) -> str:
     ]
     for old, new in rewrites:
         scenario_text = scenario_text.replace(old, new)
+
+    # Normalize vendor parameter keys that are case-sensitive.
+    # The ResMan plugin uses lowercase tank letters in parameter names
+    # (e.g., tank-a-lossperminute). Some generated scenarios used tank-A-…
+    # which fails OpenMATB validation.
+    scenario_text = re.sub(
+        r"\btank-([A-F])-",
+        lambda m: f"tank-{m.group(1).lower()}-",
+        scenario_text,
+    )
     return scenario_text
 
 
