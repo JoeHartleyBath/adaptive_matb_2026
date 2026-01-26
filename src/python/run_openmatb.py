@@ -5,13 +5,14 @@ OpenMATB to write session logs outside the git repo.
 
 Usage (PowerShell):
   cd src/python/vendor/openmatb
-    ./.venv/Scripts/Activate.ps1
-  python ..\..\run_openmatb.py --participant P001 --session S001
+        .\.venv\Scripts\Activate.ps1
+    python ..\..\run_openmatb.py --participant P001 --session S001 --seq-id SEQ1
 
 Environment variables (optional):
   OPENMATB_OUTPUT_ROOT   (default: C:\data\adaptive_matb)
   OPENMATB_PARTICIPANT / OPENMATB_PARTICIPANT_ID
   OPENMATB_SESSION / OPENMATB_SESSION_ID
+    OPENMATB_SEQ_ID
 
 OpenMATB uses:
   OPENMATB_OUTPUT_ROOT and OPENMATB_OUTPUT_SUBDIR
@@ -387,9 +388,9 @@ def main() -> int:
 
     parser.add_argument(
         "--seq-id",
-        required=True,
+        required=False,
         choices=("SEQ1", "SEQ2", "SEQ3"),
-        help="Retained-order sequence ID (required): SEQ1, SEQ2, or SEQ3.",
+        help="Retained-order sequence ID (SEQ1/SEQ2/SEQ3). Can also be set via OPENMATB_SEQ_ID.",
     )
     parser.add_argument(
         "--dry-run",
@@ -404,6 +405,17 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    seq_id = args.seq_id or _get_env_first("OPENMATB_SEQ_ID")
+    if not seq_id:
+        if args.dry_run:
+            seq_id = "DRYRUN"
+        else:
+            print(
+                "Missing required --seq-id (SEQ1/SEQ2/SEQ3). Provide --seq-id or set OPENMATB_SEQ_ID.",
+                file=sys.stderr,
+            )
+            return 2
 
     participant_raw = args.participant or _get_env_first("OPENMATB_PARTICIPANT", "OPENMATB_PARTICIPANT_ID")
     session_raw = args.session or _get_env_first("OPENMATB_SESSION", "OPENMATB_SESSION_ID")
@@ -457,12 +469,22 @@ def main() -> int:
         return 2
 
     try:
-        playlist = _get_playlist(args.seq_id, args.dry_run)
+        playlist = _get_playlist(seq_id, args.dry_run)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
 
-    print(f"Running sequence: {args.seq_id}")
+    missing_scenarios: list[str] = []
+    for scenario_filename in playlist:
+        if not (repo_root / "scenarios" / scenario_filename).exists():
+            missing_scenarios.append(scenario_filename)
+    if missing_scenarios:
+        print("Missing scenario files under <repo>/scenarios:", file=sys.stderr)
+        for name in missing_scenarios:
+            print(f" - {name}", file=sys.stderr)
+        return 2
+
+    print(f"Running sequence: {seq_id}")
     print(f"Playlist ({len(playlist)} scenarios):")
     for s in playlist:
         print(f" - {s}")
@@ -474,7 +496,7 @@ def main() -> int:
             output_root_path=output_root_path,
             participant=participant,
             session=session,
-            seq_id=args.seq_id,
+            seq_id=seq_id,
             args=args,
             repo_commit=repo_commit,
             submodule_commit=submodule_commit,
