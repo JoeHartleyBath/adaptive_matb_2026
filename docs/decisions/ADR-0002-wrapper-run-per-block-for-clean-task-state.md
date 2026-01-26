@@ -14,8 +14,8 @@ However, the core experimental requirement is that each block begins from a know
 
 The vendor wiki describes scenario “actions” primarily as `start` / `stop` / `pause` / `resume` / `hide` / `show` and notes that actions execute the corresponding plugin method (example: sending `pause` to `resman` calls `Resman.pause()` in `resman.py`). There is no documented scenario-level `reset` action.
 
-- Scenario actions are “limited in number” and “most used actions are `start` and `stop`” (no mention of reset): `docs/openmatb/wiki/How-to-build-a-scenario-file.md`.
-- “When a plugin is sent an action instruction (e.g., `start`), … execute the corresponding method in the plugin python file.”: `docs/openmatb/wiki/How-to-build-a-scenario-file.md`.
+- Scenario actions are “limited in number” and “most used actions are `start` and `stop`” (no mention of reset): `docs/openmatb/wiki/How-to-build-a-scenario-file.md` (Actions section).
+- “When a plugin is sent an action instruction (e.g., `start`), … execute the corresponding method in the plugin python file.”: `docs/openmatb/wiki/How-to-build-a-scenario-file.md` (Actions section).
 - The `resman` and `track` wiki pages document parameter manipulation (e.g., `tank-*-level`, `pump-*-state`, `automaticsolver`), but do not describe a canonical block reset mechanism: `docs/openmatb/wiki/The-resources-management-task-(resman).md`, `docs/openmatb/wiki/The-tracking-task-(track).md`.
 
 ### What the vendor code does
@@ -27,9 +27,9 @@ OpenMATB parses the scenario file into a time-ordered list of events. For each e
 Critically, plugins are instantiated **once per scenario load**, not once per block.
 
 Evidence (vendor code):
-- Scenario parsing & plugin instantiation: `src/python/vendor/openmatb/core/scenario.py` (`Scenario.__init__`).
-- Event execution: `src/python/vendor/openmatb/core/scheduler.py` (`Scheduler.execute_one_event`).
-- Base plugin lifecycle: `src/python/vendor/openmatb/plugins/abstractplugin.py` (`AbstractPlugin.start()` / `stop()`).
+- Scenario parsing & plugin instantiation (plugins created once per scenario): `src/python/vendor/openmatb/core/scenario.py` (`Scenario.__init__`, see the `self.plugins = {...}()` comprehension).
+- Event execution (action => method call; parameter => `set_parameter`): `src/python/vendor/openmatb/core/scheduler.py` (`Scheduler.execute_one_event`).
+- Base plugin lifecycle (no reset semantics in `start()` / `stop()`): `src/python/vendor/openmatb/plugins/abstractplugin.py` (`AbstractPlugin.start()` / `stop()`).
 
 ### Why a single multi-block scenario cannot guarantee clean state today
 
