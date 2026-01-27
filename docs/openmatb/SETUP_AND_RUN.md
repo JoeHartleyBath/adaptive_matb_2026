@@ -91,8 +91,8 @@ Options that require no new files:
 
 Study-owned scenarios (recommended for this repo):
 
-- Store repo-managed scenarios under `src/python/scenarios/openmatb/`.
-- Point `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) at a relative path that traverses from `vendor/openmatb/includes/scenarios/` to `src/python/scenarios/openmatb/`.
+- Store repo-managed scenarios under `scenarios/`.
+- Point `scenario_path` in [src/python/vendor/openmatb/config.ini](../../src/python/vendor/openmatb/config.ini) at a relative path that traverses from `vendor/openmatb/includes/scenarios/` to `scenarios/`.
   - Use forward slashes for portability.
   - Example pattern: `../../../..` (to `src/python/`) + `/scenarios/openmatb/<scenario>.txt`.
 

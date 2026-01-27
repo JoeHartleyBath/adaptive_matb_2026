@@ -1,4 +1,4 @@
-"""Launch OpenMATB with repo-safe output paths.
+r"""Launch OpenMATB with repo-safe output paths.
 
 This wrapper enforces that participant/session identifiers are provided and configures
 OpenMATB to write session logs outside the git repo.
@@ -356,6 +356,18 @@ def _run_single_scenario(
         abort_reason=None,
     )
 
+    if getattr(args, "summarize_performance", False):
+        try:
+            summarizer = (repo_root / "src" / "python" / "summarize_openmatb_performance.py").resolve()
+            subprocess.run(
+                [sys.executable, str(summarizer), "--manifest", str(manifest_path)],
+                check=False,
+                cwd=str(repo_root),
+            )
+        except Exception:
+            # Performance summarization is best-effort and must not crash an attended run.
+            pass
+
     # If OpenMATB reports scenario parsing/runtime errors, treat this run as failed.
     try:
         with open(manifest_path, "r", encoding="utf-8") as f:
@@ -512,6 +524,12 @@ def main() -> int:
         type=int,
         default=1,
         help="Fast-forward speed multiplier (ignored unless --verification is set).",
+    )
+
+    parser.add_argument(
+        "--summarize-performance",
+        action="store_true",
+        help="Write a derived performance summary JSON next to each run manifest.",
     )
 
     args = parser.parse_args()

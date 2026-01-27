@@ -39,6 +39,31 @@ The manifest payload includes the following required keys:
 - Monotonic timebase: `time.perf_counter()` is written to `logtime` in record methods (e.g. [src/python/vendor/openmatb/core/logger.py](../src/python/vendor/openmatb/core/logger.py#L106)).
 - Scenario-relative time: `scenario_time` is accumulated using pyglet `dt` in [src/python/vendor/openmatb/core/scheduler.py](../src/python/vendor/openmatb/core/scheduler.py#L81) and passed into the logger in [src/python/vendor/openmatb/core/scheduler.py](../src/python/vendor/openmatb/core/scheduler.py#L82).
 
+## Performance tracking (CSV rows)
+
+OpenMATB task performance is logged into the same session CSV as rows with:
+
+- `type == performance`
+- `module == <plugin>` (e.g., `sysmon`, `track`, `communications`, `resman`)
+- `address == <metric>` (e.g., `signal_detection`, `response_time`, `center_deviation`)
+- `value == <metric value>` (numeric/boolean/categorical)
+
+These are emitted via `Logger.log_performance()` in [src/python/vendor/openmatb/core/logger.py](../src/python/vendor/openmatb/core/logger.py#L79-L112) and called by plugins (examples):
+
+- `sysmon`: logs `signal_detection` (HIT/MISS/FA) and `response_time` in [src/python/vendor/openmatb/plugins/sysmon.py](../src/python/vendor/openmatb/plugins/sysmon.py#L235-L270)
+- `track`: logs `cursor_in_target`, `center_deviation`, and `response_time` in [src/python/vendor/openmatb/plugins/track.py](../src/python/vendor/openmatb/plugins/track.py#L63-L92)
+- `communications`: logs `sdt_value` and response fields in [src/python/vendor/openmatb/plugins/communications.py](../src/python/vendor/openmatb/plugins/communications.py#L329-L505)
+- `resman`: logs per-target-tank `*_deviation`, `*_in_tolerance`, and `*_response_time` in [src/python/vendor/openmatb/plugins/resman.py](../src/python/vendor/openmatb/plugins/resman.py#L286-L330)
+
+### Derived summary (optional)
+
+The repo includes a pure-stdlib summarizer that reads the CSV and writes a JSON summary:
+
+- Script: [src/python/summarize_openmatb_performance.py](../src/python/summarize_openmatb_performance.py)
+- Runner flag: `--summarize-performance` in [src/python/run_openmatb.py](../src/python/run_openmatb.py)
+
+The summary is written next to the run manifest as `*.manifest.json.performance_summary.json`.
+
 ## Failure modes
 
 - If the process crashes, `ended_at_local` remains `null` because it is only set during `Logger.finalize()` on clean shutdown in [src/python/vendor/openmatb/core/logger.py](../src/python/vendor/openmatb/core/logger.py#L134-L150).

@@ -2,6 +2,8 @@
 
 Purpose: define **objective, checkable** conditions under which the MATB(-II) paradigm + EEG pipeline are ready to begin pilot data collection.
 
+Pilot definition: A small number of non-final participants used to validate task timing, signal quality, and pipeline integrity; pilot data may or may not be used in final analyses depending on ethics approval.
+
 Scope: scenario setup, EEG acquisition, time alignment, contracts, and compliance. **No modelling** and no assumptions that data already exists.
 
 Last updated: 2026-01-22
@@ -111,6 +113,7 @@ Failure modes and fallbacks:
 
 - [ ] If LSL/event streaming fails mid-run, the failure is detectable from logs and the run is classified as unusable (or explicitly downgraded) by a written rule.
 - [ ] If the EEG recording has missing timestamps or non-monotonic timing, it is rejected by a written rule.
+- [ ] Runs that violate synchronization or contract rules are never silently used for modelling or adaptation (must be explicitly flagged or excluded).
 
 ---
 

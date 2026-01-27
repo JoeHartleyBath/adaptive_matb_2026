@@ -171,8 +171,44 @@ def add_scenario_phase(scenario_lines, task_difficulty_tuples, start_sec):
     
     # Start tasks
     for (plugin_name, difficulty) in task_difficulty_tuples:
-        scenario_lines.append(Event(start_line, start_sec, plugin_name, 'start'))
         plugin = plugins[plugin_name]
+
+        # Tracking difficulty: manipulate control-dynamics parameters
+        # (1) taskupdatetime (ms): lower => higher update rate/bandwidth (harder)
+        # (2) joystickforce (gain): lower => more attenuation (harder)
+        # Keep targetproportion at OpenMATB defaults by not setting it here.
+        if plugin_name == 'track':
+            # Linear mapping from difficulty in [0,1] to parameter ranges.
+            # Easy (0.0): slower updates, higher gain
+            # Hard (1.0): faster updates, lower gain
+            difficulty = max(0.0, min(1.0, float(difficulty)))
+
+            taskupdatetime_easy_ms = 50
+            taskupdatetime_hard_ms = 10
+            taskupdatetime_ms = int(round(
+                taskupdatetime_easy_ms
+                + (taskupdatetime_hard_ms - taskupdatetime_easy_ms) * difficulty
+            ))
+            if taskupdatetime_ms < 1:
+                taskupdatetime_ms = 1
+
+            joystickforce_easy = 3
+            joystickforce_hard = 1
+            joystickforce = int(round(
+                joystickforce_easy
+                + (joystickforce_hard - joystickforce_easy) * difficulty
+            ))
+            if joystickforce < 1:
+                joystickforce = 1
+
+            # Ensure params are applied before start (even at identical timestamps)
+            scenario_lines.append(Event(start_line, start_sec, plugin_name, ['taskupdatetime', taskupdatetime_ms]))
+            scenario_lines.append(Event(start_line, start_sec, plugin_name, ['joystickforce', joystickforce]))
+            scenario_lines.append(Event(start_line, start_sec, plugin_name, 'start'))
+            continue
+
+        # Default: start the task first, then schedule its events
+        scenario_lines.append(Event(start_line, start_sec, plugin_name, 'start'))
 
         if plugin_name == 'sysmon':
             failure_duration_sec = plugin.parameters['alerttimeout'] / 1000 + EVENTS_REFRACTORY_DURATION
@@ -192,9 +228,6 @@ def add_scenario_phase(scenario_lines, task_difficulty_tuples, start_sec):
             scale_list = choices(scale_names, events_N, True)
             cmd_list = [[f'scales-{s}-failure', True] for s in scale_list]
             scenario_lines = distribute_events(scenario_lines, start_sec, failure_duration_sec, cmd_list, plugin_name)
-
-        elif plugin_name == 'track':
-            scenario_lines.append(Event(start_line, start_sec, plugin_name, ['targetproportion', 1 - difficulty]))
 
         elif plugin_name == 'communications':
             averaged_duration_sec = AVERAGE_AUDITORY_PROMPT_DURATION
