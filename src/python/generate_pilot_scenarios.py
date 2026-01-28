@@ -341,7 +341,7 @@ def write_scenario(filename, lines, marker_name, include_tlx=False):
         if include_tlx:
             # TLX Injection: This plugin blocks execution until the user submits.
             # We derive the marker name from the block name.
-            tlx_marker_name = f"TLX/{marker_name.replace('RETAINED/', 'RETAINED_')}"
+            tlx_marker_name = f"TLX/{marker_name.replace('calibration/', 'calibration_')}"
             tlx_start_marker = f"STUDY/V0/{tlx_marker_name}/START|{payload}"
             
             f.write(f"\n# --- NASA-TLX (Blocking) ---\n")
@@ -367,10 +367,10 @@ def main():
         "MODERATE": "pilot_practice_moderate.txt",
         "HIGH": "pilot_practice_high.txt",
     }
-    static_filenames = {
-        "LOW": "pilot_static_low.txt",
-        "MODERATE": "pilot_static_moderate.txt",
-        "HIGH": "pilot_static_high.txt",
+    calibration_filenames = {
+        "LOW": "pilot_calibration_low.txt",
+        "MODERATE": "pilot_calibration_moderate.txt",
+        "HIGH": "pilot_calibration_high.txt",
     }
     
     # Generate Training Blocks (T1, T2, T3 fixed order: Low, Mod, High)
@@ -385,7 +385,7 @@ def main():
         write_scenario(practice_filenames[level], scen_lines, marker_name, include_tlx=False)
         print(f"Generated Training {level} (Diff {difficulty})")
 
-    # Generate Retained Blocks (Generic LOW, MODERATE, HIGH)
+    # Generate calibration Blocks (Generic LOW, MODERATE, HIGH)
     for level in levels:
         scen_lines = []
         difficulty = DIFFICULTIES[level]
@@ -393,9 +393,9 @@ def main():
                  ('communications', difficulty),('resman', difficulty))
         
         scen_lines = add_scenario_phase(scen_lines, phase, 0)
-        marker_name = f"RETAINED/{level}"
-        write_scenario(static_filenames[level], scen_lines, marker_name, include_tlx=True)
-        print(f"Generated Retained {level} (Diff {difficulty})")
+        marker_name = f"calibration/{level}"
+        write_scenario(calibration_filenames[level], scen_lines, marker_name, include_tlx=True)
+        print(f"Generated calibration {level} (Diff {difficulty})")
 
 
 if __name__ == "__main__":

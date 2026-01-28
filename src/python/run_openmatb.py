@@ -111,22 +111,22 @@ def _get_playlist(seq_id: str, dry_run: bool) -> list[str]:
         "pilot_practice_high.txt",
     ]
 
-    # Retained blocks based on counterbalancing sequence
+    # calibration blocks based on counterbalancing sequence
     # SEQ1: Low -> Moderate -> High
     # SEQ2: Moderate -> High -> Low
     # SEQ3: High -> Low -> Moderate
-    retained_levels = {
+    calibration_levels = {
         "SEQ1": ["LOW", "MODERATE", "HIGH"],
         "SEQ2": ["MODERATE", "HIGH", "LOW"],
         "SEQ3": ["HIGH", "LOW", "MODERATE"],
     }
 
     try:
-        levels = retained_levels[seq_id]
+        levels = calibration_levels[seq_id]
     except KeyError as exc:
         raise ValueError(f"Unknown sequence ID: {seq_id}") from exc
-    for level in levels:
-        playlist.append(f"pilot_static_{level.lower()}.txt")
+        for level in levels:
+            playlist.append(f"pilot_calibration_{level.lower()}.txt")
 
     return playlist
 
@@ -356,11 +356,11 @@ def _run_single_scenario(
         abort_reason=None,
     )
 
-    if getattr(args, "summarize_performance", False):
+    if getattr(args, "summarise_performance", False):
         try:
-            summarizer = (repo_root / "src" / "python" / "summarize_openmatb_performance.py").resolve()
+            summariser = (repo_root / "src" / "python" / "summarise_openmatb_performance.py").resolve()
             subprocess.run(
-                [sys.executable, str(summarizer), "--manifest", str(manifest_path)],
+                [sys.executable, str(summariser), "--manifest", str(manifest_path)],
                 check=False,
                 cwd=str(repo_root),
             )
@@ -507,7 +507,7 @@ def main() -> int:
         "--seq-id",
         required=False,
         choices=("SEQ1", "SEQ2", "SEQ3"),
-        help="Retained-order sequence ID (SEQ1/SEQ2/SEQ3). Can also be set via OPENMATB_SEQ_ID.",
+        help="calibration-order sequence ID (SEQ1/SEQ2/SEQ3). Can also be set via OPENMATB_SEQ_ID.",
     )
     parser.add_argument(
         "--dry-run",
@@ -527,7 +527,7 @@ def main() -> int:
     )
 
     parser.add_argument(
-        "--summarize-performance",
+        "--summarise-performance",
         action="store_true",
         help="Write a derived performance summary JSON next to each run manifest.",
     )

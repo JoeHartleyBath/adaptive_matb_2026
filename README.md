@@ -28,6 +28,12 @@ This repository is intentionally scoped to shareable research code and derived a
 - PRs: changes land via pull request with a brief description and review when feasible.
 - Commit rhythm: commit small, coherent units of work; write messages that explain intent and scope.
 
+## Decision logging
+
+- `docs/decisions/design_choices/` contains committed, defensible design choices only.
+- `docs/decisions/open_decisions.md` contains active but unresolved design questions.
+- `docs/lab-notes/` is for exploratory thinking and narrative, not commitments.
+
 ## Naming conventions
 
 Naming and style conventions are defined in `docs/STYLEGUIDE.md` (canonical source).

@@ -6,7 +6,7 @@ Accepted — 2026-01-26
 
 ## Context
 
-We want a pilot protocol with multiple task blocks (familiarisation, training, then three retained difficulty blocks in a counterbalanced order). A desirable simplification would be to embed multiple “runs”/blocks into a single OpenMATB scenario file (similar to the vendor example scenarios), reducing the number of scenario files and reducing wrapper logic.
+We want a pilot protocol with multiple task blocks (familiarisation, training, then three calibration difficulty blocks in a counterbalanced order). A desirable simplification would be to embed multiple “runs”/blocks into a single OpenMATB scenario file (similar to the vendor example scenarios), reducing the number of scenario files and reducing wrapper logic.
 
 However, the core experimental requirement is that each block begins from a known, comparable baseline state (especially the **Resource Management** task, but also other tasks with accumulating state).
 
@@ -48,7 +48,7 @@ Because the vendor scenario/action surface does not include a documented reset m
 Keep the current approach:
 
 - Each block is run as a separate OpenMATB process invocation via the repo wrapper (`src/python/run_openmatb.py`).
-- The wrapper selects the scenario file for each block (training + retained blocks) and restarts OpenMATB between blocks.
+- The wrapper selects the scenario file for each block (training + calibration blocks) and restarts OpenMATB between blocks.
 
 This guarantees a fresh plugin instantiation and baseline state for each block without relying on undocumented or incomplete “reset via scenario actions/parameters”.
 

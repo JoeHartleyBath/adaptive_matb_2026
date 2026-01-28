@@ -76,7 +76,7 @@ Verification docs already present:
 
 Workload manipulation lever:
 
-- Primary lever is event rate + overlap (concurrency), while keeping the task set constant across levels.
+- Primary lever is event rate, while keeping the task set constant across levels.
 - Use >2 workload levels to reduce inverted-U ambiguity: Low / Moderate / High.
 
 v0 workload targets (authoritative; must match the study spec + scenario contract):
@@ -86,9 +86,9 @@ v0 workload targets (authoritative; must match the study spec + scenario contrac
 
 Order control:
 
-- Workload level order must be counterbalanced across participants via retained `seq_id` assignment (`SEQ1|SEQ2|SEQ3`).
-- `seq_id` applies to retained block order only; training is invariant across participants and does not depend on `seq_id`.
-- The repo uses three combined session scenario files (one per `seq_id`) that each embed the same training segment, followed by retained blocks ordered per `seq_id`.
+- Workload level order must be counterbalanced across participants via calibration `seq_id` assignment (`SEQ1|SEQ2|SEQ3`).
+- `seq_id` applies to calibration block order only; training is invariant across participants and does not depend on `seq_id`.
+- The repo uses three combined session scenario files (one per `seq_id`) that each embed the same training segment, followed by calibration blocks ordered per `seq_id`.
 - Order assignment must be reproducible and checkable from the run manifest or session metadata (at minimum: recorded `seq_id`).
 
 Training:
@@ -98,7 +98,7 @@ Training:
 
 Subjective validation:
 
-- NASA-TLX after each retained block (B1–B3); TLX is not administered during training in v0.
+- NASA-TLX after each calibration block (B1–B3); TLX is not administered during training in v0.
 - NASA-TLX is untimed and requires interaction with all sliders before continuing.
 - Use OpenMATB `genericscales` + `nasatlx_en.txt` as the in-task questionnaire mechanism.
 
@@ -209,7 +209,7 @@ Files touched:
 
 Success criteria:
 
-- Ethics approval is explicitly granted for participant recruitment/recording (or a documented determination forbids recruitment and limits work to non-retained researcher dry runs).
+- Ethics approval is explicitly granted for participant recruitment/recording (or a documented determination forbids recruitment and limits work to non-calibration researcher dry runs).
 - Approval identifier and approved protocol version/date recorded.
 
 Failure modes:
@@ -274,11 +274,11 @@ Files touched:
 Success criteria:
 
 - Exactly which scenarios are used is specified by path and filename.
-- Scenario set is exactly three combined session scenario files (v0; one per retained `seq_id`), loaded via `scenario_path`:
+- Scenario set is exactly three combined session scenario files (v0; one per calibration `seq_id`), loaded via `scenario_path`:
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq1.txt` (for `SEQ1`)
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq2.txt` (for `SEQ2`)
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq3.txt` (for `SEQ3`)
-- Each scenario file begins with the same training segment (T1–T3; `LOW`→`MODERATE`→`HIGH`), then runs retained blocks (B1–B3) ordered per `seq_id`.
+- Each scenario file begins with the same training segment (T1–T3; `LOW`→`MODERATE`→`HIGH`), then runs calibration blocks (B1–B3) ordered per `seq_id`.
 - For each workload level within the session, all manipulated parameters and event-rate targets are recorded.
 - Level durations are fixed and bounded.
 
@@ -314,7 +314,7 @@ Failure modes:
 
 Objective:
 
-- Capture subjective MWL after each retained block (B1–B3) using a consistent, in-task instrument.
+- Capture subjective MWL after each calibration block (B1–B3) using a consistent, in-task instrument.
 
 Files touched:
 
@@ -543,7 +543,7 @@ These files must be placed in a location resolvable by OpenMATB scenario include
 ### Content constraints
 - Concise, on-screen readable (heading + ≤6 bullets).
 - Include controls and success criteria per task; no theory, no workload/hypothesis language.
-- Training/familiarisation screens may guide; retained-phase screens must not provide performance strategies.
+- Training/familiarisation screens may guide; calibration-phase screens must not provide performance strategies.
 
 ### Hard disallow list (must not be referenced by pilot scenarios)
 Pilot scenarios must not reference any of:
@@ -665,7 +665,7 @@ Must be true before pilot recruitment/recording:
    - Alternative: 50 ms (if acquisition/LSL path introduces unavoidable jitter; must be justified).
 
 3) Workload block durations and full session structure
-  - Default: session structure is exactly as defined in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (training T1–T3 with breaks; retained B1–B3 with TLX after each retained block and breaks).
+  - Default: session structure is exactly as defined in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (training T1–T3 with breaks; calibration B1–B3 with TLX after each calibration block and breaks).
    - Alternative: 3 × 7 minutes if more stable EEG windows are needed; keep total session bounded.
 
 4) Event rate targets per level (per task)
@@ -675,7 +675,7 @@ Must be true before pilot recruitment/recording:
   - Scheduling is deterministic and must follow the contract’s authoritative per-block template (integer second offsets, guard bands, collision rules).
 
 5) Counterbalancing scheme
-  - v0 retained counterbalancing is exactly the 3-sequence Latin-square defined by `seq_id` in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (`SEQ1|SEQ2|SEQ3`).
+  - v0 calibration counterbalancing is exactly the 3-sequence Latin-square defined by `seq_id` in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (`SEQ1|SEQ2|SEQ3`).
 
 6) Label target space choice under label contract
    - Default: 3-level ordinal label `{LOW, MODERATE, HIGH}` with `TBD_MWL_NUM_LEVELS_V0 = 3`.

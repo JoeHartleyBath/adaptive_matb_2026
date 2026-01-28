@@ -36,9 +36,16 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 
-# We reuse the existing canonical verifier utilities (parsers + constants)
-# but we do NOT reuse any unattended-only assumptions.
-import verify_pilot_scenarios as vps
+# Ensure we can import runner/util modules when executed from repo root.
+# File is located at <repo>/src/python/verification/verify_pilot.py.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SRC_PYTHON = REPO_ROOT / "src" / "python"
+if str(SRC_PYTHON) not in sys.path:
+    sys.path.insert(0, str(SRC_PYTHON))
+
+
+# We reuse verifier utilities (parsers + constants) but do NOT reuse unattended-only assumptions.
+from verification import verify_pilot_scenarios as vps
 
 
 @dataclass
@@ -48,12 +55,14 @@ class CheckFailure:
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[3]
 
 
-def _run_static_verifier(python: str) -> int:
+def _run_calibration_verifier(python: str) -> int:
     """Run the repo-level static checks (scenarios/assets/contracts)."""
-    proc = subprocess.run([python, str(_repo_root() / "src" / "python" / "verify_pilot_scenarios.py")])
+    proc = subprocess.run(
+        [python, str(_repo_root() / "src" / "python" / "verification" / "verify_pilot_scenarios.py")]
+    )
     return int(proc.returncode)
 
 
@@ -115,10 +124,16 @@ def _intended_segments_from_scenario_events(events: list[vps.Event]) -> dict[str
     add_segment("T3", "TRAINING/T3/START", "TRAINING/T3/END")
 
     for level in ("LOW", "MODERATE", "HIGH"):
-        add_segment(f"RETAINED_{level}", f"RETAINED/{level}/START", f"RETAINED/{level}/END")
+        add_segment(f"calibration_{level}", f"calibration/{level}/START", f"calibration/{level}/END")
 
-    for idx in (1, 2, 3):
-        add_segment(f"TLX/B{idx}", f"TLX/B{idx}/START", f"TLX/B{idx}/END")
+    # Current scenarios emit TLX markers keyed to the immediately preceding calibration level,
+    # e.g., TLX/calibration_LOW/START and TLX/calibration_LOW/END.
+    for level in ("LOW", "MODERATE", "HIGH"):
+        add_segment(
+            f"TLX_calibration_{level}",
+            f"TLX/calibration_{level}/START",
+            f"TLX/calibration_{level}/END",
+        )
 
     return segments
 
@@ -130,8 +145,8 @@ def _level_for_segment(label: str) -> Optional[str]:
         return "MODERATE"
     if label == "T3":
         return "HIGH"
-    if label.startswith("RETAINED_"):
-        level = label.replace("RETAINED_", "")
+    if label.startswith("calibration_"):
+        level = label.replace("calibration_", "")
         return level if level in vps.ALLOWED_LEVELS else None
     return None
 
@@ -257,7 +272,7 @@ def _check_dynamic_segments(
                     )
                 )
 
-        # Count check (only for training/retained segments)
+        # Count check (only for training/calibration segments)
         headers = ["Segment", "Level", "Sysmon", "Comms", "Resman", "Expected", "PASS"]
         rows: list[list[str]] = []
         for label, seg in intended.items():
@@ -325,7 +340,7 @@ def _check_dynamic_segments(
                 )
 
     else:
-        lines.append(f"No TRAINING/RETAINED/TLX segments detected in {scenario_path.name}; skipping timing/count checks.")
+        lines.append(f"No TRAINING/calibration/TLX segments detected in {scenario_path.name}; skipping timing/count checks.")
 
     return lines, failures
 
@@ -361,7 +376,7 @@ def main() -> int:
     failures: list[CheckFailure] = []
 
     if not args.skip_static:
-        rc = _run_static_verifier(sys.executable)
+        rc = _run_calibration_verifier(sys.executable)
         if rc != 0:
             print("Static verification failed; fix static issues before running dynamic checks.", file=sys.stderr)
             return rc
@@ -377,6 +392,7 @@ def main() -> int:
             args.session,
             "--seq-id",
             args.seq_id,
+            "--summarise-performance",
             "--verification",
             "--speed",
             str(args.speed),

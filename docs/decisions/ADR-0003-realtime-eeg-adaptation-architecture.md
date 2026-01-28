@@ -27,7 +27,7 @@ This ADR documents the target architecture and a PR-by-PR implementation plan th
 **What it does:**
 - Wraps OpenMATB execution with repo-safe output paths
 - Validates participant/session/seq-id identifiers
-- Executes a *playlist* of scenarios in sequence (e.g., training blocks then retained blocks)
+- Executes a *playlist* of scenarios in sequence (e.g., training blocks then calibration blocks)
 - Injects environment variables for output routing and provenance
 - Dynamically bootstraps OpenMATB with Clock speed patching, token substitution, and plugin shims
 - Writes/patches `.manifest.json` files with run metadata (seq_id, dry_run, abort_reason, provenance)
@@ -72,9 +72,9 @@ HH:MM:SS;plugin;command[;param]
 **Current scenario usage:**
 ```
 0:00:00;labstreaminglayer;start
-0:00:00;labstreaminglayer;marker;STUDY/V0/RETAINED/LOW/START|pid=...
+0:00:00;labstreaminglayer;marker;STUDY/V0/calibration/LOW/START|pid=...
 ...
-0:05:00;labstreaminglayer;marker;STUDY/V0/RETAINED/LOW/END|pid=...
+0:05:00;labstreaminglayer;marker;STUDY/V0/calibration/LOW/END|pid=...
 0:05:00;labstreaminglayer;stop
 ```
 
@@ -91,7 +91,7 @@ HH:MM:SS;plugin;command[;param]
 {
   "identifiers": {"seq_id": "SEQ1", ...},
   "seq_id": "SEQ1",
-  "scenario_name": "pilot_static_low",
+  "scenario_name": "pilot_calibration_low",
   "openmatb": {"scenario_path": "..."},
   "paths": {"session_csv": "...", "scenario_errors_log": "..."},
   "dry_run": false,
@@ -473,8 +473,8 @@ Additional v0 guidance:
 
 **Marker schema for alignment:**
 ```
-STUDY/V0/RETAINED/{LEVEL}/START|pid=P001|sid=S001|seq=SEQ1
-STUDY/V0/RETAINED/{LEVEL}/END|pid=P001|sid=S001|seq=SEQ1
+STUDY/V0/calibration/{LEVEL}/START|pid=P001|sid=S001|seq=SEQ1
+STUDY/V0/calibration/{LEVEL}/END|pid=P001|sid=S001|seq=SEQ1
 ```
 
 **Post-session:**
@@ -852,10 +852,10 @@ mwl_estimate = model.predict(features_norm)
 
 ---
 
-### PR 15: `feat(analysis): update performance summarizer for adaptive runs`
+### PR 15: `feat(analysis): update performance summariser for adaptive runs`
 
 **Files to add/change:**
-- `src/python/summarize_openmatb_performance.py` (modify)
+- `src/python/summarise_openmatb_performance.py` (modify)
 
 **Scope:**
 - Read adaptation logs (if present)
@@ -867,7 +867,7 @@ mwl_estimate = model.predict(features_norm)
 - Run summary on adaptive session data and verify stratified output
 - Run summary on old static session data and verify no regression
 
-**Rollback:** Revert changes to `summarize_openmatb_performance.py`
+**Rollback:** Revert changes to `summarise_openmatb_performance.py`
 
 ---
 
@@ -892,8 +892,8 @@ python -m pytest src/python/tests/ -v
   Recommended additional check (reuse existing harness):
   - Run [src/python/verify_pilot.py](../../src/python/verify_pilot.py) to ensure scenario markers and segment boundaries remain contract-compliant under any new adaptive scenario templates.
 
-  Recommended additional check (reuse existing summarizer):
-  - Use [src/python/summarize_openmatb_performance.py](../../src/python/summarize_openmatb_performance.py) on produced manifests to validate that performance metrics and marker segmentation remain parseable.
+  Recommended additional check (reuse existing summariser):
+  - Use [src/python/summarise_openmatb_performance.py](../../src/python/summarise_openmatb_performance.py) on produced manifests to validate that performance metrics and marker segmentation remain parseable.
 
 2. **EEG hardware loop:**
    - Connect EEG amplifier (LSL stream active)

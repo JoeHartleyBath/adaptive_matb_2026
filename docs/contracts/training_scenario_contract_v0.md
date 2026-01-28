@@ -4,11 +4,11 @@ Status: draft (implementation in-progress)
 
 Last updated: 2026-01-23
 
-Purpose: define the **deterministic, contract-compliant structure** of the OpenMATB v0 pilot session scenarios (training + retained) used in this repository.
+Purpose: define the **deterministic, contract-compliant structure** of the OpenMATB v0 pilot session scenarios (training + calibration) used in this repository.
 
 Scope:
 
-- Covers **scenario structure + marker semantics** for both training and retained blocks described in `docs/pilot/PILOT_STUDY_SPEC_V0.md`.
+- Covers **scenario structure + marker semantics** for both training and calibration blocks described in `docs/pilot/PILOT_STUDY_SPEC_V0.md`.
 - Specifies the minimum inputs required to run the scenario in a way that is **one-shot reproducible** and **log-bracketed**.
 - Defines the scenario-side requirements only (not EEG ingestion). EEG alignment and labeling are governed by:
   - `docs/contracts/mwl_eeg_input_contract.md`
@@ -25,10 +25,10 @@ Non-goals (v0):
 
 ## 1) Definitions
 
-- **Training blocks**: T1–T3. Familiarization only; not retained for analysis/modeling.
-- **Retained blocks**: B1–B3. Intended for dry-run verification artifacts and pilot analyses (subject to ethics + QC gates).
+- **Training blocks**: T1–T3. Familiarization only; not calibration for analysis/modeling.
+- **calibration blocks**: B1–B3. Intended for dry-run verification artifacts and pilot analyses (subject to ethics + QC gates).
 - **Workload levels**: `LOW`, `MODERATE`, `HIGH`.
-- **Sequence ID**: retained order assignment `SEQ1|SEQ2|SEQ3`.
+- **Sequence ID**: calibration order assignment `SEQ1|SEQ2|SEQ3`.
 
 ---
 
@@ -38,7 +38,7 @@ The run must provide:
 
 - `participant_id` (required; safe for folder names)
 - `session_id` (required; safe for folder names)
-- `seq_id` ∈ {`SEQ1`, `SEQ2`, `SEQ3`} (required; retained order control)
+- `seq_id` ∈ {`SEQ1`, `SEQ2`, `SEQ3`} (required; calibration order control)
 
 These inputs must be made available to the scenario/marker layer (either by direct string substitution during generation or by runtime templating).
 
@@ -48,7 +48,7 @@ These inputs must be made available to the scenario/marker layer (either by dire
 
 A contract-compliant run must yield:
 
-- Three deterministic combined session scenario `.txt` files (one per retained `seq_id`) whose timelines are fully specified:
+- Three deterministic combined session scenario `.txt` files (one per calibration `seq_id`) whose timelines are fully specified:
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq1.txt`
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq2.txt`
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq3.txt`
@@ -72,7 +72,7 @@ The scenario must implement the pilot session structure from `docs/pilot/PILOT_S
 
 
 
-### 4.1 Training (not retained)
+### 4.1 Training (not calibration)
 
 - T1: `LOW`, 5:00
 - break: 1:00 (quiet rest; no tasks)
@@ -80,7 +80,7 @@ The scenario must implement the pilot session structure from `docs/pilot/PILOT_S
 - break: 1:00
 - T3: `HIGH`, 5:00
 
-### 4.2 Retained blocks + TLX (retained)
+### 4.2 calibration blocks + TLX (calibration)
 
 - B1: per `seq_id`, 5:00
 - TLX after B1: self-paced, untimed; all sliders must be interacted with before continuing
@@ -91,7 +91,7 @@ The scenario must implement the pilot session structure from `docs/pilot/PILOT_S
 - B3: per `seq_id`, 5:00
 - TLX after B3: self-paced, untimed; all sliders must be interacted with before continuing
 
-### 4.3 Retained order mapping (exact)
+### 4.3 calibration order mapping (exact)
 
 - `SEQ1`: LOW → MODERATE → HIGH
 - `SEQ2`: MODERATE → HIGH → LOW
@@ -115,19 +115,6 @@ Design principle (v0): manipulate MWL primarily via **event rate + overlap** whi
 ### 5.3 Per-level targets (exact)
 
 Per-minute event rates over each active 5:00 block (normative for v0):
-
-- **LOW** (total = **3 events/min**)
-  - Sysmon failure onsets: **1 event/min**
-  - Communications prompts: **1 event/min** (target:distractor ratio **80:20**)
-  - Resman pump failures: **1 event/min**
-- **MODERATE** (total = **8 events/min**)
-  - Sysmon failure onsets: **3 events/min**
-  - Communications prompts: **3 events/min** (target:distractor ratio **80:20**)
-  - Resman pump failures: **2 events/min**
-- **HIGH** (total = **18 events/min**)
-  - Sysmon failure onsets: **6 events/min**
-  - Communications prompts: **6 events/min** (target:distractor ratio **80:20**)
-  - Resman pump failures: **6 events/min**
 
 Scaling rule (normative for v0): HIGH total event rate is exactly **6×** LOW total event rate (18 vs 3 events/min).
 

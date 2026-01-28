@@ -56,7 +56,7 @@ python src/python/verify_preprocessing.py
 **Expected Output:**
 *   **Drift Removal:** PASS (Mean offset reduced).
 *   **Mains Hum:** PASS (50Hz power suppressed).
-*   **Signal Preservation:** PASS (10Hz Alpha retained).
+*   **Signal Preservation:** PASS (10Hz Alpha calibration).
 
 ### Manual Research / Deep Dive
 If you want to verify the Digital Signal Processing (DSP) theory:

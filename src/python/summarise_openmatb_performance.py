@@ -1,4 +1,4 @@
-"""Summarize OpenMATB performance rows from the session CSV.
+"""summarise OpenMATB performance rows from the session CSV.
 
 OpenMATB writes a single event log CSV per run (see manifest key: paths.session_csv).
 Task "performance" is tracked as rows where:
@@ -10,8 +10,8 @@ Task "performance" is tracked as rows where:
 This script derives a compact JSON summary (overall + per marker-defined segment).
 
 Usage:
-  python src/python/summarize_openmatb_performance.py --manifest <path/to/*.manifest.json>
-  python src/python/summarize_openmatb_performance.py --csv <path/to/*.csv> --out <summary.json>
+  python src/python/summarise_openmatb_performance.py --manifest <path/to/*.manifest.json>
+  python src/python/summarise_openmatb_performance.py --csv <path/to/*.csv> --out <summary.json>
 
 Notes:
 - Segmenting uses labstreaminglayer markers of the form:
@@ -106,7 +106,7 @@ def _percentile(sorted_values: list[float], q: float) -> Optional[float]:
 
 
 def _metric_summary(values: list[str]) -> dict[str, Any]:
-    """Summarize a list of raw string values from CSV."""
+    """summarise a list of raw string values from CSV."""
 
     bool_values: list[bool] = []
     numeric_values: list[float] = []
@@ -324,7 +324,7 @@ def _collect_performance_rows(
     return by_module
 
 
-def _summarize_performance(by_module: dict[str, dict[str, list[str]]]) -> dict[str, Any]:
+def _summarise_performance(by_module: dict[str, dict[str, list[str]]]) -> dict[str, Any]:
     summary: dict[str, Any] = {}
     for module, metrics in sorted(by_module.items()):
         mod_summary: dict[str, Any] = {}
@@ -334,12 +334,12 @@ def _summarize_performance(by_module: dict[str, dict[str, list[str]]]) -> dict[s
     return summary
 
 
-def summarize_csv(csv_path: Path) -> dict[str, Any]:
+def summarise_csv(csv_path: Path) -> dict[str, Any]:
     markers = _read_markers(csv_path)
     segments = _derive_segments_from_markers(markers)
 
     overall_rows = _collect_performance_rows(csv_path)
-    overall = _summarize_performance(overall_rows)
+    overall = _summarise_performance(overall_rows)
     overall_kpis = _compute_derived_kpis(overall_rows)
 
     per_segment: dict[str, Any] = {}
@@ -347,7 +347,7 @@ def summarize_csv(csv_path: Path) -> dict[str, Any]:
         seg_rows = _collect_performance_rows(csv_path, window=(seg.start_sec, seg.end_sec))
         per_segment[seg.name] = {
             "window": {"start_sec": seg.start_sec, "end_sec": seg.end_sec},
-            "performance": _summarize_performance(seg_rows),
+            "performance": _summarise_performance(seg_rows),
             "derived_kpis": _compute_derived_kpis(seg_rows),
         }
 
@@ -363,7 +363,7 @@ def summarize_csv(csv_path: Path) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Summarize OpenMATB performance metrics from a session CSV.")
+    parser = argparse.ArgumentParser(description="summarise OpenMATB performance metrics from a session CSV.")
     parser.add_argument("--manifest", default=None, help="Path to *.manifest.json (preferred input).")
     parser.add_argument("--csv", default=None, help="Path to the session CSV (alternative input).")
     parser.add_argument(
@@ -403,7 +403,7 @@ def main() -> int:
         print(f"ERROR: session CSV not found: {csv_path}")
         return 2
 
-    summary = summarize_csv(csv_path)
+    summary = summarise_csv(csv_path)
 
     # Attach a minimal run context when available.
     if manifest is not None:

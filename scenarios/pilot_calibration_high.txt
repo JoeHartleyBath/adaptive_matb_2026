@@ -1,8 +1,8 @@
-# OpenMATB Scenario: pilot_static_high.txt
+# OpenMATB Scenario: pilot_calibration_high.txt
 # Auto-generated Clone (Vendor Logic)
 
 0:00:00;labstreaminglayer;start
-0:00:00;labstreaminglayer;marker;STUDY/V0/RETAINED/HIGH/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:00:00;labstreaminglayer;marker;STUDY/V0/calibration/HIGH/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
 0:00:00;scheduling;start
 0:00:00;track;taskupdatetime;12
 0:00:00;track;joystickforce;1
@@ -99,11 +99,11 @@
 0:05:00;communications;stop
 0:05:00;resman;stop
 0:05:00;scheduling;stop
-0:05:00;labstreaminglayer;marker;STUDY/V0/RETAINED/HIGH/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;labstreaminglayer;marker;STUDY/V0/calibration/HIGH/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
 
 # --- NASA-TLX (Blocking) ---
-0:05:00;labstreaminglayer;marker;STUDY/V0/TLX/RETAINED_HIGH/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;labstreaminglayer;marker;STUDY/V0/TLX/calibration_HIGH/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
 0:05:00;genericscales;filename;nasatlx_en.txt
 0:05:00;genericscales;start
-0:05:00;labstreaminglayer;marker;STUDY/V0/TLX/RETAINED_HIGH/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;labstreaminglayer;marker;STUDY/V0/TLX/calibration_HIGH/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
 0:05:00;labstreaminglayer;stop

@@ -57,10 +57,10 @@ These are emitted via `Logger.log_performance()` in [src/python/vendor/openmatb/
 
 ### Derived summary (optional)
 
-The repo includes a pure-stdlib summarizer that reads the CSV and writes a JSON summary:
+The repo includes a pure-stdlib summariser that reads the CSV and writes a JSON summary:
 
-- Script: [src/python/summarize_openmatb_performance.py](../src/python/summarize_openmatb_performance.py)
-- Runner flag: `--summarize-performance` in [src/python/run_openmatb.py](../src/python/run_openmatb.py)
+- Script: [src/python/summarise_openmatb_performance.py](../src/python/summarise_openmatb_performance.py)
+- Runner flag: `--summarise-performance` in [src/python/run_openmatb.py](../src/python/run_openmatb.py)
 
 The summary is written next to the run manifest as `*.manifest.json.performance_summary.json`.
 

@@ -19,22 +19,22 @@ Operational context (implementation already present in repo):
 - Run OpenMATB via wrapper: `src/python/run_openmatb.py`.
 - Scenario selection via: `src/python/vendor/openmatb/config.ini` (`scenario_path=...`).
 - Scenario files live under: `src/python/vendor/openmatb/includes/scenarios/`.
-- v0 pilot scenarios are exactly three combined session scenario files (one per retained `seq_id`):
+- v0 pilot scenarios are exactly three combined session scenario files (one per calibration `seq_id`):
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq1.txt` (for `SEQ1`)
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq2.txt` (for `SEQ2`)
   - `src/python/vendor/openmatb/includes/scenarios/pilot_seq3.txt` (for `SEQ3`)
-- Each scenario file begins with the same training segment (T1–T3), then runs retained blocks (B1–B3) ordered per `seq_id`.
+- Each scenario file begins with the same training segment (T1–T3), then runs calibration blocks (B1–B3) ordered per `seq_id`.
 - Primary event log is CSV + adjacent `.manifest.json` written externally (outside repo).
 - LSL outlet plugin exists: `src/python/vendor/openmatb/plugins/labstreaminglayer.py`.
 
 ---
 
-## 1) Session structure (exact; training vs retained)
+## 1) Session structure (exact; training vs calibration)
 
 Definitions:
 
 - **Training blocks**: participant familiarization; not used for analysis/modeling.
-- **Retained blocks**: the pilot blocks intended to be used for dry-run verification artifacts and pilot analyses (subject to ethics + QC gates).
+- **calibration blocks**: the pilot blocks intended to be used for dry-run verification artifacts and pilot analyses (subject to ethics + QC gates).
 
 Session phases (exact):
 
@@ -44,9 +44,9 @@ Session phases (exact):
 - Confirm LSL streams visible if LSL is used (EEG stream + OpenMATB marker stream).
 - Confirm scenario selection in `config.ini`.
 
-### Phase B — Training (not retained)
+### Phase B — Training (not calibration)
 
-Goal: stabilize task proficiency before any retained data.
+Goal: stabilize task proficiency before any calibration data.
 
 - A participant ID entry popup appears before T1, and the scenario does not proceed until a valid ID is submitted.
 
@@ -60,22 +60,22 @@ NASA-TLX during training (exact):
 
 - TLX is **not** administered during training in v0.
   - Rationale (protocol stability): reduce interruptions while the participant is still learning controls.
-  - Exception (operator discretion): if training indicates obvious inability to operate tasks, stop and reschedule; do not proceed to retained blocks.
+  - Exception (operator discretion): if training indicates obvious inability to operate tasks, stop and reschedule; do not proceed to calibration blocks.
 
-### Phase C — Retained pilot blocks (retained)
+### Phase C — calibration pilot blocks (calibration)
 
 Goal: collect comparable blocks at multiple workload levels with deterministic boundaries + subjective ratings.
 
-- Retained Block B1: workload level per counterbalancing (see Section 2), **5:00**
+- calibration Block B1: workload level per counterbalancing (see Section 2), **5:00**
 - NASA-TLX: immediately after B1, **self-paced**, untimed; all sliders must be interacted with before continuing
 - Break: **1:00**
-- Retained Block B2: per counterbalancing, **5:00**
+- calibration Block B2: per counterbalancing, **5:00**
 - NASA-TLX: immediately after B2, **self-paced**, untimed; all sliders must be interacted with before continuing
 - Break: **1:00**
-- Retained Block B3: per counterbalancing, **5:00**
+- calibration Block B3: per counterbalancing, **5:00**
 - NASA-TLX: immediately after B3, **self-paced**, untimed; all sliders must be interacted with before continuing
 
-Total planned retained time (excluding setup):
+Total planned calibration time (excluding setup):
 
 - Task time: 15:00
 - TLX time: self-paced (no fixed maximum)
@@ -83,8 +83,8 @@ Total planned retained time (excluding setup):
 
 Pause policy (exact):
 
-- No pausing during retained blocks B1–B3.
-  - If an interruption occurs or pause would be needed during B1–B3, the operator must abort the run and restart (do not pause/resume within a retained block).
+- No pausing during calibration blocks B1–B3.
+  - If an interruption occurs or pause would be needed during B1–B3, the operator must abort the run and restart (do not pause/resume within a calibration block).
 - Pause/resume state changes may still appear in OpenMATB CSV/runtime logs and/or operator notes, but they are not emitted as `STUDY/V0/` markers (see Section 4).
 
 ---
@@ -101,7 +101,7 @@ Training order (fixed):
 
 - T1=LOW → T2=MODERATE → T3=HIGH
 
-Retained order (counterbalanced):
+calibration order (counterbalanced):
 
 - Default: Latin-square over the 3 levels.
 - The operator assigns each participant a sequence ID (e.g., `SEQ1`, `SEQ2`, `SEQ3`) prior to the session.
@@ -152,7 +152,7 @@ Notes:
 
 ## 4) Marker set (exact) and where markers appear
 
-Goal: every retained block and questionnaire segment must be deterministically bracketed in logs.
+Goal: every calibration block and questionnaire segment must be deterministically bracketed in logs.
 
 Marker transport requirements (v0):
 
@@ -163,7 +163,7 @@ Marker transport requirements (v0):
 Marker naming format (exact):
 
 - Prefix all markers with `STUDY/V0/`.
-- Include participant/session IDs and retained sequence ID in each marker payload to make stream mixing detectable.
+- Include participant/session IDs and calibration sequence ID in each marker payload to make stream mixing detectable.
 
 Marker payload template (exact):
 
@@ -180,16 +180,16 @@ Markers (exact list):
 | `TRAINING/T2/END` | end of training block T2 | Yes | Yes | brackets training |
 | `TRAINING/T3/START` | start of training block T3 | Yes | Yes | brackets training |
 | `TRAINING/T3/END` | end of training block T3 | Yes | Yes | brackets training |
-| `RETAINED/B1/<LEVEL>/START` | start of retained block B1 | Yes | Yes | primary label interval start |
-| `RETAINED/B1/<LEVEL>/END` | end of retained block B1 | Yes | Yes | primary label interval end |
+| `calibration/B1/<LEVEL>/START` | start of calibration block B1 | Yes | Yes | primary label interval start |
+| `calibration/B1/<LEVEL>/END` | end of calibration block B1 | Yes | Yes | primary label interval end |
 | `TLX/B1/START` | immediately before NASA-TLX for B1 | Yes | Yes | brackets TLX |
 | `TLX/B1/END` | immediately after TLX for B1 | Yes | Yes | brackets TLX |
-| `RETAINED/B2/<LEVEL>/START` | start of retained block B2 | Yes | Yes | primary label interval start |
-| `RETAINED/B2/<LEVEL>/END` | end of retained block B2 | Yes | Yes | primary label interval end |
+| `calibration/B2/<LEVEL>/START` | start of calibration block B2 | Yes | Yes | primary label interval start |
+| `calibration/B2/<LEVEL>/END` | end of calibration block B2 | Yes | Yes | primary label interval end |
 | `TLX/B2/START` | immediately before NASA-TLX for B2 | Yes | Yes | brackets TLX |
 | `TLX/B2/END` | immediately after TLX for B2 | Yes | Yes | brackets TLX |
-| `RETAINED/B3/<LEVEL>/START` | start of retained block B3 | Yes | Yes | primary label interval start |
-| `RETAINED/B3/<LEVEL>/END` | end of retained block B3 | Yes | Yes | primary label interval end |
+| `calibration/B3/<LEVEL>/START` | start of calibration block B3 | Yes | Yes | primary label interval start |
+| `calibration/B3/<LEVEL>/END` | end of calibration block B3 | Yes | Yes | primary label interval end |
 | `TLX/B3/START` | immediately before NASA-TLX for B3 | Yes | Yes | brackets TLX |
 | `TLX/B3/END` | immediately after TLX for B3 | Yes | Yes | brackets TLX |
 | `SESSION_END` | immediately before clean OpenMATB exit | Yes | Yes | anchors session end |
