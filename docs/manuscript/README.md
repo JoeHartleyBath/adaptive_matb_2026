@@ -6,6 +6,7 @@ This folder is a deliberately minimal workspace to keep *canonical context* clos
 
 - A place to store stable context that helps future writing assistance (humans and tools).
 - A lightweight home for a small set of canonical references and their BibTeX entries.
+- Draft research questions: `research_questions_draft.md`
 
 ## What this is not
 
