@@ -196,7 +196,6 @@ No other code changes are strictly required to *run* Pilot 1, but additional cha
 ## 7) Risks / failure modes if we run Pilot 1 now
 
 - Canonical-source ambiguity: DCs are not in the declared canonical location, so “what is locked” is unclear.
-- Calibration semantics are unclear in markers: filenames say “calibration”, markers say `calibration/<LEVEL>`.
 - OD-04 mismatch: current implemented event-rate ratio is ~5.1×, but OD-04 default says ~6×.
 - `generate_pilot_scenarios.py` is non-deterministic (random without a fixed seed), so regeneration may silently change schedules.
 - Intro scenario has no study markers (analysis segmentation may ignore/lose it).

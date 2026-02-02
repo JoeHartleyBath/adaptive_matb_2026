@@ -10,8 +10,6 @@ Use an MATB(-II)-style multitask paradigm (sysmon + tracking + communications + 
 - Involves minimal whole-body movement and limited speech, reducing motion- and muscle-related EEG artefacts and improving the interpretability of neural measures during adaptation.
 - Is open-source and inspectable, reducing platform lock-in and development overhead while improving reproducibility and transparency relative to proprietary or high-fidelity simulators.
 
-
-
 **Alternatives considered**  
 - Single-task paradigms (e.g., n-back, Stroop, SART).
 - Higher-fidelity simulators (e.g., driving/flight) with heavier infrastructure demands.

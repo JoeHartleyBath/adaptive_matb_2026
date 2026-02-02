@@ -11,19 +11,6 @@ Rules:
   - Open decisions must be reviewed after each pilot phase.
 - Any OD older than one pilot cycle must be either closed, split, or explicitly deferred.
 
-## Open decisions index (status snapshot)
-
-- OD-02: Calibration block semantics — Pilot 1
-- OD-03: Practice block structure — Pilot 1
-- OD-04: Event-rate scaling — Pilot 1
-- OD-05: Subjective ratings during calibration — Pilot 1
-- OD-06: Performance metrics — Pilot 1 → Pilot 2
-- OD-07: Calibration structure for ML — Pilot 2
-- OD-08: Event scheduling policy — Pilot 1
-- OD-09: Tracking difficulty operationalisation — Pilot 1
-- OD-10: Experience sampling during calibration — **pre-Pilot 1**
-- OD-11: MODERATE placement — Pilot 1
-
 ---
 
 ## Design note: Proposed multi-phase piloting structure (non-canonical)
@@ -125,7 +112,7 @@ What total event-rate separation between LOW and HIGH workload levels produces r
 Although prior work reports wide variability in absolute event rates, and reviews suggest a common ≈6× increase between low and high workload levels, tolerability and effective separation are highly task- and population-dependent and must be confirmed in pilot data.
 
 **Current pilot default**  
-Target a total event rate of approximately 6× (5.1x) between LOW and HIGH workload levels (e.g., 3 vs 18 events/min), applied as a multiplicative rule across scenario schedules.
+Target a total event rate of approximately 6× between LOW and HIGH workload levels (e.g., 3 vs 18 events/min), applied as a multiplicative rule across scenario schedules.
 
 **Options under consideration**  
 - Smaller separation (e.g., 3×–4×) to improve tolerability.
@@ -450,60 +437,3 @@ Would alter calibration protocol timing, task interruption profile, subjective l
 
 **Status**  
 Open → expected to close pre-Pilot 1 via literature.
-
-### OD-11: Placement of MODERATE between LOW and HIGH (difficulty mapping shape)
-
-**Decision question**  
-When scaling difficulty across `LOW`, `MODERATE`, `HIGH`, should `MODERATE` be:
-- **A: Midpoint** (approximately halfway between LOW and HIGH on the operational difficulty scale), or
-- **B: Biased** (closer to LOW or closer to HIGH), and if biased, in which direction?
-
-**Why this is open**  
-The placement of `MODERATE` determines whether the three-level design captures a meaningful ordinal ladder or collapses into “easy vs hard with a fuzzy middle”. It affects:
-- manipulation checks (subjective separation),
-- performance ceiling/floor effects,
-- tolerability,
-- ML separability and calibration curve quality.
-
-A midpoint is simple and symmetric, but may be too close to LOW (weak separation) or too close to HIGH (excess fatigue/overload) depending on task dynamics.
-
-**Current pilot default**  
-Linear midpoint mapping for any parameter scaled by a single difficulty scalar (i.e., `MODERATE` ≈ halfway between `LOW` and `HIGH`), unless task-specific caps/occupancy models distort the effective midpoint.
-
-**Options under consideration**
-- **A: Linear midpoint**  
-  `MODERATE` set at 0.5 (or parameter midpoint).
-- **B: Ease-in (MOD closer to LOW)**  
-  Conservative moderate to reduce early overload and preserve tolerability.
-- **C: Ease-out (MOD closer to HIGH)**  
-  Aggressive moderate to ensure clear separation from LOW.
-- **D: Task-specific moderate placement**  
-  Allow different mappings per subtask (risk: interpretability drift).
-
-**Constraints**
-- `MODERATE` must remain ordinal and defensible across subtasks.
-- Mapping must be auditable (explicit formula/lookup table), not “tuned by feel”.
-- Must not introduce within-block level changes (unless OD-02 changes).
-
-**What evidence resolves this decision**
-
-**Literature evidence**
-- Three-level designs are commonly used to avoid two-level ambiguity, but absolute placement is not standardised; reporting and manipulation checks are emphasised more than prescriptive midpoints.
-
-**Pilot evidence (Pilot 1)**
-- **Subjective separation:** LOW < MOD < HIGH reliably (not just LOW vs HIGH).
-- **Performance sensitivity:** MOD should not be at ceiling (≈LOW) or floor (≈HIGH).
-- **Tolerability:** MOD should not cause overload/frustration comparable to HIGH.
-- **Event overlap sanity:** MOD should not create pathological concurrency patterns (if event-driven).
-
-**Decision trigger**  
-Lock after Pilot 1 once a mapping yields:
-- ordered subjective ratings,
-- non-saturated performance metrics,
-- acceptable tolerability.
-
-**Downstream impact if changed**  
-Affects scenario parameterisation for all scaled subtasks, event-rate totals (OD-04), and any calibration/personalisation assumptions relying on separable levels.
-
-**References**  
-- (Add Pontiggia et al., 2024 and any primary sources if they explicitly discuss multi-level scaling practices.)
