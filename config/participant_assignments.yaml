@@ -1,0 +1,37 @@
+participants:
+  P001:
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P002:
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P003:
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P004:
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P005:
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P006:
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P007:
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P008:
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P009:
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
