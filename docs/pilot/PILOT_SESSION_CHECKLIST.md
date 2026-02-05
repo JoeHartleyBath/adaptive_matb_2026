@@ -39,17 +39,30 @@ Or manually edit `config/participant_assignments.yaml`.
 ### 1. EEG Setup
 
 - [ ] Fit EEG cap on participant
-- [ ] Check impedances (target: < 5 kΩ)
+- [ ] Check impedances (target: < 30 kΩ)
 - [ ] Verify EEG amplifier streaming to LSL
-- [ ] Confirm LSL stream visible in LabRecorder (name: varies by amp)
+- [ ] Confirm LSL stream visible in LabRecorder (name: )
 
 ### 2. EDA Setup
 
 - [ ] Attach Shimmer GSR3 electrodes to participant
 - [ ] Power on Shimmer device
 - [ ] Pair via Bluetooth (note COM port, e.g., COM5)
-- [ ] Start EDA streamer:
 
+**Option A: Integrated EDA (recommended)**
+
+Use `--with-eda` to let the runner manage the EDA streamer:
+```powershell
+python src/python/run_openmatb.py --pilot1 --with-eda --eda-port COM5
+```
+The runner will:
+- Start the Shimmer EDA→LSL streamer
+- Wait for the stream to appear (health check)
+- Stop the streamer when the session ends
+
+**Option B: Manual EDA (if integration fails)**
+
+Start EDA streamer in a separate terminal:
 ```powershell
 python scripts/stream_shimmer_eda.py --port COM5
 ```
@@ -81,11 +94,14 @@ python scripts/stream_shimmer_eda.py --port COM5
 cd C:\phd_projects\adaptive_matb_2026
 .\.venv\Scripts\Activate.ps1
 
-# Full pilot session (familiarization + practice + calibration)
+# Full pilot session with integrated EDA (recommended)
+python src/python/run_openmatb.py --pilot1 --with-eda --eda-port COM5
+
+# Or without EDA (if using manual EDA streamer)
 python src/python/run_openmatb.py --pilot1
 
-# Or calibration-only (for self-testing)
-python src/python/run_openmatb.py --pilot1 --calibration-only
+# Or calibration-only for self-testing
+python src/python/run_openmatb.py --pilot1 --calibration-only --with-eda --eda-port COM5
 ```
 
 Interactive prompts will ask for:
@@ -183,12 +199,17 @@ C:\data\adaptive_matb\
 
 ## Quick Reference
 
-### Start EDA Streaming
+### Start EDA Streaming (manual mode)
 ```powershell
 python scripts/stream_shimmer_eda.py --port COM5
 ```
 
-### Run Pilot Session
+### Run Pilot Session (with integrated EDA)
+```powershell
+python src/python/run_openmatb.py --pilot1 --with-eda --eda-port COM5
+```
+
+### Run Pilot Session (manual EDA)
 ```powershell
 python src/python/run_openmatb.py --pilot1
 ```

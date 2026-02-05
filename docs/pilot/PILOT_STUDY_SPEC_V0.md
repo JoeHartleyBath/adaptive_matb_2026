@@ -246,7 +246,7 @@ python src/python/verification/verify_xdf_alignment.py \
 
 ### Recording Stack
 
-- **EEG**: g.USBamp → LSL outlet (via g.NEEDaccess or g.HIsys)
+- **EEG**: ANTneuro Waveguard → LSL outlet (via Eego)
 - **EDA**: Shimmer GSR3 → LSL outlet (via `scripts/stream_shimmer_eda.py`)
 - **Markers**: OpenMATB → LSL outlet (via `labstreaminglayer` plugin)
 - **Recording**: LabRecorder captures all streams to single `.xdf` file

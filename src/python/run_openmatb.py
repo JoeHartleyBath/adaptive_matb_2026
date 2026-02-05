@@ -21,16 +21,569 @@ OpenMATB uses:
 from __future__ import annotations
 
 import argparse
+import atexit
 from datetime import datetime
 import json
 import os
 import re
+import signal
 import subprocess
 import shutil
 import sys
+import time
 import yaml
 from pathlib import Path
 from typing import Optional
+
+# Suppress liblsl's verbose C++ logging (must be set before pylsl is imported)
+os.environ.setdefault("LSL_LOGLEVEL", "0")
+
+# ---------------------------------------------------------------------------
+# EDA subprocess management (global state for crash-safe cleanup)
+# ---------------------------------------------------------------------------
+_eda_subprocess: Optional[subprocess.Popen] = None
+
+
+def _cleanup_eda_subprocess() -> None:
+    """Terminate EDA subprocess if running. Called via atexit or signal handlers."""
+    global _eda_subprocess
+    if _eda_subprocess is not None and _eda_subprocess.poll() is None:
+        print("Terminating EDA streamer subprocess...", file=sys.stderr)
+        try:
+            _eda_subprocess.terminate()
+            _eda_subprocess.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            print("EDA streamer did not terminate, killing...", file=sys.stderr)
+            _eda_subprocess.kill()
+            _eda_subprocess.wait()
+        except Exception as e:
+            print(f"Error cleaning up EDA subprocess: {e}", file=sys.stderr)
+        _eda_subprocess = None
+
+
+def _signal_handler(signum, frame):
+    """Handle SIGINT/SIGTERM by cleaning up EDA subprocess then re-raising."""
+    _cleanup_eda_subprocess()
+    # Re-raise the signal to allow normal exit behavior
+    sys.exit(128 + signum)
+
+
+# Register cleanup handlers
+atexit.register(_cleanup_eda_subprocess)
+signal.signal(signal.SIGINT, _signal_handler)
+signal.signal(signal.SIGTERM, _signal_handler)
+
+
+def _start_eda_streamer(
+    repo_root: Path,
+    eda_port: str,
+    eda_stream_name: str = "ShimmerEDA",
+    health_check_timeout: float = 15.0,
+) -> dict:
+    """Start EDA streamer subprocess and verify LSL stream appears.
+    
+    Returns:
+        dict with keys:
+            - started: bool
+            - pid: int or None
+            - stream_name: str
+            - stream_type: str
+            - health_check_passed: bool
+            - error: str or None
+    """
+    global _eda_subprocess
+    
+    result = {
+        "started": False,
+        "pid": None,
+        "stream_name": eda_stream_name,
+        "stream_type": "EDA",
+        "health_check_passed": False,
+        "error": None,
+    }
+    
+    # Build command to run EDA streamer
+    streamer_script = repo_root / "scripts" / "stream_shimmer_eda.py"
+    if not streamer_script.exists():
+        result["error"] = f"EDA streamer script not found: {streamer_script}"
+        return result
+    
+    cmd = [
+        sys.executable,
+        str(streamer_script),
+        "--port", eda_port,
+        "--name", eda_stream_name,
+    ]
+    
+    print(f"Starting EDA streamer: {' '.join(cmd)}")
+    
+    try:
+        _eda_subprocess = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        result["started"] = True
+        result["pid"] = _eda_subprocess.pid
+        print(f"EDA streamer started (PID: {_eda_subprocess.pid})")
+    except Exception as e:
+        result["error"] = f"Failed to start EDA streamer: {e}"
+        return result
+    
+    # Wait a moment for the subprocess to initialize
+    time.sleep(2.0)
+    
+    # Check if subprocess crashed immediately
+    if _eda_subprocess.poll() is not None:
+        stderr_output = _eda_subprocess.stderr.read() if _eda_subprocess.stderr else ""
+        result["error"] = f"EDA streamer exited immediately (code {_eda_subprocess.returncode}): {stderr_output}"
+        result["started"] = False
+        _eda_subprocess = None
+        return result
+    
+    # Health check: resolve LSL stream
+    print(f"Waiting for LSL stream '{eda_stream_name}' (timeout: {health_check_timeout}s)...")
+    
+    try:
+        import pylsl
+        
+        start_time = time.time()
+        streams = []
+        
+        while time.time() - start_time < health_check_timeout:
+            # Look for streams with matching name
+            streams = pylsl.resolve_byprop("name", eda_stream_name, timeout=2.0)
+            if streams:
+                break
+            
+            # Check if subprocess is still running
+            if _eda_subprocess.poll() is not None:
+                stderr_output = _eda_subprocess.stderr.read() if _eda_subprocess.stderr else ""
+                result["error"] = f"EDA streamer crashed during health check: {stderr_output}"
+                result["started"] = False
+                _eda_subprocess = None
+                return result
+        
+        if streams:
+            result["health_check_passed"] = True
+            print(f"✓ LSL stream '{eda_stream_name}' found ({len(streams)} stream(s))")
+        else:
+            result["error"] = f"LSL stream '{eda_stream_name}' not found within {health_check_timeout}s"
+            
+    except ImportError:
+        result["error"] = "pylsl not installed; cannot verify EDA stream"
+    except Exception as e:
+        result["error"] = f"LSL health check failed: {e}"
+    
+    return result
+
+
+def _stop_eda_streamer() -> None:
+    """Stop EDA streamer subprocess."""
+    _cleanup_eda_subprocess()
+
+
+def _preflight_stream_check(
+    expected_streams: list[dict],
+    timeout_per_stream: float = 5.0,
+    sample_test_duration: float = 2.0,
+) -> dict:
+    """Check for expected LSL streams before session starts.
+    
+    Args:
+        expected_streams: List of dicts with 'name' and/or 'type' keys to search for.
+                         e.g., [{"name": "ShimmerEDA", "type": "EDA"}, {"type": "EEG"}]
+        timeout_per_stream: Seconds to wait for each stream.
+        sample_test_duration: Seconds to collect samples for rate/quality estimation.
+    
+    Returns:
+        dict with:
+            - all_found: bool
+            - all_streaming: bool
+            - streams: list of dicts with name, type, found, info, sample_stats
+            - warnings: list of warning messages
+    """
+    try:
+        import pylsl
+    except ImportError:
+        print("WARNING: pylsl not installed, skipping stream check", file=sys.stderr)
+        return {"all_found": False, "all_streaming": False, "streams": [], "warnings": [], "error": "pylsl not installed"}
+    
+    results = {
+        "all_found": True,
+        "all_streaming": True,
+        "streams": [],
+        "warnings": [],
+        "error": None,
+    }
+    
+    # Helper to suppress liblsl C++ logging during resolve calls
+    def _resolve_quiet(prop: str, value: str, timeout: float):
+        """Resolve LSL streams while suppressing C library logging."""
+        old_stderr_fd = os.dup(2)
+        try:
+            with open(os.devnull, 'w') as devnull:
+                os.dup2(devnull.fileno(), 2)
+                result = pylsl.resolve_byprop(prop, value, timeout=timeout)
+        finally:
+            os.dup2(old_stderr_fd, 2)
+            os.close(old_stderr_fd)
+        return result
+    
+    def _test_sample_flow(stream_info, duration: float) -> dict:
+        """Pull samples from a stream to verify data flow and estimate quality."""
+        import numpy as np
+        
+        stats = {
+            "samples_received": 0,
+            "measured_rate_hz": 0.0,
+            "rate_error_pct": 0.0,
+            "signal_range": None,
+            "signal_std": None,
+            "flat_signal": False,
+            "time_correction_ms": 0.0,
+            "streaming": False,
+            "warnings": [],
+        }
+        
+        try:
+            inlet = pylsl.StreamInlet(stream_info, max_buflen=int(duration * 2))
+            inlet.open_stream(timeout=2.0)
+            
+            # Get time correction
+            try:
+                tc = inlet.time_correction(timeout=1.0)
+                stats["time_correction_ms"] = tc * 1000
+                if abs(tc) > 0.1:  # >100ms clock difference
+                    stats["warnings"].append(f"Large clock offset: {tc*1000:.1f}ms")
+            except Exception:
+                stats["warnings"].append("Could not get time correction")
+            
+            # Collect samples
+            samples = []
+            timestamps = []
+            start_time = time.time()
+            
+            while time.time() - start_time < duration:
+                sample, ts = inlet.pull_sample(timeout=0.1)
+                if sample is not None:
+                    samples.append(sample)
+                    timestamps.append(ts)
+            
+            inlet.close_stream()
+            
+            n_samples = len(samples)
+            stats["samples_received"] = n_samples
+            
+            if n_samples > 1:
+                stats["streaming"] = True
+                
+                # Calculate actual sample rate
+                elapsed = timestamps[-1] - timestamps[0]
+                if elapsed > 0:
+                    stats["measured_rate_hz"] = (n_samples - 1) / elapsed
+                
+                # Compare to nominal rate
+                nominal = stream_info.nominal_srate()
+                if nominal > 0 and stats["measured_rate_hz"] > 0:
+                    stats["rate_error_pct"] = abs(stats["measured_rate_hz"] - nominal) / nominal * 100
+                    if stats["rate_error_pct"] > 10:
+                        stats["warnings"].append(
+                            f"Sample rate mismatch: {stats['measured_rate_hz']:.1f}Hz vs nominal {nominal:.1f}Hz"
+                        )
+                
+                # Signal quality checks (first channel)
+                values = np.array([s[0] for s in samples])
+                stats["signal_range"] = float(np.max(values) - np.min(values))
+                stats["signal_std"] = float(np.std(values))
+                
+                # Check for flat/stuck signal
+                if stats["signal_std"] < 1e-9:
+                    stats["flat_signal"] = True
+                    stats["warnings"].append("FLAT SIGNAL: No variation detected (sensor issue?)")
+                
+                # Check for NaN/Inf values
+                if np.any(np.isnan(values)) or np.any(np.isinf(values)):
+                    stats["warnings"].append("Invalid values detected (NaN/Inf)")
+                
+                # EDA-specific checks
+                if stream_info.type() == "EDA":
+                    mean_val = float(np.mean(values))
+                    if mean_val < 0.01:
+                        stats["warnings"].append(f"EDA very low ({mean_val:.4f} uS) - check electrode contact")
+                    elif mean_val > 50:
+                        stats["warnings"].append(f"EDA unusually high ({mean_val:.1f} uS) - check for artifacts")
+                
+                # EEG-specific checks
+                if stream_info.type() == "EEG":
+                    # Check for clipping or saturation
+                    if stats["signal_range"] < 1:
+                        stats["warnings"].append("EEG range very small - check impedances")
+                    
+            elif n_samples == 0:
+                stats["warnings"].append("NO SAMPLES RECEIVED - stream may be stalled")
+            else:
+                stats["streaming"] = True  # Got at least 1 sample
+                stats["warnings"].append("Too few samples for quality analysis")
+                
+        except Exception as e:
+            stats["warnings"].append(f"Sample test failed: {e}")
+        
+        return stats
+    
+    for expected in expected_streams:
+        stream_name = expected.get("name")
+        stream_type = expected.get("type")
+        label = stream_name or stream_type or "unknown"
+        
+        stream_result = {
+            "name": stream_name,
+            "type": stream_type,
+            "found": False,
+            "info": None,
+            "sample_stats": None,
+        }
+        
+        # Search by name first, then by type
+        if stream_name:
+            print(f"  Searching for stream '{stream_name}'...", end="", flush=True)
+            streams = _resolve_quiet("name", stream_name, timeout_per_stream)
+        elif stream_type:
+            print(f"  Searching for stream type '{stream_type}'...", end="", flush=True)
+            streams = _resolve_quiet("type", stream_type, timeout_per_stream)
+        else:
+            print(f"  Skipping stream with no name or type")
+            continue
+        
+        if streams:
+            stream_result["found"] = True
+            info = streams[0]
+            stream_result["info"] = {
+                "name": info.name(),
+                "type": info.type(),
+                "channel_count": info.channel_count(),
+                "nominal_srate": info.nominal_srate(),
+                "source_id": info.source_id(),
+            }
+            print(f" Found: {info.name()}")
+            
+            # Test sample flow
+            print(f"    Testing data flow ({sample_test_duration}s)...", end="", flush=True)
+            sample_stats = _test_sample_flow(info, sample_test_duration)
+            stream_result["sample_stats"] = sample_stats
+            
+            if sample_stats["streaming"]:
+                print(f" {sample_stats['samples_received']} samples @ {sample_stats['measured_rate_hz']:.1f}Hz")
+            else:
+                print(f" NO SAMPLES!")
+                results["all_streaming"] = False
+            
+            # Collect warnings
+            for warning in sample_stats.get("warnings", []):
+                results["warnings"].append(f"{label}: {warning}")
+        else:
+            stream_result["found"] = False
+            results["all_found"] = False
+            results["all_streaming"] = False
+            print(f" Not found")
+        
+        results["streams"].append(stream_result)
+    
+    return results
+
+
+def _check_labrecorder() -> dict:
+    """Check if LabRecorder is running.
+    
+    Note: We can only detect if the process is running, not if it's actively recording.
+    User must verify recording status manually.
+    """
+    result = {
+        "running": False,
+        "process_name": None,
+        "warning": None,
+        "recording_note": "Cannot verify recording status programmatically - check LabRecorder UI!",
+    }
+    
+    try:
+        # Check for LabRecorder process (Windows)
+        if sys.platform == "win32":
+            output = subprocess.check_output(
+                ["tasklist", "/FI", "IMAGENAME eq LabRecorder.exe", "/FO", "CSV"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+            if "LabRecorder.exe" in output:
+                result["running"] = True
+                result["process_name"] = "LabRecorder.exe"
+        else:
+            # Unix: check with pgrep
+            try:
+                subprocess.check_call(
+                    ["pgrep", "-x", "LabRecorder"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                result["running"] = True
+                result["process_name"] = "LabRecorder"
+            except subprocess.CalledProcessError:
+                pass
+    except Exception as e:
+        result["warning"] = f"Could not check for LabRecorder: {e}"
+    
+    return result
+
+
+def _run_preflight_checks(
+    check_eeg: bool = True,
+    check_eda: bool = True,
+    eeg_stream_type: str = "EEG",
+    eda_stream_name: str = "ShimmerEDA",
+    timeout: float = 5.0,
+) -> bool:
+    """Run pre-flight LSL stream checks and prompt user to continue.
+    
+    Includes a retry loop so users can fix issues and re-check without restarting.
+    
+    Returns True if user confirms to proceed, False otherwise.
+    """
+    
+    def _run_single_check():
+        """Run one round of preflight checks. Returns (all_ok, has_warnings, lr_status, result)."""
+        print("\n" + "=" * 60)
+        print("PRE-FLIGHT STREAM CHECK")
+        print("=" * 60)
+        
+        # Check LabRecorder first
+        print("\n[1/2] Checking LabRecorder...")
+        lr_status = _check_labrecorder()
+        if lr_status["running"]:
+            print(f"  LabRecorder is running")
+        else:
+            print(f"  LabRecorder NOT DETECTED")
+            print(f"    Start LabRecorder before proceeding to ensure data is saved!")
+        
+        # Check streams
+        expected_streams = []
+        if check_eeg:
+            expected_streams.append({"type": eeg_stream_type, "name": None})
+        if check_eda:
+            expected_streams.append({"name": eda_stream_name, "type": "EDA"})
+        
+        result = {"streams": [], "warnings": [], "all_found": True, "all_streaming": True}
+        
+        if not expected_streams:
+            print("\n[2/2] No streams to check.")
+        else:
+            print(f"\n[2/2] Checking {len(expected_streams)} stream(s)...\n")
+            result = _preflight_stream_check(
+                expected_streams,
+                timeout_per_stream=timeout,
+                sample_test_duration=2.0,
+            )
+        
+        # Summary
+        print("\n" + "=" * 60)
+        print("PREFLIGHT SUMMARY")
+        print("=" * 60)
+        
+        all_ok = True
+        
+        # LabRecorder status
+        if lr_status["running"]:
+            print(f"  [OK] LabRecorder: RUNNING")
+            print(f"        >>> Verify it is RECORDING and has all streams selected! <<<")
+        else:
+            print(f"  [!!] LabRecorder: NOT DETECTED (data may not be saved!)")
+            all_ok = False
+        
+        # Stream status
+        if expected_streams:
+            for stream in result["streams"]:
+                label = stream.get("name") or stream.get("type") or "unknown"
+                if stream["found"]:
+                    stats = stream.get("sample_stats", {})
+                    if stats.get("streaming"):
+                        rate = stats.get("measured_rate_hz", 0)
+                        print(f"  [OK] {label}: STREAMING ({rate:.1f} Hz)")
+                    else:
+                        print(f"  [!!] {label}: FOUND but NO DATA")
+                        all_ok = False
+                else:
+                    print(f"  [XX] {label}: NOT FOUND")
+                    all_ok = False
+        
+        # Warnings
+        has_warnings = bool(result.get("warnings"))
+        if has_warnings:
+            print("\n" + "-" * 40)
+            print("SIGNAL QUALITY WARNINGS")
+            print("-" * 40)
+            for warning in result["warnings"]:
+                print(f"  [!] {warning}")
+            print("-" * 40)
+        
+        print("=" * 60)
+        
+        return all_ok, has_warnings, lr_status, result
+    
+    # Run checks in a retry loop
+    while True:
+        all_ok, has_warnings, lr_status, result = _run_single_check()
+        
+        if all_ok and not has_warnings:
+            print("\nAll checks passed!")
+            confirm = input("\nProceed to session setup? (y/n): ").strip().lower()
+            if confirm in ("y", "yes", ""):
+                return True
+            elif confirm in ("n", "no"):
+                return False
+            # Any other input: re-run checks
+            
+        elif all_ok and has_warnings:
+            print("\nStreams OK but there are signal quality warnings.")
+            print("\nOptions:")
+            print("  [y] Proceed to session setup")
+            print("  [r] Re-check after fixing issues")
+            print("  [n] Cancel and exit")
+            
+            confirm = input("\nChoice (y/r/n): ").strip().lower()
+            if confirm in ("y", "yes"):
+                return True
+            elif confirm in ("n", "no"):
+                return False
+            elif confirm in ("r", "retry", ""):
+                print("\n" + "~" * 60)
+                print("Fix the issues and press Enter to re-check...")
+                print("~" * 60)
+                input()
+                continue  # Re-run the check
+            else:
+                # Default to retry
+                continue
+                
+        else:
+            print("\nSome checks FAILED. Review the issues above.")
+            print("\nOptions:")
+            print("  [y] Proceed anyway (not recommended)")
+            print("  [r] Re-check after fixing issues")
+            print("  [n] Cancel and exit")
+            
+            confirm = input("\nChoice (y/r/n): ").strip().lower()
+            if confirm in ("y", "yes"):
+                return True
+            elif confirm in ("n", "no"):
+                return False
+            elif confirm in ("r", "retry", ""):
+                print("\n" + "~" * 60)
+                print("Fix the issues and press Enter to re-check...")
+                print("~" * 60)
+                input()
+                continue  # Re-run the check
+            else:
+                # Default to retry
+                continue
 
 
 def _get_env_first(*names: str) -> Optional[str]:
@@ -622,6 +1175,52 @@ def main() -> int:
         help="Don't update participant_assignments.yaml (dry-run for assignments).",
     )
 
+    # EDA streamer integration (opt-in)
+    parser.add_argument(
+        "--with-eda",
+        action="store_true",
+        help=(
+            "Spawn the Shimmer EDA-to-LSL streamer subprocess before scenarios. "
+            "Requires --eda-port. The streamer is terminated when the runner exits."
+        ),
+    )
+    parser.add_argument(
+        "--eda-port",
+        default=None,
+        help="Shimmer Bluetooth COM port (e.g., COM5). Required when --with-eda is set.",
+    )
+    parser.add_argument(
+        "--eda-stream-name",
+        default="ShimmerEDA",
+        help="LSL stream name for EDA data (default: ShimmerEDA).",
+    )
+    parser.add_argument(
+        "--eda-health-timeout",
+        type=float,
+        default=15.0,
+        help="Seconds to wait for EDA LSL stream before failing (default: 15).",
+    )
+
+    # Pre-flight stream checks
+    parser.add_argument(
+        "--check-streams",
+        action="store_true",
+        help=(
+            "Run pre-flight LSL stream check before session setup. "
+            "Verifies EEG and EDA streams are live before prompting for participant."
+        ),
+    )
+    parser.add_argument(
+        "--skip-stream-check",
+        action="store_true",
+        help="Skip pre-flight stream check (even if --pilot1 is set).",
+    )
+    parser.add_argument(
+        "--eeg-stream-type",
+        default="EEG",
+        help="LSL stream type to search for EEG (default: EEG).",
+    )
+
     args = parser.parse_args()
 
     if args.pilot1 and args.dry_run:
@@ -636,11 +1235,37 @@ def main() -> int:
         )
         args.speed = 1
 
+    # Validate EDA arguments
+    if args.with_eda and not args.eda_port:
+        print("ERROR: --with-eda requires --eda-port (e.g., --eda-port COM5)", file=sys.stderr)
+        return 2
+
     repo_root = Path(__file__).resolve().parents[2]
+    
+    # EDA subprocess state (will be populated if --with-eda is set)
+    eda_info: Optional[dict] = None
     
     # Load participant assignments
     assignments = _load_assignments(repo_root)
     participants_data = assignments.get("participants", {})
+
+    # Pre-flight stream check (before asking for participant info)
+    # Run if --check-streams is set, or if --pilot1 is set (unless --skip-stream-check)
+    should_check_streams = args.check_streams or (args.pilot1 and not args.skip_stream_check)
+    
+    if should_check_streams and not args.verification:
+        # Don't check EDA if we're about to spawn it with --with-eda
+        check_eda = not args.with_eda
+        
+        if not _run_preflight_checks(
+            check_eeg=True,
+            check_eda=check_eda,
+            eeg_stream_type=args.eeg_stream_type,
+            eda_stream_name=args.eda_stream_name,
+            timeout=5.0,
+        ):
+            print("Session cancelled by user.", file=sys.stderr)
+            return 1
 
     # Interactive prompts when arguments not provided
     participant_raw = args.participant or _get_env_first("OPENMATB_PARTICIPANT", "OPENMATB_PARTICIPANT_ID")
@@ -736,6 +1361,24 @@ def main() -> int:
         print(f"OpenMATB directory not found: {openmatb_dir}", file=sys.stderr)
         return 2
 
+    # Check if session output already exists (prevent accidental overwriting)
+    session_output_dir = output_root_path / "openmatb" / participant / session
+    if session_output_dir.exists():
+        existing_files = list(session_output_dir.glob("*"))
+        if existing_files:
+            print(f"\n{'!'*60}", file=sys.stderr)
+            print(f"WARNING: Session output directory already contains data!", file=sys.stderr)
+            print(f"  Path: {session_output_dir}", file=sys.stderr)
+            print(f"  Files: {len(existing_files)} existing file(s)", file=sys.stderr)
+            print(f"{'!'*60}", file=sys.stderr)
+            print("\nOptions:")
+            print("  [y] Continue (will ADD to existing data - may cause confusion)")
+            print("  [n] Cancel and choose a different session ID")
+            confirm = input("\nContinue with this session? (y/n): ").strip().lower()
+            if confirm not in ("y", "yes"):
+                print("Aborted. Use a different session ID or remove existing data.")
+                return 1
+
     def _git_rev_parse_head(cwd: Path) -> str:
         try:
             out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(cwd), stderr=subprocess.STDOUT)
@@ -771,6 +1414,55 @@ def main() -> int:
     for s in playlist:
         print(f" - {s}")
 
+    # Start EDA streamer if requested (before scenarios)
+    if args.with_eda:
+        print("\n" + "="*60)
+        print("Starting EDA streamer...")
+        print("="*60)
+        
+        eda_info = _start_eda_streamer(
+            repo_root=repo_root,
+            eda_port=args.eda_port,
+            eda_stream_name=args.eda_stream_name,
+            health_check_timeout=args.eda_health_timeout,
+        )
+        
+        if not eda_info["health_check_passed"]:
+            print(f"\n!!! EDA HEALTH CHECK FAILED !!!", file=sys.stderr)
+            print(f"Error: {eda_info.get('error', 'Unknown error')}", file=sys.stderr)
+            print("\nCannot proceed without verified EDA stream.", file=sys.stderr)
+            _stop_eda_streamer()
+            return 2
+        
+        print(f"EDA streamer ready (PID: {eda_info['pid']}, stream: {eda_info['stream_name']})")
+        print("="*60 + "\n")
+
+    # Final launch checkpoint (only for real runs, not verification)
+    if not args.verification and not args.dry_run:
+        print("\n" + "=" * 60)
+        print("FINAL LAUNCH CHECKLIST")
+        print("=" * 60)
+        print(f"  Participant:  {participant}")
+        print(f"  Session:      {session}")
+        print(f"  Sequence:     {seq_id}")
+        print(f"  Scenarios:    {len(playlist)}")
+        print("-" * 60)
+        print("  Before pressing Enter, confirm:")
+        print("    [ ] LabRecorder is RECORDING (red button pressed)")
+        print("    [ ] All streams visible in LabRecorder (EEG, EDA, OpenMATB*)")
+        print("    [ ] Participant is seated and ready")
+        print("    [ ] Electrodes are attached and signal looks good")
+        print("-" * 60)
+        print("  * OpenMATB markers stream will appear when first scenario starts")
+        print("=" * 60)
+        
+        launch = input("\nStart session now? (y/n): ").strip().lower()
+        if launch not in ("y", "yes"):
+            print("Session aborted by user at final checkpoint.")
+            if args.with_eda:
+                _stop_eda_streamer()
+            return 1
+
     scenario_manifests: list[Path] = []
 
     for scenario_filename in playlist:
@@ -801,11 +1493,46 @@ def main() -> int:
 
     if args.pilot1 and not args.xdf_path:
         # We require an explicit .xdf to create the run-level manifest and enforce QC.
-        xdf_in = input("\nEnter LabRecorder .xdf path for calibration-stage physiology (e.g., *.xdf): ").strip()
-        if not xdf_in:
-            print("ERROR: --pilot1 requires an .xdf path (LabRecorder output).", file=sys.stderr)
-            return 2
-        args.xdf_path = xdf_in
+        print("\n" + "-" * 50)
+        print("XDF PATH REQUIRED")
+        print("-" * 50)
+        print("Stop LabRecorder recording now (if not already stopped).")
+        print("Enter the path to the .xdf file that was just recorded.")
+        print("-" * 50)
+        
+        while True:
+            xdf_in = input("\nEnter LabRecorder .xdf path: ").strip()
+            if not xdf_in:
+                print("ERROR: --pilot1 requires an .xdf path (LabRecorder output).", file=sys.stderr)
+                retry = input("Try again? (y/n): ").strip().lower()
+                if retry not in ("y", "yes"):
+                    return 2
+                continue
+            
+            # Validate the path exists
+            xdf_path = Path(xdf_in)
+            if not xdf_path.exists():
+                print(f"ERROR: File not found: {xdf_path}", file=sys.stderr)
+                print("Check the path and try again.")
+                continue
+            
+            if not xdf_path.suffix.lower() == ".xdf":
+                print(f"WARNING: File does not have .xdf extension: {xdf_path.name}")
+                confirm = input("Use this file anyway? (y/n): ").strip().lower()
+                if confirm not in ("y", "yes"):
+                    continue
+            
+            # Check file size (sanity check)
+            file_size_mb = xdf_path.stat().st_size / (1024 * 1024)
+            if file_size_mb < 0.1:
+                print(f"WARNING: XDF file is very small ({file_size_mb:.2f} MB) - may be incomplete.")
+                confirm = input("Use this file anyway? (y/n): ").strip().lower()
+                if confirm not in ("y", "yes"):
+                    continue
+            
+            print(f"Using XDF: {xdf_path} ({file_size_mb:.1f} MB)")
+            args.xdf_path = str(xdf_path)
+            break
 
     # Write run-level manifest linking the playlist to OpenMATB outputs (and optional physiology XDF).
     try:
@@ -864,6 +1591,16 @@ def main() -> int:
                     "markers": {"name": "OpenMATB", "type": "Markers"},
                     "eda": {"type": "EDA"},
                 },
+                "eda_streamer": {
+                    "managed_by_runner": bool(args.with_eda),
+                    "started": eda_info["started"] if eda_info else False,
+                    "pid": eda_info["pid"] if eda_info else None,
+                    "stream_name": eda_info["stream_name"] if eda_info else args.eda_stream_name,
+                    "stream_type": eda_info["stream_type"] if eda_info else "EDA",
+                    "health_check_passed": eda_info["health_check_passed"] if eda_info else None,
+                    "port": args.eda_port if args.with_eda else None,
+                    "error": eda_info.get("error") if eda_info else None,
+                } if args.with_eda else None,
             },
             "playlist": scenario_rows,
             "qc": {
@@ -966,6 +1703,12 @@ def main() -> int:
         assignments["participants"] = participants_data
         _save_assignments(repo_root, assignments, dry_run=args.skip_assignment_update)
         print(f"Updated participant assignments: {participant} completed {session}")
+    
+    # Stop EDA streamer if we started it
+    if args.with_eda:
+        print("\nStopping EDA streamer...")
+        _stop_eda_streamer()
+        print("EDA streamer stopped.")
     
     return 0
 
