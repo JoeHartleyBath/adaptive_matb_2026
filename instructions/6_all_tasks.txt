@@ -1,4 +1,4 @@
-<h1>Putting it All Together</h1>
-<p>Now all tasks will run simultaneously for a short practice period.</p>
-<p>Do your best to attend to all of them.</p>
-<p>Press <b>SPACE</b> to begin the full practice.</p>
+<center><h1>Putting it All Together</h1></center>
+<center><p>Now all tasks will run simultaneously for a short practice period.</p></center>
+<center><p>Do your best to attend to all of them.</p></center>
+<center><p>Press <b>SPACE</b> to begin the full practice.</p></center>

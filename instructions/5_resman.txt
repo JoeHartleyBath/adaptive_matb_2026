@@ -1,7 +1,7 @@
-<h1>Task 4: Resource Management</h1>
-<p>Keep the fuel level in the main tanks (A & B) around 2500 units.</p>
-<ul>
-    <li>Turn pumps ON/OFF (Keys 1-8) to transfer fuel from reserve tanks.</li>
-    <li>Don't let any tank run dry or overflow.</li>
-</ul>
-<p>Press <b>SPACE</b> to try this task.</p>
+<center><h1>Task 4: Resource Management</h1></center>
+<center><p>Manage fuel across 6 tanks displayed as vertical bars. Your goal: keep the two main tanks (A & B) near 2500 units.</p></center>
+<center><p>• <b>Tanks A & B (main):</b> These leak fuel constantly and need refilling. Keep them between ~2250-2750 units (acceptable range).</p></center>
+<center><p>• <b>Tanks C, D, E, F (reserves):</b> Supply tanks on the sides. Use pumps to transfer their fuel into A & B.</p></center>
+<center><p>• <b>Pumps (keys 1-8):</b> Press number keys <b>1</b> through <b>8</b> to toggle pumps ON/OFF. Each pump transfers fuel from a specific reserve tank to a main tank. The pump status panel (right side) shows which pumps are active and their flow rates.</p></center>
+<center><p>• <b>Strategy:</b> Monitor tank levels. When A or B drops low, activate pumps connected to them. Turn pumps off before reserves run dry or mains overflow.</p></center>
+<center><p>Press <b>SPACE</b> to try this task.</p></center>

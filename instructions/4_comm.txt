@@ -1,8 +1,5 @@
-<h1>Task 3: Communications</h1>
-<p>Listen for your callsign: <b>NASA-504</b>.</p>
-<ul>
-    <li>When you hear "NASA-504", listen for the command (e.g., "Change frequency to 123.4").</li>
-    <li>Set the frequency using the arrow keys and press ENTER.</li>
-    <li>If you hear a different callsign, ignore it.</li>
-</ul>
-<p>Press <b>SPACE</b> to try this task.</p>
+<center><h1>Task 3: Communications</h1></center>
+<center><p>Listen for your unique callsign (3 letters + 3 numbers, displayed on screen).</p></center>
+<center><p>• <b>When you hear YOUR callsign:</b> Listen for the radio and frequency (e.g., "NAV-1 frequency 123.4"). Use <b>UP/DOWN</b> arrows to select the correct radio, <b>LEFT/RIGHT</b> arrows to adjust the frequency, then press <b>ENTER</b> to confirm.</p></center>
+<center><p>• <b>When you hear a DIFFERENT callsign:</b> Ignore it completely.</p></center>
+<center><p>Press <b>SPACE</b> to try this task.</p></center>

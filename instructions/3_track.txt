@@ -1,7 +1,5 @@
-<h1>Task 2: Tracking</h1>
-<p>Use the joystick to keep the target circle tracking the green circle in the center.</p>
-<ul>
-    <li>Ideally, keep the target inside the center box.</li>
-    <li>Move the joystick smoothly.</li>
-</ul>
-<p>Press <b>SPACE</b> to try this task.</p>
+<center><h1>Task 2: Tracking</h1></center>
+<center><p>Use the joystick to keep the target circle tracking the green circle in the center.</p></center>
+<center><p>• Ideally, keep the target inside the center box.</p></center>
+<center><p>• Move the joystick smoothly.</p></center>
+<center><p>Press <b>SPACE</b> to try this task.</p></center>

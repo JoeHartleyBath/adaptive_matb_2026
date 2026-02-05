@@ -1,7 +1,6 @@
-<h1>Task 1: System Monitoring</h1>
-<p>Watch the lights and scales at the top left.</p>
-<ul>
-    <li><b>Lights:</b> If a light turns OFF (green) or RED, click it or press F1-F6 to reset it.</li>
-    <li><b>Scales:</b> If a pointer moves out of the center zone, click the scale or press F1-F6 to reset it.</li>
-</ul>
-<p>Press <b>SPACE</b> to try this task.</p>
+<center><h1>Task 1: System Monitoring</h1></center>
+<center><p>Monitor 2 indicator lights and 4 gauges at the top left of the screen. Your job is to detect and fix failures.</p></center>
+<center><p>• Green light (left): Should stay ON and GREEN. If it turns OFF, press <b>F5</b> to reset it.</p></center>
+<center><p>• Warning light (right): Should stay OFF. If it turns ON and RED, press <b>F6</b> to reset it.</p></center>
+<center><p>• Gauges (bottom row): Each gauge has a moving pointer. When a failure occurs, the pointer will move into the TOP or BOTTOM area of the gauge. Press <b>F1</b>, <b>F2</b>, <b>F3</b>, or <b>F4</b> (left to right) to reset that gauge back to center.</p></center>
+<center><p>Press <b>SPACE</b> to try this task.</p></center>

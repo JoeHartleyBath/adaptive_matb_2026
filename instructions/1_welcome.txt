@@ -1,4 +1,5 @@
-<h1>Welcome to the Adaptive MATB Pilot</h1>
+<center><h1>Welcome to the Adaptive MATB Pilot</h1></center>
 <center><p>This study involves performing multiple tasks simultaneously.</p></center>
-<p>We will introduce each sub-task one by one so you can get familiar with them.</p>
-<p>Press <b>SPACE</b> or click <b>NEXT</b> to continue.</p>
+<center><p>First, we'll show you all four tasks together so you can see the full interface.</p></center>
+<center><p>Then we'll introduce each task one by one so you can practice them individually.</p></center>
+<center><p>Press <b>SPACE</b> to continue.</p></center>
