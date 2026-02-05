@@ -204,22 +204,90 @@ Notes:
 
 ---
 
-## 5) Provisional alignment tolerance wording (to be finalized after dry run)
+## 5) XDF↔CSV Marker Alignment QC (Pilot 1)
 
-This wording is normative for v0 until replaced by a versioned update.
+All physiological data (EEG, EDA) and OpenMATB markers are recorded together via LabRecorder into a single `.xdf` file. After each run, the alignment between LSL-transported markers and OpenMATB CSV timestamps must be verified.
 
-Provisional statement (exact):
+### QC Thresholds (exact)
 
-- **Synchronization tolerance (provisional):** The maximum allowed absolute alignment error between a task event marker and the corresponding EEG time is
-  $|\Delta t| \le 20$ ms (target).
-- This tolerance is **provisional** and will be **finalized after dry-run measurement** on the intended acquisition machine and recording stack.
+| Metric | Pass Threshold | Hard Fail |
+|--------|----------------|-----------|
+| Median absolute error | ≤ 20 ms | — |
+| 95th percentile error | ≤ 50 ms | — |
+| Drift (ms/min) | ≤ 5 ms/min | > 20 ms/min |
+| Discontinuities | 0 | Any present |
 
-How the dry run finalizes it (summary requirement):
+### QC Procedure
 
-- Measure empirical alignment error between OpenMATB markers and EEG on the chosen reference timebase (recommended: LSL timestamps).
-- Record the observed distribution (at minimum: median and 95th percentile of $|\Delta t|$).
-- Update the finalized tolerance in a versioned doc update if the empirical distribution requires a looser bound.
+1. Run pilot session with `--pilot1` flag
+2. After playlist completes, provide LabRecorder `.xdf` path when prompted
+3. Automatic QC runs via `src/python/verification/verify_xdf_alignment.py`
+4. QC report written to `run_manifest_*.qc_alignment.json`
+5. Run manifest updated with pass/fail status
 
-Acceptance criterion for v0 dry run (until finalized):
+### Manual QC (optional)
 
-- 95th percentile of $|\Delta t|$ must be ≤ 20 ms, or the tolerance must be revised (with justification) before pilot recruitment.
+```powershell
+python src/python/verification/verify_xdf_alignment.py \
+    --xdf C:\data\adaptive_matb\physiology\P001_S001.xdf \
+    --csv C:\data\adaptive_matb\openmatb\P001\S001\session.csv \
+    --out qc_report.json
+```
+
+Or using run manifest:
+```powershell
+python src/python/verification/verify_xdf_alignment.py \
+    --run-manifest C:\data\adaptive_matb\openmatb\P001\S001\run_manifest_*.json
+```
+
+---
+
+## 6) Physiological Recording (Pilot 1)
+
+### Recording Stack
+
+- **EEG**: g.USBamp → LSL outlet (via g.NEEDaccess or g.HIsys)
+- **EDA**: Shimmer GSR3 → LSL outlet (via `scripts/stream_shimmer_eda.py`)
+- **Markers**: OpenMATB → LSL outlet (via `labstreaminglayer` plugin)
+- **Recording**: LabRecorder captures all streams to single `.xdf` file
+
+### EDA Streaming Setup
+
+1. Pair Shimmer GSR3 via Bluetooth (note COM port)
+2. Start EDA streamer:
+   ```powershell
+   python scripts/stream_shimmer_eda.py --port COM5
+   ```
+3. Verify stream appears in LabRecorder (name: `ShimmerEDA`, type: `EDA`)
+4. Start LabRecorder recording
+5. Run OpenMATB with `--pilot1`
+
+EDA stream properties:
+- Sample rate: ~51.2 Hz
+- Channels: 1 (GSR in microsiemens)
+- LSL type: `EDA`
+
+### Pilot 1 Scope (offline-only)
+
+Pilot 1 is **offline-only**:
+- No real-time adaptation during task
+- All physiology is recorded for post-hoc analysis
+- Focus: validate recording pipeline, marker alignment, data quality
+
+---
+
+## 7) Provisional alignment tolerance wording (finalized for Pilot 1)
+
+This wording is normative for v0. QC thresholds have been finalized based on the requirements in Section 5.
+
+Finalized statement (exact):
+
+- **Synchronization tolerance (Pilot 1):** The maximum allowed median absolute alignment error between task event markers (OpenMATB CSV) and LSL-transported markers (XDF) is **≤ 20 ms**.
+- The 95th percentile must be **≤ 50 ms**.
+- Clock drift must be **≤ 5 ms/min**, with hard failure at **> 20 ms/min**.
+- Any timestamp discontinuities (jumps, out-of-order) are a hard fail.
+
+Acceptance criterion for Pilot 1:
+
+- All QC metrics must pass before physiology data is considered valid for analysis.
+- Failed runs must be logged and either repeated or excluded with documented justification.

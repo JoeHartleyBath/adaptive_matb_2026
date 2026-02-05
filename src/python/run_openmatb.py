@@ -109,6 +109,14 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
     os.replace(tmp_path, path)
 
 
+def _read_json(path: Path) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}")
+    return payload
+
+
 def _write_seq_id_into_manifest(
     manifest_path: Path,
     *,
@@ -141,17 +149,21 @@ def _write_seq_id_into_manifest(
     _atomic_write_json(manifest_path, manifest)
 
 
-def _get_playlist(seq_id: str, dry_run: bool) -> list[str]:
+def _get_playlist(seq_id: str, dry_run: bool, *, calibration_only: bool = False) -> list[str]:
     if dry_run:
         return ["pilot_dry_run_v0.txt"]
 
-    # Fixed training sequence
-    playlist = [
-        "pilot_practice_intro.txt",
-        "pilot_practice_low.txt",
-        "pilot_practice_moderate.txt",
-        "pilot_practice_high.txt",
-    ]
+    playlist: list[str] = []
+    if not calibration_only:
+        # Fixed training sequence
+        playlist.extend(
+            [
+                "pilot_practice_intro.txt",
+                "pilot_practice_low.txt",
+                "pilot_practice_moderate.txt",
+                "pilot_practice_high.txt",
+            ]
+        )
 
     # calibration blocks based on counterbalancing sequence
     # SEQ1: Low -> Moderate -> High
@@ -167,8 +179,9 @@ def _get_playlist(seq_id: str, dry_run: bool) -> list[str]:
         levels = calibration_levels[seq_id]
     except KeyError as exc:
         raise ValueError(f"Unknown sequence ID: {seq_id}") from exc
-        for level in levels:
-            playlist.append(f"pilot_calibration_{level.lower()}.txt")
+
+    for level in levels:
+        playlist.append(f"pilot_calibration_{level.lower()}.txt")
 
     return playlist
 
@@ -253,19 +266,19 @@ def _run_single_scenario(
     args: argparse.Namespace,
     repo_commit: str,
     submodule_commit: str,
-) -> int:
+) -> tuple[int, Optional[Path]]:
     repo_root = Path(__file__).resolve().parents[2]
 
     try:
         _stage_pilot_instruction_files(openmatb_dir, repo_root)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
-        return 2
+        return 2, None
 
     scenario_source_path = repo_root / "scenarios" / scenario_filename
     if not scenario_source_path.exists():
         print(f"Scenario file not found: {scenario_source_path}", file=sys.stderr)
-        return 2
+        return 2, None
 
     scenario_target_path = openmatb_dir / "includes" / "scenarios" / scenario_filename
     scenario_target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -377,7 +390,7 @@ def _run_single_scenario(
                 scenario_filename=scenario_filename,
                 abort_reason=f"exit_code_{exit_code}",
             )
-        return exit_code
+        return exit_code, (new_manifests[0] if len(new_manifests) == 1 else None)
 
     manifests_after = _list_manifest_paths(sessions_dir)
     new_manifests = sorted(manifests_after - manifests_before)
@@ -387,7 +400,7 @@ def _run_single_scenario(
             "Skipping manifest metadata injection.",
             file=sys.stderr,
         )
-        return 2
+        return 2, None
 
     manifest_path = new_manifests[0]
     _write_seq_id_into_manifest(
@@ -445,7 +458,7 @@ def _run_single_scenario(
                 abort_reason="scenario_errors",
             )
             print(f"Scenario errors detected; see: {per_run_errors_log}", file=sys.stderr)
-            return 2
+            return 2, manifest_path
 
         # Detect early termination even without explicit errors: if the CSV ends far before
         # the latest timestamp in the scenario file, treat it as an abort.
@@ -517,11 +530,11 @@ def _run_single_scenario(
                     f"Scenario ended early (observed scenario_time={observed_end:.2f}s, expected~{expected_end}s)",
                     file=sys.stderr,
                 )
-                return 2
+                return 2, manifest_path
     except Exception:
         # If we can't read the manifest or error log, do not crash the runner.
         pass
-    return 0
+    return 0, manifest_path
 
 
 def main() -> int:
@@ -569,6 +582,36 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--calibration-only",
+        action="store_true",
+        help="Run only the counterbalanced calibration blocks (skip practice/training).",
+    )
+
+    parser.add_argument(
+        "--pilot1",
+        action="store_true",
+        help=(
+            "Enable Pilot 1 checks: requires a calibration-stage .xdf (LabRecorder) so a run-level manifest "
+            "can link physiology to OpenMATB outputs and run alignment QC."
+        ),
+    )
+
+    parser.add_argument(
+        "--xdf-path",
+        default=None,
+        help=(
+            "Path to the LabRecorder .xdf file that contains OpenMATB markers + physiology for this run. "
+            "Required for --pilot1."
+        ),
+    )
+
+    parser.add_argument(
+        "--skip-xdf-qc",
+        action="store_true",
+        help="Skip XDF↔CSV marker alignment QC (pilot verification).",
+    )
+
+    parser.add_argument(
         "--summarise-performance",
         action="store_true",
         help="Write a derived performance summary JSON next to each run manifest.",
@@ -580,6 +623,10 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    if args.pilot1 and args.dry_run:
+        print("NOTE: --pilot1 is ignored during --dry-run.", file=sys.stderr)
+        args.pilot1 = False
 
     if args.speed != 1 and not args.verification:
         print(
@@ -704,7 +751,7 @@ def main() -> int:
         return 2
 
     try:
-        playlist = _get_playlist(seq_id, args.dry_run)
+        playlist = _get_playlist(seq_id, args.dry_run, calibration_only=bool(args.calibration_only))
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -724,8 +771,10 @@ def main() -> int:
     for s in playlist:
         print(f" - {s}")
 
+    scenario_manifests: list[Path] = []
+
     for scenario_filename in playlist:
-        exit_code = _run_single_scenario(
+        exit_code, manifest_path = _run_single_scenario(
             openmatb_dir=openmatb_dir,
             scenario_filename=scenario_filename,
             output_root_path=output_root_path,
@@ -740,12 +789,158 @@ def main() -> int:
         if exit_code != 0:
             print(f"\n!!! Scenario {scenario_filename} failed (code {exit_code}). Stopping sequence. !!!", file=sys.stderr)
             return exit_code
+
+        if manifest_path:
+            scenario_manifests.append(manifest_path)
         
         # Simple separation between blocks
         print(f"Scenario {scenario_filename} completed successfully.")
         # (Interactive UI and blocking dialogs are expected in attended mode)
 
     print("\nAll scenarios in playlist completed successfully.")
+
+    if args.pilot1 and not args.xdf_path:
+        # We require an explicit .xdf to create the run-level manifest and enforce QC.
+        xdf_in = input("\nEnter LabRecorder .xdf path for calibration-stage physiology (e.g., *.xdf): ").strip()
+        if not xdf_in:
+            print("ERROR: --pilot1 requires an .xdf path (LabRecorder output).", file=sys.stderr)
+            return 2
+        args.xdf_path = xdf_in
+
+    # Write run-level manifest linking the playlist to OpenMATB outputs (and optional physiology XDF).
+    try:
+        session_root = output_root_path / "openmatb" / participant / session
+        run_manifest_dir = session_root
+        run_manifest_dir.mkdir(parents=True, exist_ok=True)
+
+        scenario_rows = []
+        for scenario_filename, manifest_path in zip(playlist, scenario_manifests, strict=False):
+            row = {
+                "scenario_filename": scenario_filename,
+                "scenario_name": Path(scenario_filename).stem,
+                "manifest_path": str(manifest_path),
+            }
+            try:
+                manifest = _read_json(manifest_path)
+                row["session_csv"] = str(manifest.get("paths", {}).get("session_csv", ""))
+                row["lsl_enabled"] = bool(manifest.get("lsl_enabled"))
+            except Exception:
+                # Best-effort; don't crash an attended run if a manifest is malformed.
+                pass
+            scenario_rows.append(row)
+
+        timestamp_tag = datetime.now().strftime("%Y%m%dT%H%M%S")
+        run_manifest_path = run_manifest_dir / f"run_manifest_{timestamp_tag}.json"
+        if run_manifest_path.exists():
+            print(f"ERROR: Refusing to overwrite existing run manifest: {run_manifest_path}", file=sys.stderr)
+            return 2
+
+        run_manifest = {
+            "schema": "pilot_run_manifest_v0",
+            "created_at": datetime.now().isoformat(),
+            "participant": participant,
+            "session": session,
+            "seq_id": seq_id,
+            "mode": {
+                "pilot1": bool(args.pilot1),
+                "calibration_only": bool(args.calibration_only),
+                "dry_run": bool(args.dry_run),
+                "verification": bool(args.verification),
+            },
+            "repo": {
+                "commit": repo_commit,
+                "openmatb_submodule_commit": submodule_commit,
+            },
+            "openmatb": {
+                "output_root": str(output_root_path),
+                "output_subdir": str(Path("openmatb") / participant / session),
+                "session_root": str(session_root),
+                "openmatb_dir": str(openmatb_dir),
+            },
+            "physiology": {
+                "xdf_path": str(args.xdf_path) if args.xdf_path else None,
+                "recording_scope": "calibration_only",
+                "expected_streams": {
+                    "markers": {"name": "OpenMATB", "type": "Markers"},
+                    "eda": {"type": "EDA"},
+                },
+            },
+            "playlist": scenario_rows,
+            "qc": {
+                "xdf_alignment": {
+                    "required": bool(args.pilot1),
+                    "skipped": bool(args.skip_xdf_qc),
+                    "status": "pending" if (args.pilot1 and not args.skip_xdf_qc) else ("skipped" if args.skip_xdf_qc else "not_required"),
+                    "report_path": None,
+                    "thresholds": {
+                        "median_abs_ms": 20,
+                        "p95_abs_ms": 50,
+                        "drift_ms_per_min": 5,
+                        "hard_fail_drift_ms_per_min": 20,
+                    },
+                }
+            },
+        }
+
+        _atomic_write_json(run_manifest_path, run_manifest)
+        print(f"Wrote run manifest: {run_manifest_path}")
+    except Exception as exc:
+        print(f"ERROR: Failed to write run-level manifest: {exc}", file=sys.stderr)
+        return 2
+    
+    # Run XDF↔CSV marker alignment QC if --pilot1 and not --skip-xdf-qc
+    if args.pilot1 and not args.skip_xdf_qc and args.xdf_path:
+        print("\n" + "="*60)
+        print("Running XDF↔CSV marker alignment QC...")
+        print("="*60)
+        
+        try:
+            # Import from sibling verification module
+            import importlib.util
+            qc_script = Path(__file__).parent / "verification" / "verify_xdf_alignment.py"
+            spec = importlib.util.spec_from_file_location("verify_xdf_alignment", qc_script)
+            verify_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(verify_module)
+            run_qc = verify_module.run_qc
+            
+            csv_paths = [Path(row["session_csv"]) for row in scenario_rows if row.get("session_csv")]
+            qc_report_path = run_manifest_path.with_suffix(".qc_alignment.json")
+            
+            qc_report = run_qc(
+                xdf_path=Path(args.xdf_path),
+                csv_paths=csv_paths,
+                thresholds=run_manifest["qc"]["xdf_alignment"]["thresholds"],
+                output_path=qc_report_path,
+            )
+            
+            qc_passed = qc_report.get("results", {}).get("passed", False)
+            run_manifest["qc"]["xdf_alignment"]["status"] = "passed" if qc_passed else "failed"
+            run_manifest["qc"]["xdf_alignment"]["report_path"] = str(qc_report_path)
+            
+            # Update run manifest with QC results
+            _atomic_write_json(run_manifest_path, run_manifest)
+            
+            if not qc_passed:
+                print("\n⚠️  XDF alignment QC FAILED")
+                print("Fail reasons:")
+                for reason in qc_report.get("results", {}).get("fail_reasons", []):
+                    print(f"  - {reason}")
+                print(f"\nSee QC report: {qc_report_path}")
+            else:
+                print("\n✓ XDF alignment QC PASSED")
+                timing = qc_report.get("results", {}).get("timing", {})
+                print(f"  Median error: {timing.get('median_abs_error_ms', 0):.1f} ms")
+                print(f"  95th pct:     {timing.get('p95_abs_error_ms', 0):.1f} ms")
+        
+        except ImportError as exc:
+            print(f"WARNING: Could not run XDF QC (missing dependency): {exc}", file=sys.stderr)
+            print("Install with: pip install pyxdf", file=sys.stderr)
+            run_manifest["qc"]["xdf_alignment"]["status"] = "skipped_missing_dep"
+            _atomic_write_json(run_manifest_path, run_manifest)
+        except Exception as exc:
+            print(f"WARNING: XDF QC failed with error: {exc}", file=sys.stderr)
+            run_manifest["qc"]["xdf_alignment"]["status"] = f"error: {exc}"
+            _atomic_write_json(run_manifest_path, run_manifest)
     
     # Update participant assignments
     if not args.skip_assignment_update:
