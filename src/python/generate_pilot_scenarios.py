@@ -320,6 +320,8 @@ def write_scenario(filename, lines, marker_name, include_tlx=False):
         f.write(f"0:00:00;labstreaminglayer;start\n")
         f.write(f"0:00:00;labstreaminglayer;marker;{marker_str}\n")
         f.write(f"0:00:00;scheduling;start\n")
+        f.write(f"0:00:00;communications;voiceidiom;english\n")
+        f.write(f"0:00:00;communications;voicegender;male\n")
         
         for e in events:
             f.write(e.line_str + '\n')
