@@ -1,60 +1,81 @@
 # Pilot Familiarization Scenario
-# Introduces tasks one by one
+# Introduces tasks one by one, following OpenMATB default.txt pattern
 # Format: TIME;EVENT;ACTION;ARGUMENTS
 
-# --- Initialization ---
+# --- Welcome and full environment view ---
+0:00:00;instructions;filename;../../../../assets/instructions/pilot_en/1_welcome.txt
+0:00:00;instructions;start
 0:00:00;sysmon;start
-0:00:00;sysmon;hide
 0:00:00;track;start
-0:00:00;track;hide
 0:00:00;communications;start
-0:00:00;communications;hide
+0:00:00;communications;voiceidiom;english
+0:00:00;communications;voicegender;male
 0:00:00;resman;start
-0:00:00;resman;hide
 
-# --- Step 1: Welcome ---
-0:00:01;instructions;filename;../../../../assets/instructions/pilot_en/1_welcome.txt
-0:00:01;instructions;start
+# --- SysMon Demo (20 seconds) ---
+0:00:10;resman;hide
+0:00:10;resman;pause
+0:00:10;track;hide
+0:00:10;track;pause
+0:00:10;communications;hide
+0:00:10;communications;pause
+0:00:10;instructions;filename;../../../../assets/instructions/pilot_en/2_sysmon.txt
+0:00:10;instructions;start
 
-# --- Step 2: SysMon Demo ---
-# Wait for user to dismiss instructions, then show Sysmon
-0:00:02;instructions;filename;../../../../assets/instructions/pilot_en/2_sysmon.txt
-0:00:02;instructions;start
-0:00:02;sysmon;show
-# Let them practice sysmon for 30 seconds alone
-# (Technically instructions pauses, so 'resume' happens when they click Next)
+# Trigger sysmon failures during demo
+0:00:15;sysmon;scales-1-failure;True
+0:00:20;sysmon;lights-1-failure;True
 
-# --- Step 3: Tracking Demo ---
-0:00:03;sysmon;hide
-0:00:03;instructions;filename;../../../../assets/instructions/pilot_en/3_track.txt
-0:00:03;instructions;start
-0:00:03;track;show
+# --- Tracking Demo (20 seconds) ---
+0:00:30;track;show
+0:00:30;track;resume
+0:00:30;sysmon;hide
+0:00:30;sysmon;pause
+0:00:30;instructions;filename;../../../../assets/instructions/pilot_en/3_track.txt
+0:00:30;instructions;start
 
-# --- Step 4: Comm Demo ---
-0:00:04;track;hide
-0:00:04;instructions;filename;../../../../assets/instructions/pilot_en/4_comm.txt
-0:00:04;instructions;start
-0:00:04;communications;show
+# --- Communications Demo (20 seconds) ---
+0:00:50;communications;show
+0:00:50;communications;resume
+0:00:50;track;hide
+0:00:50;track;pause
+0:00:50;instructions;filename;../../../../assets/instructions/pilot_en/4_comm.txt
+0:00:50;instructions;start
 
-# --- Step 5: ResMan Demo ---
-0:00:05;communications;hide
-0:00:05;instructions;filename;../../../../assets/instructions/pilot_en/5_resman.txt
-0:00:05;instructions;start
-0:00:05;resman;show
+# Trigger comm prompt during demo
+0:00:53;communications;radioprompt;own
 
-# --- Step 6: All Together ---
-0:00:06;resman;hide
-0:00:06;instructions;filename;../../../../assets/instructions/pilot_en/6_all_tasks.txt
-0:00:06;instructions;start
+# --- ResMan Demo (30 seconds) ---
+0:01:10;resman;show
+0:01:10;resman;resume
+0:01:10;communications;hide
+0:01:10;communications;pause
+0:01:10;instructions;filename;../../../../assets/instructions/pilot_en/5_resman.txt
+0:01:10;instructions;start
 
-# Show all for 2 minutes of practice
-0:00:06;sysmon;show
-0:00:06;track;show
-0:00:06;communications;show
-0:00:06;resman;show
+# Trigger pump failure during demo
+0:01:15;resman;pump-1-state;failure
+
+# --- All Together (2 minutes practice) ---
+0:01:40;sysmon;show
+0:01:40;sysmon;resume
+0:01:40;track;show
+0:01:40;track;resume
+0:01:40;communications;show
+0:01:40;communications;resume
+0:01:40;instructions;filename;../../../../assets/instructions/pilot_en/6_all_tasks.txt
+0:01:40;instructions;start
+
+# Practice events during full task period
+0:01:50;resman;pump-1-state;off
+0:01:50;sysmon;lights-2-failure;true
+0:01:55;communications;radioprompt;own
+0:02:00;resman;pump-6-state;failure
+0:02:05;sysmon;scales-3-failure;true
+0:02:15;communications;radioprompt;own
 
 # --- End ---
-0:02:30;sysmon;stop
-0:02:30;track;stop
-0:02:30;communications;stop
-0:02:30;resman;stop
+0:03:50;sysmon;stop
+0:03:50;track;stop
+0:03:50;communications;stop
+0:03:50;resman;stop
