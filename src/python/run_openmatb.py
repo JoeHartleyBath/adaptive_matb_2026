@@ -21,12 +21,14 @@ OpenMATB uses:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import os
 import re
 import subprocess
 import shutil
 import sys
+import yaml
 from pathlib import Path
 from typing import Optional
 
@@ -49,6 +51,46 @@ def _validate_id(value: str, *, label: str) -> str:
         raise ValueError(f"{label} must be alphanumeric/underscore/dash (got: {value!r})")
 
     return value
+
+
+def _load_assignments(repo_root: Path) -> dict:
+    """Load participant assignments from config file."""
+    assignments_path = repo_root / "config" / "participant_assignments.yaml"
+    if not assignments_path.exists():
+        return {"participants": {}}
+    
+    with open(assignments_path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f) or {}
+    
+    return data if "participants" in data else {"participants": data}
+
+
+def _save_assignments(repo_root: Path, assignments: dict, dry_run: bool = False) -> None:
+    """Save participant assignments to config file."""
+    if dry_run:
+        return
+    
+    assignments_path = repo_root / "config" / "participant_assignments.yaml"
+    assignments_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(assignments_path, 'w', encoding='utf-8') as f:
+        yaml.dump(assignments, f, default_flow_style=False, sort_keys=True)
+
+
+def _get_recent_participants(assignments: dict, limit: int = 5) -> list[str]:
+    """Get list of recent participants sorted by last_run timestamp."""
+    participants = assignments.get("participants", {})
+    
+    # Filter participants with last_run timestamp
+    recent = []
+    for pid, data in participants.items():
+        if data.get("last_run"):
+            recent.append((pid, data["last_run"]))
+    
+    # Sort by timestamp descending
+    recent.sort(key=lambda x: x[1], reverse=True)
+    
+    return [pid for pid, _ in recent[:limit]]
 
 
 def _list_manifest_paths(sessions_dir: Path) -> set[Path]:
@@ -531,6 +573,11 @@ def main() -> int:
         action="store_true",
         help="Write a derived performance summary JSON next to each run manifest.",
     )
+    parser.add_argument(
+        "--skip-assignment-update",
+        action="store_true",
+        help="Don't update participant_assignments.yaml (dry-run for assignments).",
+    )
 
     args = parser.parse_args()
 
@@ -542,33 +589,85 @@ def main() -> int:
         )
         args.speed = 1
 
-    seq_id = args.seq_id or _get_env_first("OPENMATB_SEQ_ID")
-    if not seq_id:
-        if args.dry_run:
-            seq_id = "DRYRUN"
-        else:
-            print(
-                "Missing required --seq-id (SEQ1/SEQ2/SEQ3). Provide --seq-id or set OPENMATB_SEQ_ID.",
-                file=sys.stderr,
-            )
-            return 2
+    repo_root = Path(__file__).resolve().parents[2]
+    
+    # Load participant assignments
+    assignments = _load_assignments(repo_root)
+    participants_data = assignments.get("participants", {})
 
+    # Interactive prompts when arguments not provided
     participant_raw = args.participant or _get_env_first("OPENMATB_PARTICIPANT", "OPENMATB_PARTICIPANT_ID")
     session_raw = args.session or _get_env_first("OPENMATB_SESSION", "OPENMATB_SESSION_ID")
+    seq_id = args.seq_id or _get_env_first("OPENMATB_SEQ_ID")
 
-    if participant_raw is None or session_raw is None:
-        missing = []
-        if participant_raw is None:
-            missing.append("participant")
+    # Interactive participant selection
+    if participant_raw is None:
+        print("\n=== OpenMATB Session Setup ===")
+        
+        # Show recent participants
+        recent = _get_recent_participants(assignments, limit=5)
+        if recent:
+            print("\nRecent participants:")
+            for i, pid in enumerate(recent, 1):
+                pdata = participants_data[pid]
+                seq = pdata.get("sequence", "?")
+                completed = len(pdata.get("sessions_completed", []))
+                print(f"  {i}. {pid} ({seq}, {completed} sessions)")
+            print(f"  Or enter a participant number/ID")
+        
+        while not participant_raw:
+            user_input = input("\nEnter participant number: ").strip()
+            if not user_input:
+                print("Participant selection cannot be empty.")
+                continue
+            
+            # Check if selecting from recent list
+            if user_input.isdigit() and 1 <= int(user_input) <= len(recent):
+                participant_raw = recent[int(user_input) - 1]
+            else:
+                # Parse as participant number
+                if not user_input.startswith('P'):
+                    try:
+                        num = int(user_input)
+                        participant_raw = f"P{num:03d}"
+                    except ValueError:
+                        participant_raw = f"P{user_input}"
+                else:
+                    participant_raw = user_input
+    
+    # Look up sequence from assignments
+    if participant_raw in participants_data:
+        assigned_seq = participants_data[participant_raw].get("sequence")
+        assigned_sessions = participants_data[participant_raw].get("sessions_completed", [])
+        
+        # Use assigned sequence if not overridden
+        if seq_id is None:
+            seq_id = assigned_seq
+        elif seq_id != assigned_seq and assigned_seq:
+            print(f"\nWARNING: Overriding assigned sequence {assigned_seq} with {seq_id}", file=sys.stderr)
+        
+        # Auto-increment session if needed
         if session_raw is None:
-            missing.append("session")
-        msg = (
-            "Missing required identifiers: "
-            + ", ".join(missing)
-            + ". Provide --participant/--session or set OPENMATB_PARTICIPANT and OPENMATB_SESSION."
-        )
-        print(msg, file=sys.stderr)
+            next_session_num = len(assigned_sessions) + 1
+            session_raw = f"S{next_session_num:03d}"
+    else:
+        # New participant not in assignments
+        print(f"\nERROR: {participant_raw} not found in assignments file.", file=sys.stderr)
+        print(f"Add to config/participant_assignments.yaml first, or use:", file=sys.stderr)
+        print(f"  python scripts/generate_participant_assignments.py --participant-ids {participant_raw} --sequences SEQ1", file=sys.stderr)
         return 2
+    
+    # Confirmation prompt
+    if not args.dry_run:
+        print(f"\n{'='*50}")
+        print(f"  Participant: {participant_raw}")
+        print(f"  Sequence:    {seq_id}")
+        print(f"  Session:     {session_raw}")
+        print(f"{'='*50}")
+        confirm = input("\nProceed with this configuration? (y/n): ").strip().lower()
+        if confirm not in ('y', 'yes'):
+            print("Aborted by user.")
+            return 1
 
     try:
         participant = _validate_id(participant_raw, label="participant")
@@ -647,6 +746,32 @@ def main() -> int:
         # (Interactive UI and blocking dialogs are expected in attended mode)
 
     print("\nAll scenarios in playlist completed successfully.")
+    
+    # Update participant assignments
+    if not args.skip_assignment_update:
+        # Ensure participant is in assignments
+        if participant not in participants_data:
+            participants_data[participant] = {
+                "sequence": seq_id,
+                "sessions_completed": [],
+                "last_run": None
+            }
+        
+        # Add session to completed list if not already there
+        pdata = participants_data[participant]
+        if session not in pdata.get("sessions_completed", []):
+            if "sessions_completed" not in pdata:
+                pdata["sessions_completed"] = []
+            pdata["sessions_completed"].append(session)
+        
+        # Update last run timestamp
+        pdata["last_run"] = datetime.now().isoformat()
+        
+        # Save assignments
+        assignments["participants"] = participants_data
+        _save_assignments(repo_root, assignments, dry_run=args.skip_assignment_update)
+        print(f"Updated participant assignments: {participant} completed {session}")
+    
     return 0
 
 
