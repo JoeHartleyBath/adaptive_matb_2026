@@ -208,3 +208,6 @@ __marimo__/
 
 # Local-only path configuration
 config/paths.yaml
+
+# Local-only ethics templates (do not track binary docs here)
+docs/ethics/
