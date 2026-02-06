@@ -2,7 +2,7 @@
 
 Status: draft (locks the intended pilot protocol; update only via versioned edit)
 
-Last updated: 2026-01-22
+Last updated: 2026-02-06
 
 Purpose: this document is the single source of truth for the **pilot session structure**, **MWL manipulations**, **marker set**, and **provisional synchronization tolerance wording**.
 
@@ -17,23 +17,29 @@ Constraints:
 Operational context (implementation already present in repo):
 
 - Run OpenMATB via wrapper: `src/python/run_openmatb.py`.
-- Scenario selection via: `src/python/vendor/openmatb/config.ini` (`scenario_path=...`).
-- Scenario files live under: `src/python/vendor/openmatb/includes/scenarios/`.
-- v0 pilot scenarios are exactly three combined session scenario files (one per calibration `seq_id`):
-  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq1.txt` (for `SEQ1`)
-  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq2.txt` (for `SEQ2`)
-  - `src/python/vendor/openmatb/includes/scenarios/pilot_seq3.txt` (for `SEQ3`)
-- Each scenario file begins with the same training segment (T1–T3), then runs calibration blocks (B1–B3) ordered per `seq_id`.
-- Primary event log is CSV + adjacent `.manifest.json` written externally (outside repo).
+- Scenario selection is set programmatically by the wrapper by writing `scenario_path=...` into the vendor config (`src/python/vendor/openmatb/config.ini`) for each block.
+- Scenario source-of-truth files live under: `scenarios/` (repo-managed).
+  - For execution, the wrapper stages each scenario into: `src/python/vendor/openmatb/includes/scenarios/`.
+- v0 Pilot 1 is executed as a **playlist** of scenario files (one OpenMATB run per file).
+  - Fixed practice playlist (always runs first):
+    - `pilot_practice_intro.txt`
+    - `pilot_practice_low.txt`
+    - `pilot_practice_moderate.txt`
+    - `pilot_practice_high.txt`
+  - Calibration playlist (order depends on `seq_id`, see Section 2):
+    - `pilot_calibration_low.txt`
+    - `pilot_calibration_moderate.txt`
+    - `pilot_calibration_high.txt`
+- Primary event logs are one CSV + adjacent `.manifest.json` per scenario block, written externally (outside repo), plus a run-level manifest linking the playlist.
 - LSL outlet plugin exists: `src/python/vendor/openmatb/plugins/labstreaminglayer.py`.
 
 ---
 
-## 1) Session structure (exact; training vs calibration)
+## 1) Session structure (exact; practice vs calibration)
 
 Definitions:
 
-- **Training blocks**: participant familiarization; not used for analysis/modeling.
+- **practice blocks**: participant familiarization; not used for analysis/modeling.
 - **calibration blocks**: the pilot blocks intended to be used for dry-run verification artifacts and pilot analyses (subject to ethics + QC gates).
 
 Session phases (exact):
@@ -42,25 +48,25 @@ Session phases (exact):
 
 - Fit EEG cap, impedance checks, verify signal quality.
 - Confirm LSL streams visible if LSL is used (EEG stream + OpenMATB marker stream).
-- Confirm scenario selection in `config.ini`.
+- Confirm participant/session/sequence IDs are correct in the wrapper launch; the wrapper prints the intended scenario playlist and sets `scenario_path` automatically.
 
-### Phase B — Training (not calibration)
+### Phase B — practice (not calibration)
 
 Goal: stabilize task proficiency before any calibration data.
 
 - A participant ID entry popup appears before T1, and the scenario does not proceed until a valid ID is submitted.
 
-- Training Block T1: **Low** workload, **5:00**
-- Break: **1:00** (quiet rest; no tasks)
-- Training Block T2: **Moderate** workload, **5:00**
-- Break: **1:00**
-- Training Block T3: **High** workload, **5:00**
+- practice Block T1: **Low** workload, **5:00**
+- Break: **operator-controlled** (participant may rest; the block-start dialog for the next block acts as a gate)
+- practice Block T2: **Moderate** workload, **5:00**
+- Break: **operator-controlled**
+- practice Block T3: **High** workload, **5:00**
 
-NASA-TLX during training (exact):
+NASA-TLX during practice (exact):
 
-- TLX is **not** administered during training in v0.
+- TLX is **not** administered during practice in v0.
   - Rationale (protocol stability): reduce interruptions while the participant is still learning controls.
-  - Exception (operator discretion): if training indicates obvious inability to operate tasks, stop and reschedule; do not proceed to calibration blocks.
+  - Exception (operator discretion): if practice indicates obvious inability to operate tasks, stop and reschedule; do not proceed to calibration blocks.
 
 ### Phase C — calibration pilot blocks (calibration)
 
@@ -68,10 +74,10 @@ Goal: collect comparable blocks at multiple workload levels with deterministic b
 
 - calibration Block B1: workload level per counterbalancing (see Section 2), **5:00**
 - NASA-TLX: immediately after B1, **self-paced**, untimed; all sliders must be interacted with before continuing
-- Break: **1:00**
+- Break: **operator-controlled** (participant may rest; the block-start dialog for B2 acts as a gate)
 - calibration Block B2: per counterbalancing, **5:00**
 - NASA-TLX: immediately after B2, **self-paced**, untimed; all sliders must be interacted with before continuing
-- Break: **1:00**
+- Break: **operator-controlled** (block-start dialog for B3 acts as a gate)
 - calibration Block B3: per counterbalancing, **5:00**
 - NASA-TLX: immediately after B3, **self-paced**, untimed; all sliders must be interacted with before continuing
 
@@ -79,7 +85,16 @@ Total planned calibration time (excluding setup):
 
 - Task time: 15:00
 - TLX time: self-paced (no fixed maximum)
-- Breaks: 2:00
+- Breaks: operator-controlled (not timed; see open decision OD-REST)
+
+Block-start dialog:
+
+Each scenario in the playlist is a separate OpenMATB process. When a new block launches, a modal dialog appears before the scenario starts (participant must click OK / press Space to proceed).
+
+- **First block only**: full Participant/Session/Sequence IDs are displayed for operator verification.
+- **Subsequent blocks**: a compact one-line ID footer replaces the full display.
+- Two participant-friendly message variants (practice vs calibration) are selected automatically by scenario filename. Exact wording is defined in `_block_dialog_lines()` in `src/python/run_openmatb.py`.
+- Dialogs are suppressed automatically during verification/automated runs.
 
 Pause policy (exact):
 
@@ -97,7 +112,7 @@ Workload levels:
 - `MODERATE`
 - `HIGH`
 
-Training order (fixed):
+practice order (fixed):
 
 - T1=LOW → T2=MODERATE → T3=HIGH
 
@@ -174,12 +189,12 @@ Markers (exact list):
 | Marker name | When emitted | Appears in CSV | Appears in LSL | Purpose |
 |---|---|---:|---:|---|
 | `SESSION_START` | immediately after OpenMATB begins the session | Yes | Yes | anchors session start |
-| `TRAINING/T1/START` | start of training block T1 | Yes | Yes | brackets training |
-| `TRAINING/T1/END` | end of training block T1 | Yes | Yes | brackets training |
-| `TRAINING/T2/START` | start of training block T2 | Yes | Yes | brackets training |
-| `TRAINING/T2/END` | end of training block T2 | Yes | Yes | brackets training |
-| `TRAINING/T3/START` | start of training block T3 | Yes | Yes | brackets training |
-| `TRAINING/T3/END` | end of training block T3 | Yes | Yes | brackets training |
+| `TRAINING/T1/START` | start of practice block T1 | Yes | Yes | brackets practice |
+| `TRAINING/T1/END` | end of practice block T1 | Yes | Yes | brackets practice |
+| `TRAINING/T2/START` | start of practice block T2 | Yes | Yes | brackets practice |
+| `TRAINING/T2/END` | end of practice block T2 | Yes | Yes | brackets practice |
+| `TRAINING/T3/START` | start of practice block T3 | Yes | Yes | brackets practice |
+| `TRAINING/T3/END` | end of practice block T3 | Yes | Yes | brackets practice |
 | `calibration/B1/<LEVEL>/START` | start of calibration block B1 | Yes | Yes | primary label interval start |
 | `calibration/B1/<LEVEL>/END` | end of calibration block B1 | Yes | Yes | primary label interval end |
 | `TLX/B1/START` | immediately before NASA-TLX for B1 | Yes | Yes | brackets TLX |
@@ -198,7 +213,8 @@ Markers (exact list):
 Notes:
 
 - `<LEVEL>` must be one of `LOW|MODERATE|HIGH`.
-- Training markers exist for completeness but training blocks are not intended for analysis.
+- Note: for Pilot 1, scenarios currently use the legacy `TRAINING/` marker namespace for the practice phase.
+- Practice markers exist for completeness but practice blocks are not intended for analysis.
 - Pause/resume state changes may appear in OpenMATB CSV/runtime logs and operator notes, but they are not represented as `STUDY/V0/` markers; interruptions during B1–B3 must be handled via `ABORT` + restart.
 - Marker payloads MUST NOT contain semicolons (;). Semicolons are reserved for OpenMATB scenario field separation.
 

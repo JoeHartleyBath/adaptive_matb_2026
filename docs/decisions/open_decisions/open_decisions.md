@@ -437,3 +437,38 @@ Would alter calibration protocol timing, task interruption profile, subjective l
 
 **Status**  
 Open → expected to close pre-Pilot 1 via literature.
+
+---
+
+### OD-11 (OD-REST): Enforced rest vs operator-controlled rest between blocks
+
+**Decision question**  
+Should inter-block rest periods be a fixed, enforced duration (e.g., a timed 1:00 blank screen) or operator-controlled (the participant rests as long as they wish and presses OK to continue)?
+
+**Current position**  
+Operator-controlled. The block-start dialog acts as a gate: the participant sees "Take a short break if you need one. Press OK when you are ready to begin." The operator may also verbally suggest a longer break if needed.
+
+**Options**
+
+- **A: Enforced fixed-duration rest** (e.g., 60 s blank screen before the next block launches)
+  - Pros: standardises rest across participants; easy to document in protocol.
+  - Cons: requires implementation work; artificially constrains participants who need more or less time.
+- **B: Operator-controlled / self-paced** (current)
+  - Pros: simple; respects participant needs; block-start dialog is already implemented.
+  - Cons: variable rest duration across participants; must be logged for analysis.
+- **C: Hybrid** (minimum enforced rest + self-paced extension)
+  - Pros: ensures a minimum recovery period while allowing flexibility.
+  - Cons: more complex implementation and documentation.
+
+**Constraints**
+- Rest duration variability should be logged regardless of approach.
+- The chosen approach must not interfere with EEG signal quality (e.g., abrupt transitions may cause artefacts).
+
+**Decision trigger**  
+Decide before Pilot 1 protocol freeze. Current implementation uses Option B.
+
+**Downstream impact if changed**  
+Would require changes to `run_openmatb.py` (add timed delay or blank-screen overlay), scenario contracts, and the pilot study spec.
+
+**Status**  
+Open → leaning toward Option B (operator-controlled) for Pilot 1.

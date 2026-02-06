@@ -1,4 +1,4 @@
-<center><h1>Welcome to the Adaptive MATB Pilot</h1></center>
+<center><h1>Welcome to the NASA Multi-Attribute Battery Task (MATB2) </h1></center>
 <center><p>This study involves performing multiple tasks simultaneously.</p></center>
 <center><p>First, we'll show you all four tasks together so you can see the full interface.</p></center>
 <center><p>Then we'll introduce each task one by one so you can practice them individually.</p></center>

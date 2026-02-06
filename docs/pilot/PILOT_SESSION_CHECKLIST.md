@@ -113,6 +113,7 @@ Interactive prompts will ask for:
 
 - [ ] Monitor participant for issues
 - [ ] **Do not pause** during calibration blocks (B1-B3)
+- [ ] Communications task: after selecting the radio and tuning the frequency, participant must press **ENTER** to validate/submit (tuning alone is scored as MISS)
 - [ ] If must abort, use Ctrl+C and restart
 
 ### 4. Post-Session

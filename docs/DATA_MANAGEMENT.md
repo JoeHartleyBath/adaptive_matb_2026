@@ -10,9 +10,14 @@ Examples of content that must stay **outside** the repo:
 
 - Raw task logs as exported from acquisition systems
 - Any files containing participant identifiers or quasi-identifiers
+- Signed/filled consent forms, debrief forms, contact sheets, or any ethics paperwork containing participant details/signatures
 - Large video/audio/screen recordings
 - Model checkpoints / training snapshots
 - Large intermediate artifacts (multi-GB parquet/hdf5, etc.)
+
+Examples of content that **can** be tracked in the repo:
+
+- Blank/template ethics documents (e.g., recruitment email template, participant info sheet template, consent form template), as long as they contain **no participant-specific data**
 
 ## 2) Recommended external folder layout
 

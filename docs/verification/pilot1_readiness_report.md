@@ -106,7 +106,7 @@ Communications minimum spacing (by scheduled timestamps) is ≥14s in MOD/HIGH a
 
 ## 4) Exactly what to do next (Pilot 1 readiness checklist)
 
-
+1) [VERIFICATION] Run `src/python/verification/verify_pilot_scenarios.py` and confirm **PASS**. This is a repo-artifact gate: monotonic timestamps, marker token sanity, and ResMan pump failure recovery (+10s `off` after `failure`).
 2) [DECISION] (OD-02) Lock marker semantics for “calibration vs calibration”: either rename markers to `CALIBRATION/<LEVEL>` or explicitly state that Pilot 1 uses `calibration/<LEVEL>` markers as calibration proxies. Unblocks: OD-02.
 3) [DECISION] (OD-03) Decide whether `pilot_practice_intro.txt` is part of the training phase and whether it needs study markers. Unblocks: OD-03 + analysis segmentation.
 4) [DECISION] (OD-04) Decide the Pilot 1 *default* scaling rule (6× vs current ~5.1×) and whether “total rate” is defined as sysmon+comms+resman only, or includes other event classes. Unblocks: OD-04.

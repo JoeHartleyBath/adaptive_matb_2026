@@ -75,19 +75,19 @@ The scenario must implement the pilot session structure from `docs/pilot/PILOT_S
 ### 4.1 Training (not calibration)
 
 - T1: `LOW`, 5:00
-- break: 1:00 (quiet rest; no tasks)
+- break: operator-controlled (participant rests until block-start dialog is acknowledged)
 - T2: `MODERATE`, 5:00
-- break: 1:00
+- break: operator-controlled
 - T3: `HIGH`, 5:00
 
 ### 4.2 calibration blocks + TLX (calibration)
 
 - B1: per `seq_id`, 5:00
 - TLX after B1: self-paced, untimed; all sliders must be interacted with before continuing
-- break: 1:00
+- break: operator-controlled
 - B2: per `seq_id`, 5:00
 - TLX after B2: self-paced, untimed; all sliders must be interacted with before continuing
-- break: 1:00
+- break: operator-controlled
 - B3: per `seq_id`, 5:00
 - TLX after B3: self-paced, untimed; all sliders must be interacted with before continuing
 
