@@ -43,39 +43,40 @@
 0:00:50;instructions;start
 
 # Trigger comm prompt during demo
-0:00:53;communications;radioprompt;own
+0:00:51;communications;radioprompt;own
 
-# --- ResMan Demo (30 seconds) ---
-0:01:10;resman;show
-0:01:10;resman;resume
-0:01:10;communications;hide
-0:01:10;communications;pause
-0:01:10;instructions;filename;../../../../assets/instructions/pilot_en/5_resman.txt
-0:01:10;instructions;start
+# --- ResMan Demo (25 seconds) ---
+0:01:30;resman;show
+0:01:30;resman;resume
+0:01:30;communications;hide
+0:01:30;communications;pause
+0:01:30;instructions;filename;../../../../assets/instructions/pilot_en/5_resman.txt
+0:01:30;instructions;start
 
 # Trigger pump failure during demo
-0:01:15;resman;pump-1-state;failure
+0:01:35;resman;pump-1-state;failure
+0:01:45;resman;pump-1-state;off
 
 # --- All Together (2 minutes practice) ---
-0:01:40;sysmon;show
-0:01:40;sysmon;resume
-0:01:40;track;show
-0:01:40;track;resume
-0:01:40;communications;show
-0:01:40;communications;resume
-0:01:40;instructions;filename;../../../../assets/instructions/pilot_en/6_all_tasks.txt
-0:01:40;instructions;start
+0:01:55;sysmon;show
+0:01:55;sysmon;resume
+0:01:55;track;show
+0:01:55;track;resume
+0:01:55;communications;show
+0:01:55;communications;resume
+0:01:55;instructions;filename;../../../../assets/instructions/pilot_en/6_all_tasks.txt
+0:01:55;instructions;start
 
 # Practice events during full task period
-0:01:50;resman;pump-1-state;off
-0:01:50;sysmon;lights-2-failure;true
-0:01:55;communications;radioprompt;own
-0:02:00;resman;pump-6-state;failure
-0:02:05;sysmon;scales-3-failure;true
-0:02:15;communications;radioprompt;own
+0:02:05;sysmon;lights-2-failure;true
+0:02:10;communications;radioprompt;own
+0:02:15;resman;pump-6-state;failure
+0:02:20;sysmon;scales-3-failure;true
+0:02:25;resman;pump-6-state;off
+0:02:30;communications;radioprompt;own
 
 # --- End ---
-0:03:50;sysmon;stop
-0:03:50;track;stop
-0:03:50;communications;stop
-0:03:50;resman;stop
+0:04:05;sysmon;stop
+0:04:05;track;stop
+0:04:05;communications;stop
+0:04:05;resman;stop

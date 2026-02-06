@@ -2,6 +2,7 @@ import sys
 import os
 from pathlib import Path
 from random import randint, shuffle, random
+import math
 
 # --------------------------------------------------------------------------------
 # CONFIGURATION
@@ -54,13 +55,22 @@ plugins = {
     'sysmon': MockPlugin({
         'alerttimeout': 10000,
         'lights': {'1': {}, '2': {}},
-        'scales': {'1': {}, '2': {}}
+        # Match vendor SysMon default: 4 scales (F1-F4) and 2 lights (F5-F6).
+        'scales': {'1': {}, '2': {}, '3': {}, '4': {}}
     }),
     'communications': MockPlugin({}),
     'resman': MockPlugin({
         'pump': {
-            '1': {'flow': 1000}, '2': {'flow': 1000}, '3': {'flow': 1000}, '4': {'flow': 1000},
-            '5': {'flow': 600}, '6': {'flow': 600}, '7': {'flow': 600}, '8': {'flow': 600}
+            # Match vendor resman defaults (see src/python/vendor/openmatb/plugins/resman.py).
+            # The vendor scenario generator uses these pump flows to derive a *solvable* target-tank leakage.
+            '1': {'flow': 800},
+            '2': {'flow': 600},
+            '3': {'flow': 800},
+            '4': {'flow': 600},
+            '5': {'flow': 600},
+            '6': {'flow': 600},
+            '7': {'flow': 400},
+            '8': {'flow': 400},
         },
         'tank': {'A': {'target': 2500}, 'B': {'target': 2500}}
     })
@@ -68,9 +78,27 @@ plugins = {
 
 # Copied Constants
 EVENTS_REFRACTORY_DURATION = 1
-AVERAGE_AUDITORY_PROMPT_DURATION = 13
+# The vendor generator uses an average of ~13s, but in practice our comms audio
+# can run longer; using a more conservative duration prevents overlapping prompts.
+AVERAGE_AUDITORY_PROMPT_DURATION = 18
 COMMUNICATIONS_TARGET_RATIO = 0.50
 STEP_DURATION_SEC = BLOCK_DURATION_SEC # Override global for the vendor functions
+
+# Guard against events firing at the very start/end of a block.
+# This applies to distributed *demand* events (failures/prompts), not to task start/stop.
+EVENT_EDGE_BUFFER_SEC = 5
+
+# ResMan: we keep the vendor leak scaling logic, but apply a small offset to
+# MODERATE/HIGH to make the task "hard but not impossible" without changing the
+# overall block difficulty used for other tasks.
+RESMAN_LEAK_OFFSET_THRESHOLD_DIFFICULTY = 0.50
+RESMAN_LEAK_OFFSET_MODERATE_HIGH = -100
+RESMAN_LEAK_OFFSET_HIGH_THRESHOLD_DIFFICULTY = 0.90
+RESMAN_LEAK_OFFSET_HIGH_EXTRA = -100
+
+# ResMan: vendor example scenarios recover a pump failure by explicitly
+# scheduling `pump-*-state;off` 10s after `failure`.
+RESMAN_PUMP_FAILURE_DURATION_SEC = 10
 
 # Copied Functions
 def part_duration_sec(duration_sec, part_left, duration_list=list()):
@@ -120,6 +148,57 @@ def choices(l, k, randomize):
         shuffle(nl)
     return nl
 
+
+def choices_balanced_by_weight(items, weights, k: int, randomize: bool):
+    """Return a length-k list by allocating counts ~proportional to weights.
+
+    This is used to reduce variance in "impact" (e.g., ResMan pump failures),
+    compared with naive uniform sampling.
+
+    Implementation: largest-remainder allocation.
+    - expected_i = w_i / sum(w) * k
+    - count_i = floor(expected_i)
+    - distribute remaining counts to largest fractional parts
+    - shuffle the resulting list to randomize order
+    """
+
+    if k <= 0:
+        return []
+    if len(items) != len(weights):
+        raise ValueError("items and weights must be same length")
+
+    pairs = []
+    for item, w in zip(items, weights):
+        w = float(w)
+        if not math.isfinite(w) or w < 0:
+            raise ValueError(f"invalid weight for {item}: {w}")
+        pairs.append((item, w))
+
+    total_w = sum(w for _, w in pairs)
+    if total_w <= 0:
+        # Fallback: behave like the existing choices() (uniform with repeats)
+        return choices(items, k, randomize)
+
+    expected = [(item, (w / total_w) * k) for item, w in pairs]
+    counts = {item: int(math.floor(e)) for item, e in expected}
+    remaining = int(k - sum(counts.values()))
+
+    # Largest remainder distribution with randomized tie-breaking
+    remainders = [(item, (e - math.floor(e))) for item, e in expected]
+    shuffle(remainders)
+    remainders.sort(key=lambda x: x[1], reverse=True)
+
+    for item, _ in remainders[:remaining]:
+        counts[item] += 1
+
+    out = []
+    for item, _ in pairs:
+        out.extend([item] * counts[item])
+
+    if randomize:
+        shuffle(out)
+    return out
+
 def get_events_from_scenario(scenario_lines):
     return [l for l in scenario_lines if isinstance(l, Event)]
 
@@ -141,9 +220,32 @@ def get_task_current_state(scenario_lines, plugin):
     else:
         return None
 
-def distribute_events(scenario_lines, start_sec, single_duration, cmd_list, plugin_name):
+def distribute_events(
+    scenario_lines,
+    start_sec,
+    single_duration,
+    cmd_list,
+    plugin_name,
+    start_buffer_sec: float = EVENT_EDGE_BUFFER_SEC,
+    end_buffer_sec: float = EVENT_EDGE_BUFFER_SEC,
+):
+    # Constrain distributed events to occur within the buffered window.
+    # Policy: ensure the *full event duration* fits before the end buffer.
+    buffered_window_sec = float(STEP_DURATION_SEC) - float(start_buffer_sec) - float(end_buffer_sec)
+    if buffered_window_sec < 0:
+        buffered_window_sec = 0.0
+
+    # If too many events to fit, trim to the maximum that can fit.
+    # This should be rare, but keeps the invariant deterministic.
+    if single_duration and single_duration > 0:
+        max_events_fit = int(math.floor(buffered_window_sec / float(single_duration)))
+        if max_events_fit < 0:
+            max_events_fit = 0
+        if len(cmd_list) > max_events_fit:
+            cmd_list = list(cmd_list)[:max_events_fit]
+
     total_event_duration = len(cmd_list) * single_duration
-    rest_sec = STEP_DURATION_SEC - total_event_duration
+    rest_sec = buffered_window_sec - total_event_duration
     
     # Cap if overloaded
     if rest_sec < 0:
@@ -153,7 +255,7 @@ def distribute_events(scenario_lines, start_sec, single_duration, cmd_list, plug
     random_delays = get_part_durations(rest_sec, n) if n > 1 else [rest_sec]
     random_delays = random_delays[:-1]
 
-    onset_sec = start_sec
+    onset_sec = float(start_sec) + float(start_buffer_sec)
     lastline = 0
     if len(scenario_lines) > 0 and isinstance(scenario_lines[-1], Event):
         lastline = scenario_lines[-1].line
@@ -163,6 +265,60 @@ def distribute_events(scenario_lines, start_sec, single_duration, cmd_list, plug
         onset_sec += previous_delay
         scenario_lines.append(Event(lastline, onset_sec, plugin_name, cmd))
         onset_sec += single_duration
+    return scenario_lines
+
+
+def distribute_resman_pump_failures(scenario_lines, start_sec, pump_ids):
+    """Distribute resman pump failures across the block and schedule recovery.
+
+    Vendor policy (see vendor includes/scenarios/basic.txt):
+      - Set `pump-*-state` to `failure`
+      - Exactly 10 seconds later, set `pump-*-state` back to `off`
+
+    We also apply the standard refractory duration between failures.
+    """
+
+    failure_duration_sec = RESMAN_PUMP_FAILURE_DURATION_SEC
+    single_event_duration = failure_duration_sec + EVENTS_REFRACTORY_DURATION
+
+    buffered_window_sec = float(STEP_DURATION_SEC) - float(EVENT_EDGE_BUFFER_SEC) - float(EVENT_EDGE_BUFFER_SEC)
+    if buffered_window_sec < 0:
+        buffered_window_sec = 0.0
+
+    if single_event_duration and single_event_duration > 0:
+        max_events_fit = int(math.floor(buffered_window_sec / float(single_event_duration)))
+        if max_events_fit < 0:
+            max_events_fit = 0
+        if len(pump_ids) > max_events_fit:
+            pump_ids = list(pump_ids)[:max_events_fit]
+
+    total_event_duration = len(pump_ids) * single_event_duration
+    rest_sec = buffered_window_sec - total_event_duration
+    if rest_sec < 0:
+        rest_sec = 0
+
+    n = len(pump_ids) + 1
+    random_delays = get_part_durations(rest_sec, n) if n > 1 else [rest_sec]
+    random_delays = random_delays[:-1]
+
+    onset_sec = float(start_sec) + float(EVENT_EDGE_BUFFER_SEC)
+    lastline = 0
+    if len(scenario_lines) > 0 and isinstance(scenario_lines[-1], Event):
+        lastline = scenario_lines[-1].line
+
+    for previous_delay, pid in zip(random_delays, pump_ids):
+        onset_sec += previous_delay
+
+        lastline += 1
+        scenario_lines.append(Event(lastline, onset_sec, 'resman', [f'pump-{pid}-state', 'failure']))
+
+        lastline += 1
+        scenario_lines.append(
+            Event(lastline, onset_sec + failure_duration_sec, 'resman', [f'pump-{pid}-state', 'off'])
+        )
+
+        onset_sec += single_event_duration
+
     return scenario_lines
 
 def add_scenario_phase(scenario_lines, task_difficulty_tuples, start_sec):
@@ -267,7 +423,12 @@ def add_scenario_phase(scenario_lines, task_difficulty_tuples, start_sec):
                 # Warning: 'maximum_single_leakage * difficulty' might result in leaks > inputs at high difficulty.
                 # Vendor code does exactly this.
                 # OpenMATB parameter keys are case-sensitive (expects tank-a-..., tank-b-...)
-                cmd = [f"tank-{letter.lower()}-lossperminute", int(maximum_single_leakage * difficulty)]
+                leak_per_min = int(maximum_single_leakage * difficulty)
+                if difficulty >= RESMAN_LEAK_OFFSET_THRESHOLD_DIFFICULTY:
+                    leak_per_min = max(0, leak_per_min + RESMAN_LEAK_OFFSET_MODERATE_HIGH)
+                if difficulty >= RESMAN_LEAK_OFFSET_HIGH_THRESHOLD_DIFFICULTY:
+                    leak_per_min = max(0, leak_per_min + RESMAN_LEAK_OFFSET_HIGH_EXTRA)
+                cmd = [f"tank-{letter.lower()}-lossperminute", leak_per_min]
                 scenario_lines.append(Event(start_line, start_sec, plugin_name, cmd))
 
             # ADDED: Pump Failure Generation
@@ -282,12 +443,18 @@ def add_scenario_phase(scenario_lines, task_difficulty_tuples, start_sec):
 
             if num_failures > 0:
                 pump_ids = list(pumps.keys())
-                # Pick pumps randomly
-                chosen_pumps = choices(pump_ids, num_failures, True)
-                cmd_list = [[f'pump-{pid}-state', 'failure'] for pid in chosen_pumps]
-                
-                # Distribute with approximate 15s spacing/buffer
-                scenario_lines = distribute_events(scenario_lines, start_sec, 15, cmd_list, plugin_name)
+
+                # Impact-balanced pump failures:
+                # failing a pump removes its flow entirely (0 during failure), so higher-flow
+                # pumps are more disruptive. We therefore allocate failures ~proportional to
+                # 1/flow to reduce block-to-block variance in effective difficulty.
+                pump_weights = []
+                for pid in pump_ids:
+                    flow = float(pumps[pid].get('flow', 0) or 0)
+                    pump_weights.append(1.0 / flow if flow > 0 else 0.0)
+
+                chosen_pumps = choices_balanced_by_weight(pump_ids, pump_weights, num_failures, True)
+                scenario_lines = distribute_resman_pump_failures(scenario_lines, start_sec, chosen_pumps)
 
     return scenario_lines
 

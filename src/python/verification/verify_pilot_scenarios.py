@@ -27,6 +27,16 @@ TOKEN_SEQ = "${OPENMATB_SEQ_ID}"
 ALLOWED_LEVELS = {"LOW", "MODERATE", "HIGH"}
 
 
+# Pilot 1 block duration (practice/calibration scenarios).
+BLOCK_DURATION_SEC = 300.0
+
+# Guardrail: distributed demand events should not fire at the very start/end of the block.
+EVENT_EDGE_BUFFER_SEC = 5.0
+
+# Vendor examples recover pump failures by setting state back to `off` after 10s.
+RESMAN_PUMP_FAILURE_DURATION_SEC = 10.0
+
+
 @dataclass(frozen=True)
 class Event:
     line_no: int
@@ -328,6 +338,61 @@ def _static_check_scenario_file(path: Path) -> list[str]:
             problems.append(f"Marker missing STUDY/V0 prefix at line {ev.line_no}")
         if TOKEN_PID not in payload or TOKEN_SID not in payload or TOKEN_SEQ not in payload:
             problems.append(f"Marker missing pid/sid/seq tokens at line {ev.line_no}")
+
+    # ResMan pump failure recovery sanity: every failure should be followed by off at +10s.
+    # This is a solvability constraint (task must recover), not a protocol semantics constraint.
+    duration_ms = int(round(RESMAN_PUMP_FAILURE_DURATION_SEC * 1000.0))
+    resman_state_events: list[tuple[int, int, str, str]] = []
+    for ev in events:
+        if ev.plugin != "resman" or len(ev.command) < 2:
+            continue
+        address = ev.command[0].strip().lower()
+        value = ev.command[1].strip().lower()
+        if not address.startswith("pump-") or not address.endswith("-state"):
+            continue
+        if value not in {"failure", "off"}:
+            continue
+        t_ms = int(round(ev.time_sec * 1000.0))
+        resman_state_events.append((t_ms, ev.line_no, address, value))
+
+    if resman_state_events:
+        present = {(t_ms, address, value) for (t_ms, _line, address, value) in resman_state_events}
+        for t_ms, line_no, address, value in resman_state_events:
+            if value != "failure":
+                continue
+            expected_t_ms = t_ms + duration_ms
+            if (expected_t_ms, address, "off") not in present:
+                expected_sec = expected_t_ms / 1000.0
+                problems.append(
+                    f"ResMan pump failure not recovered at +{int(RESMAN_PUMP_FAILURE_DURATION_SEC)}s: "
+                    f"{address} failure at line {line_no} (t={t_ms/1000.0:.3f}) missing off at t={expected_sec:.3f}"
+                )
+
+    # Edge-buffer sanity for distributed *demand* events.
+    # Note: we intentionally do NOT apply this to task start/stop/marker events.
+    min_t = EVENT_EDGE_BUFFER_SEC
+    max_t = BLOCK_DURATION_SEC - EVENT_EDGE_BUFFER_SEC
+
+    def is_demand_event(ev: Event) -> bool:
+        if not ev.command:
+            return False
+        cmd0 = ev.command[0].strip().lower()
+        if ev.plugin == "sysmon" and cmd0.endswith("-failure"):
+            return True
+        if ev.plugin == "communications" and cmd0 == "radioprompt":
+            return True
+        if ev.plugin == "resman" and cmd0.startswith("pump-") and cmd0.endswith("-state"):
+            # Includes both failure + off recovery events.
+            return True
+        return False
+
+    for ev in events:
+        if not is_demand_event(ev):
+            continue
+        if ev.time_sec < min_t or ev.time_sec > max_t:
+            problems.append(
+                f"Demand event within edge buffer at line {ev.line_no}: t={ev.time_sec:.3f}s (allowed {min_t:.1f}..{max_t:.1f})"
+            )
 
     return problems
 
