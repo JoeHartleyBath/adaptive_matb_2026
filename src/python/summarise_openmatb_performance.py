@@ -234,6 +234,67 @@ def _compute_derived_kpis(by_module: dict[str, dict[str, list[str]]]) -> dict[st
                 },
             }
 
+    # Communications SDT + common failure mode warning
+    comms = by_module.get("communications")
+    if isinstance(comms, dict):
+        sdt_raw = comms.get("sdt_value")
+        responded_radio_raw = comms.get("responded_radio")
+        responded_frequency_raw = comms.get("responded_frequency")
+        response_time_raw = comms.get("response_time")
+
+        if isinstance(sdt_raw, list):
+            counts = {"HIT": 0, "MISS": 0, "FA": 0}
+            other = 0
+            for v in sdt_raw:
+                key = ("" if v is None else str(v)).strip().upper()
+                if key in counts:
+                    counts[key] += 1
+                else:
+                    other += 1
+
+            total = sum(counts.values())
+            accuracy = (counts["HIT"] / total) if total else None
+            comms_out: dict[str, Any] = {
+                "accuracy": accuracy,
+                "counts": {
+                    **counts,
+                    "OTHER": other,
+                    "TOTAL": total,
+                    "DEMAND_TOTAL": counts["HIT"] + counts["MISS"],
+                },
+            }
+
+            responded_radio = (
+                _parse_float_list(responded_radio_raw)
+                if isinstance(responded_radio_raw, list)
+                else []
+            )
+            responded_frequency = (
+                _parse_float_list(responded_frequency_raw)
+                if isinstance(responded_frequency_raw, list)
+                else []
+            )
+            response_times = (
+                _parse_float_list(response_time_raw)
+                if isinstance(response_time_raw, list)
+                else []
+            )
+
+            if (
+                total > 0
+                and counts["MISS"] == total
+                and not responded_radio
+                and not responded_frequency
+                and not response_times
+            ):
+                comms_out["warning"] = (
+                    "All communications trials are MISS with NaN responded_* and response_time. "
+                    "This often means responses were not validated/submitted. "
+                    "Default validate key is ENTER (press after selecting radio + tuning frequency)."
+                )
+
+            derived["communications"] = comms_out
+
     return derived
 
 

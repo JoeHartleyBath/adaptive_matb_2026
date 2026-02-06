@@ -1,0 +1,170 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OpenMATB: Pilot1 (attended, with preflight)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--pilot1"]
+    },
+    {
+      "name": "OpenMATB: Pilot1 (attended, calibration-only, with preflight)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--pilot1", "--calibration-only"]
+    },
+    {
+      "name": "OpenMATB: Run HIGH only (calibration_high)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--only-scenario", "pilot_calibration_high.txt"]
+    },
+    {
+      "name": "OpenMATB: Calibration trend (LOW→MODERATE→HIGH)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--calibration-trend", "--summarise-performance"]
+    },
+    {
+      "name": "OpenMATB: Pilot1 (attended, skip preflight stream check)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--pilot1", "--skip-stream-check"]
+    },
+    {
+      "name": "OpenMATB: Pilot1 (attended, with EDA streamer; edit COM port)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--pilot1", "--with-eda", "--eda-port", "COM5"]
+    },
+    {
+      "name": "OpenMATB: Pilot1 (attended, calibration-only, with EDA; edit COM port)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--pilot1", "--calibration-only", "--with-eda", "--eda-port", "COM5"]
+    },
+    {
+      "name": "OpenMATB: Preflight checks only",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--check-streams"]
+    },
+    {
+      "name": "Verify: Static scenarios (repo gate; must PASS)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/verification/verify_pilot_scenarios.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": []
+    },
+    {
+      "name": "Verify: Pilot playlist (run + verify; requires participant in assignments)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/verification/verify_pilot.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--participant",
+        "P001",
+        "--session",
+        "S001",
+        "--seq-id",
+        "SEQ1",
+        "--speed",
+        "10"
+      ]
+    },
+    {
+      "name": "Verify: Pilot outputs only (skip run; verify existing session)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/verification/verify_pilot.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--participant",
+        "P001",
+        "--session",
+        "S001",
+        "--seq-id",
+        "SEQ1",
+        "--skip-run"
+      ]
+    },
+    {
+      "name": "QC: XDF alignment (from run manifest; edit path)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/verification/verify_xdf_alignment.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--run-manifest",
+        "C:/data/adaptive_matb/openmatb/P001/S001/run_manifest_YYYYMMDDTHHMMSS.json"
+      ]
+    },
+    {
+      "name": "Verify: Preprocessing checks",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/verify_preprocessing.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": []
+    },
+    {
+      "name": "Export: Pilot performance table CSV (from run manifest)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/export_pilot_performance_table.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--participant",
+        "P001",
+        "--session",
+        "S001",
+        "--output-root",
+        "C:/data/adaptive_matb"
+      ]
+    },
+    {
+      "name": "Summarise: Pilot cohort status (external output root)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/summarise_pilot_cohort_status.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--output-root",
+        "C:/data/adaptive_matb"
+      ]
+    }
+  ]
+}

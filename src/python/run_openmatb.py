@@ -739,6 +739,72 @@ def _get_playlist(seq_id: str, dry_run: bool, *, calibration_only: bool = False)
     return playlist
 
 
+def _block_dialog_lines(
+    scenario_filename: str,
+    block_index: int,
+    participant: str,
+    session: str,
+    seq_id: str,
+) -> list[str]:
+    """Build participant-friendly modal-dialog lines for a block start.
+
+    Three message variants:
+      - Familiarisation (practice intro): IDs only (no instructional text).
+      - Practice blocks: reassuring, emphasises learning.
+      - Calibration blocks: neutral, mentions TLX afterwards.
+
+    Full IDs are shown only on the first block (block_index == 0);
+    subsequent blocks get a compact one-line ID footer.
+    """
+    is_intro = "pilot_practice_intro" in scenario_filename
+    is_practice = "pilot_practice" in scenario_filename and not is_intro
+
+    if is_intro:
+        # Familiarisation phase — IDs only, no instructional body text.
+        body = [
+            f"Participant: {participant}",
+            f"Session: {session}",
+            f"Sequence: {seq_id}",
+        ]
+        return body
+
+    if is_practice:
+        body = [
+            "Practice block",
+            "",
+            "This is a practice round to help you get",
+            "comfortable with the tasks.",
+            "Work at a steady pace \u2014 there is no scoring.",
+            "",
+            "Take a short break if you need one.",
+            "Press OK when you are ready to begin.",
+        ]
+    else:
+        body = [
+            "Calibration block",
+            "",
+            "Please do your best, but remember",
+            "there is no pass or fail.",
+            "After this block you will complete",
+            "a short questionnaire.",
+            "",
+            "Take a short break if you need one.",
+            "Press OK when you are ready to begin.",
+        ]
+
+    # Separator before IDs
+    body.append("")
+
+    if block_index == 0:
+        body.append(f"Participant: {participant}")
+        body.append(f"Session: {session}")
+        body.append(f"Sequence: {seq_id}")
+    else:
+        body.append(f"ID: {participant} \u00b7 {session} \u00b7 {seq_id}")
+
+    return body
+
+
 def _stage_pilot_instruction_files(openmatb_dir: Path, repo_root: Path) -> None:
     """Copy repo-managed pilot instruction text files into OpenMATB includes.
 
@@ -809,6 +875,29 @@ def _rewrite_scenario_paths_for_openmatb_includes(scenario_text: str) -> str:
     return scenario_text
 
 
+def _cleanup_openmatb_staged_assets(openmatb_dir: Path, scenario_filename: str) -> None:
+    """Remove wrapper-staged files from the vendor OpenMATB tree.
+
+    The wrapper stages repo-managed assets into the vendor submodule at runtime
+    (includes/scenarios + includes/instructions) to satisfy OpenMATB validation.
+    We then remove them again so the submodule working tree does not remain dirty.
+    """
+
+    try:
+        scenario_target_path = openmatb_dir / "includes" / "scenarios" / scenario_filename
+        if scenario_target_path.exists():
+            scenario_target_path.unlink()
+    except Exception:
+        pass
+
+    try:
+        pilot_instructions_dir = openmatb_dir / "includes" / "instructions" / "pilot_en"
+        if pilot_instructions_dir.exists():
+            shutil.rmtree(pilot_instructions_dir, ignore_errors=True)
+    except Exception:
+        pass
+
+
 def _run_single_scenario(
     openmatb_dir: Path,
     scenario_filename: str,
@@ -819,6 +908,8 @@ def _run_single_scenario(
     args: argparse.Namespace,
     repo_commit: str,
     submodule_commit: str,
+    *,
+    block_index: int = 0,
 ) -> tuple[int, Optional[Path]]:
     repo_root = Path(__file__).resolve().parents[2]
 
@@ -850,6 +941,16 @@ def _run_single_scenario(
     env["OPENMATB_SEQ_ID"] = seq_id
     env["OPENMATB_REPO_COMMIT"] = repo_commit
     env["OPENMATB_SUBMODULE_COMMIT"] = submodule_commit
+
+    # Block-start dialog metadata
+    env["OPENMATB_BLOCK_INDEX"] = str(block_index)
+    dialog_lines = _block_dialog_lines(
+        scenario_filename, block_index, participant, session, seq_id,
+    )
+    env["OPENMATB_BLOCK_DIALOG_LINES"] = "\n".join(dialog_lines)
+    # Suppress interactive dialog for automated / verification runs
+    if getattr(args, "verification", False):
+        env["OPENMATB_SUPPRESS_BLOCK_DIALOG"] = "1"
 
     # Calculate paths specifically for this run
     scenario_rel_path = scenario_filename
@@ -917,19 +1018,29 @@ def _run_single_scenario(
         "from core.utils import get_conf_value\n"
         "from core.constants import REPLAY_MODE\n"
         "def _display_session_id(self):\n"
+        "    if os.environ.get('OPENMATB_SUPPRESS_BLOCK_DIALOG') == '1':\n"
+        "        return\n"
         "    if not REPLAY_MODE and get_conf_value('Openmatb', 'display_session_number'):\n"
-        "        pid = os.environ.get('OPENMATB_PARTICIPANT') or 'UNKNOWN'\n"
-        "        sid = os.environ.get('OPENMATB_SESSION') or 'UNKNOWN'\n"
-        "        seq = os.environ.get('OPENMATB_SEQ_ID') or 'UNKNOWN'\n"
-        "        msg = [f'Participant ID: {pid}', f'Session ID: {sid}', f'Sequence ID: {seq}']\n"
+        "        raw = os.environ.get('OPENMATB_BLOCK_DIALOG_LINES', '')\n"
+        "        if raw:\n"
+        "            msg = raw.split('\\n')\n"
+        "        else:\n"
+        "            pid = os.environ.get('OPENMATB_PARTICIPANT') or 'UNKNOWN'\n"
+        "            sid = os.environ.get('OPENMATB_SESSION') or 'UNKNOWN'\n"
+        "            seq = os.environ.get('OPENMATB_SEQ_ID') or 'UNKNOWN'\n"
+        "            msg = [f'Participant: {pid}', f'Session: {sid}', f'Sequence: {seq}']\n"
         "        self.modal_dialog = ModalDialog(self, msg, 'OpenMATB')\n"
         "Window.display_session_id = _display_session_id\n"
         "runpy.run_path('main.py', run_name='__main__')\n"
     )
 
-    # Pass the modified environment
-    proc = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=str(openmatb_dir), env=env)
-    exit_code = proc.wait()
+    try:
+        # Pass the modified environment
+        proc = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=str(openmatb_dir), env=env)
+        exit_code = proc.wait()
+    finally:
+        # Best-effort cleanup: do not leave the vendor submodule dirty.
+        _cleanup_openmatb_staged_assets(openmatb_dir, scenario_filename)
 
     # Post-process manifests
     if exit_code != 0:
@@ -1090,6 +1201,71 @@ def _run_single_scenario(
     return 0, manifest_path
 
 
+def _ensure_performance_summaries(repo_root: Path, scenario_manifests: list[Path]) -> None:
+    """Best-effort: ensure *.performance_summary.json exists next to each scenario manifest."""
+
+    summariser = (repo_root / "src" / "python" / "summarise_openmatb_performance.py").resolve()
+    if not summariser.exists():
+        return
+
+    for manifest_path in scenario_manifests:
+        try:
+            summary_path = Path(str(manifest_path) + ".performance_summary.json")
+            if summary_path.exists():
+                continue
+            subprocess.run(
+                [sys.executable, str(summariser), "--manifest", str(manifest_path)],
+                check=False,
+                cwd=str(repo_root),
+            )
+        except Exception:
+            # Best-effort; never crash an attended run.
+            continue
+
+
+def _auto_export_pilot_results(
+    *,
+    repo_root: Path,
+    output_root_path: Path,
+    participant: str,
+    session: str,
+    run_manifest_path: Path,
+    scenario_manifests: list[Path],
+) -> None:
+    """Best-effort external-only exports for operator-friendly readiness tracking."""
+
+    try:
+        _ensure_performance_summaries(repo_root, scenario_manifests)
+    except Exception:
+        pass
+
+    # Export per-run results summary table
+    try:
+        import export_pilot_performance_table as exporter
+
+        session_root = output_root_path / "openmatb" / participant / session
+        derived_dir = session_root / "derived"
+        derived_dir.mkdir(parents=True, exist_ok=True)
+
+        tag = run_manifest_path.stem.replace("run_manifest_", "")
+        out_csv = derived_dir / f"pilot_results_summary_{tag}.csv"
+
+        written = exporter.export_table(run_manifest_path=run_manifest_path, out_csv=out_csv)
+        print(f"Wrote pilot results summary CSV: {written}")
+    except Exception as exc:
+        print(f"WARNING: Could not export pilot results summary CSV: {exc}", file=sys.stderr)
+
+    # Update cohort-level status tables (Option A: always attempt)
+    try:
+        import summarise_pilot_cohort_status as cohort
+
+        blocks_path, status_path = cohort.summarise(output_root_path)
+        print(f"Updated cohort block table: {blocks_path}")
+        print(f"Updated cohort status table: {status_path}")
+    except Exception as exc:
+        print(f"WARNING: Could not update cohort status tables: {exc}", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OpenMATB with external output paths.")
     parser.add_argument(
@@ -1138,6 +1314,24 @@ def main() -> int:
         "--calibration-only",
         action="store_true",
         help="Run only the counterbalanced calibration blocks (skip practice/training).",
+    )
+
+    parser.add_argument(
+        "--calibration-trend",
+        action="store_true",
+        help=(
+            "Run calibration blocks in fixed order LOW → MODERATE → HIGH (for within-session trend checks), "
+            "overriding counterbalancing order."
+        ),
+    )
+
+    parser.add_argument(
+        "--only-scenario",
+        default=None,
+        help=(
+            "Run exactly one scenario file (from <repo>/scenarios), overriding the normal playlist. "
+            "Example: --only-scenario pilot_calibration_high.txt"
+        ),
     )
 
     parser.add_argument(
@@ -1222,6 +1416,10 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    if args.only_scenario and args.calibration_trend:
+        print("ERROR: --only-scenario cannot be combined with --calibration-trend.", file=sys.stderr)
+        return 2
 
     if args.pilot1 and args.dry_run:
         print("NOTE: --pilot1 is ignored during --dry-run.", file=sys.stderr)
@@ -1399,6 +1597,17 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
+    if args.only_scenario:
+        # Allow both bare filenames and paths; we always resolve relative to <repo>/scenarios.
+        requested = Path(str(args.only_scenario)).name
+        playlist = [requested]
+    elif args.calibration_trend:
+        playlist = [
+            "pilot_calibration_low.txt",
+            "pilot_calibration_moderate.txt",
+            "pilot_calibration_high.txt",
+        ]
+
     missing_scenarios: list[str] = []
     for scenario_filename in playlist:
         if not (repo_root / "scenarios" / scenario_filename).exists():
@@ -1465,7 +1674,7 @@ def main() -> int:
 
     scenario_manifests: list[Path] = []
 
-    for scenario_filename in playlist:
+    for block_index, scenario_filename in enumerate(playlist):
         exit_code, manifest_path = _run_single_scenario(
             openmatb_dir=openmatb_dir,
             scenario_filename=scenario_filename,
@@ -1476,6 +1685,7 @@ def main() -> int:
             args=args,
             repo_commit=repo_commit,
             submodule_commit=submodule_commit,
+            block_index=block_index,
         )
 
         if exit_code != 0:
@@ -1678,6 +1888,18 @@ def main() -> int:
             print(f"WARNING: XDF QC failed with error: {exc}", file=sys.stderr)
             run_manifest["qc"]["xdf_alignment"]["status"] = f"error: {exc}"
             _atomic_write_json(run_manifest_path, run_manifest)
+
+    # Automatic external-only exports (results summary + cohort status)
+    # Option A: always attempt; failures are warnings only.
+    if not args.dry_run:
+        _auto_export_pilot_results(
+            repo_root=repo_root,
+            output_root_path=output_root_path,
+            participant=participant,
+            session=session,
+            run_manifest_path=run_manifest_path,
+            scenario_manifests=scenario_manifests,
+        )
     
     # Update participant assignments
     if not args.skip_assignment_update:
