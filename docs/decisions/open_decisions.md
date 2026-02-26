@@ -24,6 +24,9 @@ Rules:
 - OD-10: Experience sampling during calibration — **pre-Pilot 1**
 - OD-11: MODERATE placement — Pilot 1
 
+Note: the **full-study calibration structure is locked** (post-Pilot 1). See the committed design choice:
+- `docs/decisions/design_choices/study_design/dc_full_study_calibration_structure.md`
+
 ---
 
 ## Design note: Proposed multi-phase piloting structure (non-canonical)
@@ -274,30 +277,32 @@ Affects analysis scripts, reporting, and interpretation; does not affect task de
 This decision assumes OD-02 resolves to the use of discrete, single-level calibration blocks (i.e., each block contains one stable workload level).
 
 **Decision question**  
-What calibration block structure (number of blocks, duration per block, and ordering of single-level workload blocks) provides sufficient data to support per-participant model personalisation prior to adaptation, without excessive session length or fatigue?
+Given the locked full-study calibration structure, what *subset/aggregation strategy* and *total calibration evidence* is sufficient to support per-participant model personalisation prior to adaptation, without excessive session length or fatigue?
 
 **Why this is open**  
-The calibration phase is intended to provide participant-specific data for ML personalisation. The current structure (three 5-minute blocks, one per workload level) is plausible but unvalidated with respect to model stability, calibration curve quality, and downstream adaptation performance. Pilot data is required to determine sufficiency and efficiency.
+The calibration phase is intended to provide participant-specific data for ML personalisation. The full-study block structure is now locked, but it is unvalidated with respect to model stability, calibration curve quality, and downstream adaptation performance. Pilot data is required to determine sufficiency and efficiency.
 
-**Current pilot default**  
-Provisionally: three calibration blocks of 5 minutes each, one per workload level (`LOW`, `MODERATE`, `HIGH`), ordered using a Latin square across participants.
+**Locked full-study structure (post-Pilot 1)**  
+Two 9-minute calibration conditions, each containing nine 1-minute blocks: 3×`LOW`, 3×`MODERATE`, 3×`HIGH`.
+
+**Current Pilot 1 default (implementation-stable)**  
+Three calibration blocks of 5 minutes each, one per workload level (`LOW`, `MODERATE`, `HIGH`), ordered using a Latin square across participants.
 
 **Options under consideration**
 
-**Block count and duration**
-- 3 × 5 minutes (current default).
-- Fewer, longer blocks (e.g., 2 × 7–8 minutes).
-- More, shorter blocks (e.g., 4–6 × 3–4 minutes).
+**Using the locked structure for personalisation**
+- Use all 18 minutes (all blocks) for personalisation.
+- Use only the first condition (9 minutes) to reduce burden.
+- Use a balanced subset (e.g., 1–2 minutes per level per condition) if diminishing returns are observed.
+
+**Aggregation / labels**
+- Treat each 1-minute block as an independent labelled segment.
+- Aggregate repeated minutes within each level to form more stable per-level features.
+
 
 **Workload coverage**
-- One block per workload level.
-- Repeated exposure to selected levels (e.g., LOW and HIGH twice).
-- Calibration using a single reference level (e.g., MODERATE only), if multi-level calibration proves inefficient.
-
-**Ordering**
-- Latin-square counterbalancing (current).
-- Fixed ascending order (LOW → MODERATE → HIGH).
-- Randomised order with constraints.
+- Use all three levels (default).
+- If needed for efficiency: focus on `LOW` and `HIGH` only (drop `MODERATE`) while preserving protocol clarity.
 
 **Constraints**
 - Total calibration duration should remain ≤ ~20 minutes.
@@ -318,7 +323,7 @@ Lock after pilot analysis once:
 **Closure phase:** Pilot 2 (physiology + ML feasibility)
 
 **Downstream impact if changed**  
-Affects scenario timing, marker structure, calibration data volume, and ML personalisation procedures; may require updates to calibration-related contracts but does not alter calibration/adaptation block design.
+Affects scenario timing, marker structure, calibration data volume, and ML personalisation procedures; may require updates to calibration-related contracts.
 
 **References**  
 

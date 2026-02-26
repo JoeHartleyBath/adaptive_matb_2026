@@ -18,3 +18,4 @@ Open or unresolved questions must live in `open_decisions.md`.
 | DC-04 | Use three workload levels (low/moderate/high) | Study design | Final | [dc_three_workload_levels.md](study_design/dc_three_workload_levels.md) |
 | DC-05 | Include a practice phase before calibration blocks | Study design | Final | [dc_include_practice_phase.md](study_design/dc_include_practice_phase.md) |
 | DC-06 | Practice structure prior to calibration blocks | Study design | Proposed (pilot-tuned) | [dc_training_structure.md](study_design/dc_training_structure.md) |
+| DC-07 | Full-study calibration structure (2×9 min; 1-min blocks) | Study design | Final (locked; implement after Pilot 1) | [dc_full_study_calibration_structure.md](study_design/dc_full_study_calibration_structure.md) |
