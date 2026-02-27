@@ -36,8 +36,12 @@ import yaml
 from pathlib import Path
 from typing import Optional
 
-# Suppress liblsl's verbose C++ logging (must be set before pylsl is imported)
-os.environ.setdefault("LSL_LOGLEVEL", "0")
+# Suppress liblsl's verbose C++ logging (must be set before pylsl is imported).
+# Level semantics: DEBUG=5, INFO=1, WARNING=0, ERROR=-1, FATAL=-2.
+# Setting to -3 suppresses everything including the spurious "Stream transmission
+# broke off; re-connecting" ERROR messages that eego amps emit on normal
+# keep-alive reconnects.  Real data problems are caught by the sample-flow check.
+os.environ.setdefault("LSL_LOGLEVEL", "-3")
 
 # ---------------------------------------------------------------------------
 # EDA subprocess management (global state for crash-safe cleanup)
@@ -367,18 +371,45 @@ def _preflight_stream_check(
     }
     
     # Helper to suppress liblsl C++ logging during resolve calls
-    def _resolve_quiet(prop: str, value: str, timeout: float):
-        """Resolve LSL streams while suppressing C library logging."""
+    def _resolve_quiet(prop: str, value: str, timeout: float, minimum: int = 1):
+        """Resolve LSL streams while suppressing C library logging.
+
+        For type/name searches we use resolve_streams(wait_time=timeout) and
+        filter manually rather than resolve_byprop, because resolve_byprop
+        returns as soon as `minimum` streams respond — meaning a second amp
+        that responds slightly later is silently dropped.  resolve_streams
+        collects everything that announces itself within the full wait window.
+        """
         old_stderr_fd = os.dup(2)
         try:
-            with open(os.devnull, 'w') as devnull:
+            with open(os.devnull, "w") as devnull:
                 os.dup2(devnull.fileno(), 2)
-                result = pylsl.resolve_byprop(prop, value, timeout=timeout)
+                all_streams = pylsl.resolve_streams(wait_time=timeout)
         finally:
             os.dup2(old_stderr_fd, 2)
             os.close(old_stderr_fd)
-        return result
-    
+
+        if prop == "name":
+            return [s for s in all_streams if s.name() == value]
+        elif prop == "type":
+            return [s for s in all_streams if s.type() == value]
+        else:
+            return [s for s in all_streams if getattr(s, prop, lambda: None)() == value]
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _suppress_stderr():
+        """Redirect fd 2 to /dev/null for the duration of the block."""
+        old_fd = os.dup(2)
+        try:
+            with open(os.devnull, "w") as devnull:
+                os.dup2(devnull.fileno(), 2)
+                yield
+        finally:
+            os.dup2(old_fd, 2)
+            os.close(old_fd)
+
     def _test_sample_flow(stream_info, duration: float) -> dict:
         """Pull samples from a stream to verify data flow and estimate quality."""
         import numpy as np
@@ -396,31 +427,45 @@ def _preflight_stream_check(
         }
         
         try:
-            inlet = pylsl.StreamInlet(stream_info, max_buflen=int(duration * 2))
-            inlet.open_stream(timeout=2.0)
-            
-            # Get time correction
-            try:
-                tc = inlet.time_correction(timeout=1.0)
-                stats["time_correction_ms"] = tc * 1000
-                if abs(tc) > 0.1:  # >100ms clock difference
-                    stats["warnings"].append(f"Large clock offset: {tc*1000:.1f}ms")
-            except Exception:
-                stats["warnings"].append("Could not get time correction")
-            
-            # Collect samples
-            samples = []
-            timestamps = []
-            start_time = time.time()
-            
-            while time.time() - start_time < duration:
-                sample, ts = inlet.pull_sample(timeout=0.1)
-                if sample is not None:
-                    samples.append(sample)
-                    timestamps.append(ts)
-            
-            inlet.close_stream()
-            
+            # Suppress fd 2 for the entire inlet lifetime so that liblsl's
+            # background reconnect thread (which fires asynchronously, including
+            # after close_stream() returns) never leaks C++ ERR messages to the
+            # terminal.  The extra sleep after close() gives the thread time to
+            # flush before we restore fd 2.
+            with _suppress_stderr():
+                inlet = pylsl.StreamInlet(stream_info, max_buflen=int(duration * 2))
+                inlet.open_stream(timeout=2.0)
+
+                # Time correction: measure twice to detect instability.
+                try:
+                    tc1 = inlet.time_correction(timeout=1.0)
+                    time.sleep(0.3)
+                    tc2 = inlet.time_correction(timeout=1.0)
+                    tc = tc2
+                    stats["time_correction_ms"] = tc * 1000
+                    jitter_ms = abs(tc2 - tc1) * 1000
+                    if jitter_ms > 10:
+                        stats["warnings"].append(
+                            f"Clock offset unstable: jitter={jitter_ms:.1f}ms (offset={tc*1000:.1f}ms)"
+                        )
+                except Exception:
+                    stats["warnings"].append("Could not get time correction")
+
+                # Collect samples
+                samples = []
+                timestamps = []
+                start_time = time.time()
+                while time.time() - start_time < duration:
+                    sample, ts = inlet.pull_sample(timeout=0.1)
+                    if sample is not None:
+                        samples.append(sample)
+                        timestamps.append(ts)
+
+                inlet.close_stream()
+                # Brief pause so the liblsl reconnect thread can flush any
+                # pending log output before fd 2 is restored.
+                time.sleep(0.3)
+
             n_samples = len(samples)
             stats["samples_received"] = n_samples
             
@@ -483,60 +528,81 @@ def _preflight_stream_check(
     for expected in expected_streams:
         stream_name = expected.get("name")
         stream_type = expected.get("type")
+        min_count = expected.get("min_count", 1)
         label = stream_name or stream_type or "unknown"
-        
-        stream_result = {
-            "name": stream_name,
-            "type": stream_type,
-            "found": False,
-            "info": None,
-            "sample_stats": None,
-        }
-        
-        # Search by name first, then by type
+
+        # Search by name (unique) or type (may return multiple amps)
         if stream_name:
             print(f"  Searching for stream '{stream_name}'...", end="", flush=True)
-            streams = _resolve_quiet("name", stream_name, timeout_per_stream)
+            found_streams = _resolve_quiet("name", stream_name, timeout_per_stream)
+            streams_to_test = found_streams[:1]  # name searches always expect exactly 1
         elif stream_type:
-            print(f"  Searching for stream type '{stream_type}'...", end="", flush=True)
-            streams = _resolve_quiet("type", stream_type, timeout_per_stream)
+            suffix = f" (expecting {min_count})" if min_count > 1 else ""
+            print(f"  Searching for stream type '{stream_type}'{suffix}...", end="", flush=True)
+            found_streams = _resolve_quiet("type", stream_type, timeout_per_stream)
+            streams_to_test = found_streams
         else:
             print(f"  Skipping stream with no name or type")
             continue
-        
-        if streams:
-            stream_result["found"] = True
-            info = streams[0]
-            stream_result["info"] = {
-                "name": info.name(),
-                "type": info.type(),
-                "channel_count": info.channel_count(),
-                "nominal_srate": info.nominal_srate(),
-                "source_id": info.source_id(),
+
+        if len(streams_to_test) < min_count:
+            print(f" Found {len(streams_to_test)}/{min_count} — NOT ENOUGH")
+            results["all_found"] = False
+            results["all_streaming"] = False
+            results["streams"].append({
+                "name": stream_name or label,
+                "type": stream_type,
+                "found": False,
+                "info": None,
+                "sample_stats": None,
+            })
+            continue
+
+        n_found = len(streams_to_test)
+        if n_found > 1:
+            print(f" Found {n_found}")
+        else:
+            print(f" Found: {streams_to_test[0].name()}")
+
+        # For type-based multi-stream searches use short labels (EEG-A, EEG-B …)
+        # For name-based searches keep the stream's own name.
+        use_short_labels = (stream_type is not None and stream_name is None and n_found > 1)
+        letter_labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+        for idx, info in enumerate(streams_to_test):
+            if use_short_labels:
+                stream_label = f"{stream_type}-{letter_labels[idx]}"
+            else:
+                stream_label = info.name() or label
+            stream_result = {
+                "name": stream_label,  # actual amp name for summary
+                "type": stream_type,
+                "found": True,
+                "info": {
+                    "name": info.name(),
+                    "type": info.type(),
+                    "channel_count": info.channel_count(),
+                    "nominal_srate": info.nominal_srate(),
+                    "source_id": info.source_id(),
+                },
+                "sample_stats": None,
             }
-            print(f" Found: {info.name()}")
-            
+
             # Test sample flow
-            print(f"    Testing data flow ({sample_test_duration}s)...", end="", flush=True)
+            print(f"    Testing {stream_label} data flow ({sample_test_duration}s)...", end="", flush=True)
             sample_stats = _test_sample_flow(info, sample_test_duration)
             stream_result["sample_stats"] = sample_stats
-            
+
             if sample_stats["streaming"]:
                 print(f" {sample_stats['samples_received']} samples @ {sample_stats['measured_rate_hz']:.1f}Hz")
             else:
                 print(f" NO SAMPLES!")
                 results["all_streaming"] = False
-            
-            # Collect warnings
+
             for warning in sample_stats.get("warnings", []):
-                results["warnings"].append(f"{label}: {warning}")
-        else:
-            stream_result["found"] = False
-            results["all_found"] = False
-            results["all_streaming"] = False
-            print(f" Not found")
-        
-        results["streams"].append(stream_result)
+                results["warnings"].append(f"{stream_label}: {warning}")
+
+            results["streams"].append(stream_result)
     
     return results
 
@@ -545,6 +611,7 @@ def _run_preflight_checks(
     check_eeg: bool = True,
     check_eda: bool = True,
     eeg_stream_type: str = "EEG",
+    eeg_stream_count: int = 1,
     eda_stream_name: str = "ShimmerEDA",
     timeout: float = 5.0,
 ) -> bool:
@@ -564,7 +631,7 @@ def _run_preflight_checks(
         # Check streams
         expected_streams = []
         if check_eeg:
-            expected_streams.append({"type": eeg_stream_type, "name": None})
+            expected_streams.append({"type": eeg_stream_type, "name": None, "min_count": eeg_stream_count})
         if check_eda:
             expected_streams.append({"name": eda_stream_name, "type": "EDA"})
         
@@ -1495,6 +1562,12 @@ def main() -> int:
         default="EEG",
         help="LSL stream type to search for EEG (default: EEG).",
     )
+    parser.add_argument(
+        "--eeg-stream-count",
+        type=int,
+        default=1,
+        help="Number of EEG LSL streams to expect in preflight check (default: 1). Use 2 for dual-amp setups.",
+    )
 
     args = parser.parse_args()
 
@@ -1569,6 +1642,7 @@ def main() -> int:
             check_eeg=True,
             check_eda=True,
             eeg_stream_type=args.eeg_stream_type,
+            eeg_stream_count=args.eeg_stream_count,
             eda_stream_name=args.eda_stream_name,
             timeout=5.0,
         ):
