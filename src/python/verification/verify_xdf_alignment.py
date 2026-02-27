@@ -1,6 +1,6 @@
-"""Verify XDF↔CSV marker alignment for Pilot 1 QC.
+"""Verify recording↔CSV marker alignment for Pilot 1 QC.
 
-This script compares OpenMATB markers recorded via LSL (in the .xdf file) against
+This script compares OpenMATB markers recorded via LSL (in .xdf or .jsonl artifact) against
 the CSV log (ground truth from OpenMATB's internal logger) to verify timing accuracy.
 
 Pass criteria:
@@ -35,7 +35,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-# pyxdf is required for XDF parsing
 try:
     import pyxdf
     HAS_PYXDF = True
@@ -191,6 +190,69 @@ def load_xdf_markers(xdf_path: Path, stream_name: str = "OpenMATB", stream_type:
             markers.append(MarkerEvent(name=name_clean, timestamp=float(ts), source="xdf"))
     
     return markers
+
+
+def load_jsonl_markers(recording_path: Path, stream_name: str = "OpenMATB", stream_type: str = "Markers") -> list[MarkerEvent]:
+    """Load markers from Python recorder JSONL artifact."""
+    markers: list[MarkerEvent] = []
+    stream_info: dict[str, dict[str, Any]] = {}
+
+    with open(recording_path, "r", encoding="utf-8") as f:
+        for line in f:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                row = json.loads(text)
+            except Exception:
+                continue
+
+            row_type = row.get("type")
+            if row_type == "stream_info":
+                key = str(row.get("stream_key") or "")
+                info = row.get("info") if isinstance(row.get("info"), dict) else {}
+                if key:
+                    stream_info[key] = info
+                continue
+
+            if row_type != "sample":
+                continue
+
+            key = str(row.get("stream_key") or "")
+            info = stream_info.get(key, {})
+            name = str(info.get("name") or "")
+            stype = str(info.get("type") or "")
+            if name != stream_name and stype != stream_type:
+                continue
+
+            sample = row.get("sample")
+            if isinstance(sample, list) and sample:
+                marker_value = sample[0]
+            else:
+                marker_value = sample
+
+            marker_name = str(marker_value).strip()
+            if not marker_name:
+                continue
+
+            try:
+                timestamp = float(row.get("timestamp"))
+            except Exception:
+                continue
+
+            name_clean = marker_name.split("|", 1)[0].strip()
+            markers.append(MarkerEvent(name=name_clean, timestamp=timestamp, source="xdf"))
+
+    return markers
+
+
+def load_recorded_markers(recording_path: Path, stream_name: str = "OpenMATB", stream_type: str = "Markers") -> list[MarkerEvent]:
+    suffix = recording_path.suffix.lower()
+    if suffix == ".xdf":
+        return load_xdf_markers(recording_path, stream_name=stream_name, stream_type=stream_type)
+    if suffix == ".jsonl":
+        return load_jsonl_markers(recording_path, stream_name=stream_name, stream_type=stream_type)
+    raise ValueError(f"Unsupported recording format: {recording_path}")
 
 
 def check_discontinuities(markers: list[MarkerEvent], max_gap_s: float = 60.0) -> list[dict]:
@@ -405,20 +467,14 @@ def run_qc(
     output_path: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Run full QC and optionally write report."""
-    
-    if not HAS_PYXDF:
-        return {
-            "status": "error",
-            "error": "pyxdf not installed. Run: pip install pyxdf",
-        }
-    
-    # Load XDF markers
+
+    # Load recorded markers
     try:
-        xdf_markers = load_xdf_markers(xdf_path)
+        xdf_markers = load_recorded_markers(xdf_path)
     except Exception as e:
         return {
             "status": "error",
-            "error": f"Failed to load XDF: {e}",
+            "error": f"Failed to load recording artifact: {e}",
         }
     
     # Load and combine CSV markers from all scenario CSVs
@@ -440,6 +496,7 @@ def run_qc(
         "created_at": datetime.now().isoformat(),
         "inputs": {
             "xdf_path": str(xdf_path),
+            "recording_format": xdf_path.suffix.lower().lstrip("."),
             "csv_paths": [str(p) for p in csv_paths],
             "csv_load_errors": csv_load_errors,
         },
@@ -485,11 +542,11 @@ def run_qc(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify XDF↔CSV marker alignment for Pilot 1 QC.")
+    parser = argparse.ArgumentParser(description="Verify recording↔CSV marker alignment for Pilot 1 QC.")
     
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--run-manifest", help="Path to run manifest JSON (contains XDF and CSV paths)")
-    group.add_argument("--xdf", help="Path to XDF file")
+    group.add_argument("--run-manifest", help="Path to run manifest JSON (contains recording and CSV paths)")
+    group.add_argument("--xdf", help="Path to recording artifact (.xdf or .jsonl)")
     
     parser.add_argument("--csv", nargs="+", help="Path(s) to CSV file(s) (required if not using --run-manifest)")
     parser.add_argument("--out", help="Output path for QC report JSON")
@@ -497,16 +554,13 @@ def main() -> int:
     
     args = parser.parse_args()
     
-    if not HAS_PYXDF:
-        print("ERROR: pyxdf is required. Install with: pip install pyxdf", file=sys.stderr)
-        return 2
-    
     # Determine inputs
     if args.run_manifest:
         manifest = _load_json(Path(args.run_manifest))
-        xdf_path = Path(manifest.get("physiology", {}).get("xdf_path", ""))
+        physiology = manifest.get("physiology", {}) if isinstance(manifest.get("physiology"), dict) else {}
+        xdf_path = Path(physiology.get("recording_path") or physiology.get("xdf_path") or "")
         if not xdf_path or not xdf_path.exists():
-            print(f"ERROR: XDF path not found in manifest or file missing: {xdf_path}", file=sys.stderr)
+            print(f"ERROR: Recording path not found in manifest or file missing: {xdf_path}", file=sys.stderr)
             return 2
         
         csv_paths = []
@@ -528,7 +582,7 @@ def main() -> int:
     
     # Validate paths
     if not xdf_path.exists():
-        print(f"ERROR: XDF file not found: {xdf_path}", file=sys.stderr)
+        print(f"ERROR: Recording artifact not found: {xdf_path}", file=sys.stderr)
         return 2
     
     missing_csvs = [p for p in csv_paths if not p.exists()]
@@ -549,9 +603,9 @@ def main() -> int:
     
     if not args.quiet:
         print(f"\n{'='*60}")
-        print(f"XDF↔CSV Marker Alignment QC")
+        print(f"Recording↔CSV Marker Alignment QC")
         print(f"{'='*60}")
-        print(f"XDF: {xdf_path}")
+        print(f"Recording: {xdf_path}")
         print(f"CSVs: {len(csv_paths)} file(s)")
         print(f"\nResults:")
         results = report.get("results", {})

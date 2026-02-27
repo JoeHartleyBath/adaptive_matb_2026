@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import atexit
 from datetime import datetime
+import importlib.metadata
 import json
 import os
 import re
@@ -42,6 +43,55 @@ os.environ.setdefault("LSL_LOGLEVEL", "0")
 # EDA subprocess management (global state for crash-safe cleanup)
 # ---------------------------------------------------------------------------
 _eda_subprocess: Optional[subprocess.Popen] = None
+_lsl_recorder_subprocess: Optional[subprocess.Popen] = None
+_lsl_recording_path: Optional[Path] = None
+
+
+def _read_pinned_pyglet_version(requirements_path: Path) -> Optional[str]:
+    if not requirements_path.exists():
+        return None
+    try:
+        for raw_line in requirements_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.lower().startswith("pyglet=="):
+                return line.split("==", 1)[1].strip()
+    except Exception:
+        return None
+    return None
+
+
+def _ensure_openmatb_runtime_dependencies(openmatb_dir: Path) -> None:
+    requirements_path = openmatb_dir / "requirements.txt"
+    pinned_pyglet = _read_pinned_pyglet_version(requirements_path)
+
+    if not pinned_pyglet:
+        return
+
+    try:
+        installed_pyglet = importlib.metadata.version("pyglet")
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise RuntimeError(
+            "OpenMATB dependency check failed: pyglet is not installed.\n"
+            f"Install pinned dependencies with:\n  {sys.executable} -m pip install -r {requirements_path}"
+        ) from exc
+
+    if installed_pyglet != pinned_pyglet:
+        raise RuntimeError(
+            "OpenMATB dependency check failed: incompatible pyglet version.\n"
+            f"  Required: {pinned_pyglet}\n"
+            f"  Installed: {installed_pyglet}\n"
+            f"Install pinned dependencies with:\n  {sys.executable} -m pip install -r {requirements_path}"
+        )
+
+    try:
+        from pyglet.graphics import OrderedGroup  # noqa: F401
+    except Exception as exc:
+        raise RuntimeError(
+            "OpenMATB dependency check failed: pyglet does not expose OrderedGroup, which this OpenMATB build requires.\n"
+            f"Reinstall pinned dependencies with:\n  {sys.executable} -m pip install -r {requirements_path}"
+        ) from exc
 
 
 def _cleanup_eda_subprocess() -> None:
@@ -61,15 +111,34 @@ def _cleanup_eda_subprocess() -> None:
         _eda_subprocess = None
 
 
+def _cleanup_lsl_recorder_subprocess() -> None:
+    """Terminate Python LSL recorder subprocess if running."""
+    global _lsl_recorder_subprocess
+    if _lsl_recorder_subprocess is not None and _lsl_recorder_subprocess.poll() is None:
+        print("Stopping Python LSL recorder subprocess...", file=sys.stderr)
+        try:
+            _lsl_recorder_subprocess.terminate()
+            _lsl_recorder_subprocess.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            print("LSL recorder did not terminate, killing...", file=sys.stderr)
+            _lsl_recorder_subprocess.kill()
+            _lsl_recorder_subprocess.wait()
+        except Exception as e:
+            print(f"Error cleaning up LSL recorder subprocess: {e}", file=sys.stderr)
+        _lsl_recorder_subprocess = None
+
+
 def _signal_handler(signum, frame):
     """Handle SIGINT/SIGTERM by cleaning up EDA subprocess then re-raising."""
     _cleanup_eda_subprocess()
+    _cleanup_lsl_recorder_subprocess()
     # Re-raise the signal to allow normal exit behavior
     sys.exit(128 + signum)
 
 
 # Register cleanup handlers
 atexit.register(_cleanup_eda_subprocess)
+atexit.register(_cleanup_lsl_recorder_subprocess)
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 
@@ -182,6 +251,85 @@ def _start_eda_streamer(
 def _stop_eda_streamer() -> None:
     """Stop EDA streamer subprocess."""
     _cleanup_eda_subprocess()
+
+
+def _start_python_lsl_recorder(
+    *,
+    repo_root: Path,
+    output_root_path: Path,
+    participant: str,
+    session: str,
+    eda_stream_name: str,
+) -> dict:
+    """Start Python LSL recorder subprocess for Pilot 1.
+
+    Returns dict with keys: started, pid, recording_path, error.
+    """
+    global _lsl_recorder_subprocess, _lsl_recording_path
+
+    result = {
+        "started": False,
+        "pid": None,
+        "recording_path": None,
+        "error": None,
+    }
+
+    recorder_script = repo_root / "scripts" / "record_lsl_streams.py"
+    if not recorder_script.exists():
+        result["error"] = f"Recorder script not found: {recorder_script}"
+        return result
+
+    recordings_dir = output_root_path / "physiology" / participant / session
+    recordings_dir.mkdir(parents=True, exist_ok=True)
+    timestamp_tag = datetime.now().strftime("%Y%m%dT%H%M%S")
+    recording_path = recordings_dir / f"lsl_recording_{timestamp_tag}.jsonl"
+
+    cmd = [
+        sys.executable,
+        str(recorder_script),
+        "--out", str(recording_path),
+        "--include-type", "Markers",
+        "--include-type", "EEG",
+        "--include-type", "EDA",
+        "--include-name", "OpenMATB",
+        "--include-name", eda_stream_name,
+    ]
+
+    print(f"Starting Python LSL recorder: {' '.join(cmd)}")
+
+    try:
+        _lsl_recorder_subprocess = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        _lsl_recording_path = recording_path
+    except Exception as e:
+        result["error"] = f"Failed to start Python LSL recorder: {e}"
+        return result
+
+    time.sleep(1.0)
+    if _lsl_recorder_subprocess.poll() is not None:
+        stderr_output = _lsl_recorder_subprocess.stderr.read() if _lsl_recorder_subprocess.stderr else ""
+        result["error"] = f"Python LSL recorder exited immediately (code {_lsl_recorder_subprocess.returncode}): {stderr_output}"
+        _lsl_recorder_subprocess = None
+        _lsl_recording_path = None
+        return result
+
+    result["started"] = True
+    result["pid"] = _lsl_recorder_subprocess.pid
+    result["recording_path"] = str(recording_path)
+    return result
+
+
+def _stop_python_lsl_recorder() -> Optional[Path]:
+    """Stop Python LSL recorder and return recording path if available."""
+    global _lsl_recording_path
+    _cleanup_lsl_recorder_subprocess()
+    path = _lsl_recording_path
+    _lsl_recording_path = None
+    return path
 
 
 def _preflight_stream_check(
@@ -393,48 +541,6 @@ def _preflight_stream_check(
     return results
 
 
-def _check_labrecorder() -> dict:
-    """Check if LabRecorder is running.
-    
-    Note: We can only detect if the process is running, not if it's actively recording.
-    User must verify recording status manually.
-    """
-    result = {
-        "running": False,
-        "process_name": None,
-        "warning": None,
-        "recording_note": "Cannot verify recording status programmatically - check LabRecorder UI!",
-    }
-    
-    try:
-        # Check for LabRecorder process (Windows)
-        if sys.platform == "win32":
-            output = subprocess.check_output(
-                ["tasklist", "/FI", "IMAGENAME eq LabRecorder.exe", "/FO", "CSV"],
-                text=True,
-                stderr=subprocess.DEVNULL,
-            )
-            if "LabRecorder.exe" in output:
-                result["running"] = True
-                result["process_name"] = "LabRecorder.exe"
-        else:
-            # Unix: check with pgrep
-            try:
-                subprocess.check_call(
-                    ["pgrep", "-x", "LabRecorder"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                result["running"] = True
-                result["process_name"] = "LabRecorder"
-            except subprocess.CalledProcessError:
-                pass
-    except Exception as e:
-        result["warning"] = f"Could not check for LabRecorder: {e}"
-    
-    return result
-
-
 def _run_preflight_checks(
     check_eeg: bool = True,
     check_eda: bool = True,
@@ -450,20 +556,11 @@ def _run_preflight_checks(
     """
     
     def _run_single_check():
-        """Run one round of preflight checks. Returns (all_ok, has_warnings, lr_status, result)."""
+        """Run one round of preflight checks. Returns (all_ok, has_warnings, result)."""
         print("\n" + "=" * 60)
         print("PRE-FLIGHT STREAM CHECK")
         print("=" * 60)
-        
-        # Check LabRecorder first
-        print("\n[1/2] Checking LabRecorder...")
-        lr_status = _check_labrecorder()
-        if lr_status["running"]:
-            print(f"  LabRecorder is running")
-        else:
-            print(f"  LabRecorder NOT DETECTED")
-            print(f"    Start LabRecorder before proceeding to ensure data is saved!")
-        
+
         # Check streams
         expected_streams = []
         if check_eeg:
@@ -474,9 +571,9 @@ def _run_preflight_checks(
         result = {"streams": [], "warnings": [], "all_found": True, "all_streaming": True}
         
         if not expected_streams:
-            print("\n[2/2] No streams to check.")
+            print("\nNo streams to check.")
         else:
-            print(f"\n[2/2] Checking {len(expected_streams)} stream(s)...\n")
+            print(f"\nChecking {len(expected_streams)} stream(s)...\n")
             result = _preflight_stream_check(
                 expected_streams,
                 timeout_per_stream=timeout,
@@ -489,14 +586,6 @@ def _run_preflight_checks(
         print("=" * 60)
         
         all_ok = True
-        
-        # LabRecorder status
-        if lr_status["running"]:
-            print(f"  [OK] LabRecorder: RUNNING")
-            print(f"        >>> Verify it is RECORDING and has all streams selected! <<<")
-        else:
-            print(f"  [!!] LabRecorder: NOT DETECTED (data may not be saved!)")
-            all_ok = False
         
         # Stream status
         if expected_streams:
@@ -526,11 +615,11 @@ def _run_preflight_checks(
         
         print("=" * 60)
         
-        return all_ok, has_warnings, lr_status, result
+        return all_ok, has_warnings, result
     
     # Run checks in a retry loop
     while True:
-        all_ok, has_warnings, lr_status, result = _run_single_check()
+        all_ok, has_warnings, result = _run_single_check()
         
         if all_ok and not has_warnings:
             print("\nAll checks passed!")
@@ -618,9 +707,9 @@ def _load_assignments(repo_root: Path) -> dict:
     return data if "participants" in data else {"participants": data}
 
 
-def _save_assignments(repo_root: Path, assignments: dict, dry_run: bool = False) -> None:
+def _save_assignments(repo_root: Path, assignments: dict, skip_write: bool = False) -> None:
     """Save participant assignments to config file."""
-    if dry_run:
+    if skip_write:
         return
     
     assignments_path = repo_root / "config" / "participant_assignments.yaml"
@@ -674,7 +763,6 @@ def _write_seq_id_into_manifest(
     manifest_path: Path,
     *,
     seq_id: str,
-    dry_run: bool,
     scenario_filename: str,
     abort_reason: Optional[str] = None,
 ) -> None:
@@ -683,7 +771,6 @@ def _write_seq_id_into_manifest(
 
     manifest["seq_id"] = seq_id
     manifest["unattended"] = False
-    manifest["dry_run"] = dry_run
     if abort_reason:
         manifest["abort_reason"] = abort_reason
     if scenario_filename:
@@ -702,10 +789,7 @@ def _write_seq_id_into_manifest(
     _atomic_write_json(manifest_path, manifest)
 
 
-def _get_playlist(seq_id: str, dry_run: bool, *, calibration_only: bool = False) -> list[str]:
-    if dry_run:
-        return ["pilot_dry_run_v0.txt"]
-
+def _get_playlist(seq_id: str, *, calibration_only: bool = False) -> list[str]:
     playlist: list[str] = []
     if not calibration_only:
         # Fixed training sequence
@@ -1050,7 +1134,6 @@ def _run_single_scenario(
             _write_seq_id_into_manifest(
                 new_manifests[0],
                 seq_id=seq_id,
-                dry_run=args.dry_run,
                 scenario_filename=scenario_filename,
                 abort_reason=f"exit_code_{exit_code}",
             )
@@ -1070,7 +1153,6 @@ def _run_single_scenario(
     _write_seq_id_into_manifest(
         manifest_path,
         seq_id=seq_id,
-        dry_run=args.dry_run,
         scenario_filename=scenario_filename,
         abort_reason=None,
     )
@@ -1117,7 +1199,6 @@ def _run_single_scenario(
             _write_seq_id_into_manifest(
                 manifest_path,
                 seq_id=seq_id,
-                dry_run=args.dry_run,
                 scenario_filename=scenario_filename,
                 abort_reason="scenario_errors",
             )
@@ -1186,7 +1267,6 @@ def _run_single_scenario(
                 _write_seq_id_into_manifest(
                     manifest_path,
                     seq_id=seq_id,
-                    dry_run=args.dry_run,
                     scenario_filename=scenario_filename,
                     abort_reason=f"early_exit_observed_{observed_end:.3f}_expected_{expected_end}",
                 )
@@ -1294,11 +1374,6 @@ def main() -> int:
         help="calibration-order sequence ID (SEQ1/SEQ2/SEQ3). Can also be set via OPENMATB_SEQ_ID.",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Use the deterministic dry-run scenario artifact.",
-    )
-    parser.add_argument(
         "--verification",
         action="store_true",
         help="Enable fast-forward and other automation-oriented behaviors (verification only).",
@@ -1338,8 +1413,8 @@ def main() -> int:
         "--pilot1",
         action="store_true",
         help=(
-            "Enable Pilot 1 checks: requires a calibration-stage .xdf (LabRecorder) so a run-level manifest "
-            "can link physiology to OpenMATB outputs and run alignment QC."
+            "Enable Pilot 1 checks with physiology recording and marker-alignment QC. "
+            "If --xdf-path is not provided, a Python LSL recorder is started automatically."
         ),
     )
 
@@ -1347,9 +1422,15 @@ def main() -> int:
         "--xdf-path",
         default=None,
         help=(
-            "Path to the LabRecorder .xdf file that contains OpenMATB markers + physiology for this run. "
-            "Required for --pilot1."
+            "Path to a pre-recorded physiology artifact for this run (.xdf or .jsonl). "
+            "Optional for --pilot1 when using auto Python recorder."
         ),
+    )
+
+    parser.add_argument(
+        "--no-python-recorder",
+        action="store_true",
+        help="Disable auto-starting Python LSL recorder for --pilot1 when --xdf-path is omitted.",
     )
 
     parser.add_argument(
@@ -1366,7 +1447,7 @@ def main() -> int:
     parser.add_argument(
         "--skip-assignment-update",
         action="store_true",
-        help="Don't update participant_assignments.yaml (dry-run for assignments).",
+        help="Don't update participant_assignments.yaml.",
     )
 
     # EDA streamer integration (opt-in)
@@ -1421,10 +1502,6 @@ def main() -> int:
         print("ERROR: --only-scenario cannot be combined with --calibration-trend.", file=sys.stderr)
         return 2
 
-    if args.pilot1 and args.dry_run:
-        print("NOTE: --pilot1 is ignored during --dry-run.", file=sys.stderr)
-        args.pilot1 = False
-
     if args.speed != 1 and not args.verification:
         print(
             f"NOTE: Ignoring --speed={args.speed} because this is an attended run. "
@@ -1439,9 +1516,22 @@ def main() -> int:
         return 2
 
     repo_root = Path(__file__).resolve().parents[2]
+    openmatb_dir = Path(args.openmatb_dir) if args.openmatb_dir else repo_root / "src" / "python" / "vendor" / "openmatb"
+
+    if not openmatb_dir.exists():
+        print(f"OpenMATB directory not found: {openmatb_dir}", file=sys.stderr)
+        return 2
+
+    try:
+        _ensure_openmatb_runtime_dependencies(openmatb_dir)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     
     # EDA subprocess state (will be populated if --with-eda is set)
     eda_info: Optional[dict] = None
+    lsl_recorder_info: Optional[dict] = None
+    physiology_recording_path: Optional[Path] = Path(args.xdf_path) if args.xdf_path else None
     
     # Load participant assignments
     assignments = _load_assignments(repo_root)
@@ -1450,14 +1540,34 @@ def main() -> int:
     # Pre-flight stream check (before asking for participant info)
     # Run if --check-streams is set, or if --pilot1 is set (unless --skip-stream-check)
     should_check_streams = args.check_streams or (args.pilot1 and not args.skip_stream_check)
-    
+
+    # If EDA is managed by the runner and preflight is requested, start it now so
+    # preflight can confirm that the stream is actually visible and streaming.
+    if args.with_eda and should_check_streams and not args.verification:
+        print("\n" + "=" * 60)
+        print("Starting EDA streamer before preflight checks...")
+        print("=" * 60)
+
+        eda_info = _start_eda_streamer(
+            repo_root=repo_root,
+            eda_port=args.eda_port,
+            eda_stream_name=args.eda_stream_name,
+            health_check_timeout=args.eda_health_timeout,
+        )
+
+        if not eda_info["health_check_passed"]:
+            print(f"\n!!! EDA HEALTH CHECK FAILED !!!", file=sys.stderr)
+            print(f"Error: {eda_info.get('error', 'Unknown error')}", file=sys.stderr)
+            print("\nCannot proceed without verified EDA stream.", file=sys.stderr)
+            _stop_eda_streamer()
+            return 2
+
+        print(f"EDA streamer ready (PID: {eda_info['pid']}, stream: {eda_info['stream_name']})")
+
     if should_check_streams and not args.verification:
-        # Don't check EDA if we're about to spawn it with --with-eda
-        check_eda = not args.with_eda
-        
         if not _run_preflight_checks(
             check_eeg=True,
-            check_eda=check_eda,
+            check_eda=True,
             eeg_stream_type=args.eeg_stream_type,
             eda_stream_name=args.eda_stream_name,
             timeout=5.0,
@@ -1528,7 +1638,7 @@ def main() -> int:
         return 2
     
     # Confirmation prompt
-    if not args.dry_run:
+    if not args.verification:
         print(f"\n{'='*50}")
         print(f"  Participant: {participant_raw}")
         print(f"  Sequence:    {seq_id}")
@@ -1550,13 +1660,6 @@ def main() -> int:
     output_root_path = Path(output_root)
     if not output_root_path.is_absolute():
         print(f"OPENMATB_OUTPUT_ROOT must be an absolute path (got: {output_root})", file=sys.stderr)
-        return 2
-
-    repo_root = Path(__file__).resolve().parents[2]
-    openmatb_dir = Path(args.openmatb_dir) if args.openmatb_dir else repo_root / "src" / "python" / "vendor" / "openmatb"
-
-    if not openmatb_dir.exists():
-        print(f"OpenMATB directory not found: {openmatb_dir}", file=sys.stderr)
         return 2
 
     # Check if session output already exists (prevent accidental overwriting)
@@ -1592,7 +1695,7 @@ def main() -> int:
         return 2
 
     try:
-        playlist = _get_playlist(seq_id, args.dry_run, calibration_only=bool(args.calibration_only))
+        playlist = _get_playlist(seq_id, calibration_only=bool(args.calibration_only))
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -1623,8 +1726,8 @@ def main() -> int:
     for s in playlist:
         print(f" - {s}")
 
-    # Start EDA streamer if requested (before scenarios)
-    if args.with_eda:
+    # Start EDA streamer if requested (before scenarios), unless already started for preflight.
+    if args.with_eda and not (eda_info and eda_info.get("started")):
         print("\n" + "="*60)
         print("Starting EDA streamer...")
         print("="*60)
@@ -1646,8 +1749,35 @@ def main() -> int:
         print(f"EDA streamer ready (PID: {eda_info['pid']}, stream: {eda_info['stream_name']})")
         print("="*60 + "\n")
 
+    # Start Python recorder for Pilot 1 when an existing recording artifact is not supplied.
+    if args.pilot1 and physiology_recording_path is None and not args.no_python_recorder:
+        print("\n" + "=" * 60)
+        print("Starting Python LSL recorder for Pilot 1...")
+        print("=" * 60)
+
+        lsl_recorder_info = _start_python_lsl_recorder(
+            repo_root=repo_root,
+            output_root_path=output_root_path,
+            participant=participant,
+            session=session,
+            eda_stream_name=args.eda_stream_name,
+        )
+
+        if not lsl_recorder_info["started"]:
+            print(f"\n!!! PYTHON LSL RECORDER FAILED TO START !!!", file=sys.stderr)
+            print(f"Error: {lsl_recorder_info.get('error', 'Unknown error')}", file=sys.stderr)
+            print("\nProvide --xdf-path or run without --pilot1.", file=sys.stderr)
+            if args.with_eda:
+                _stop_eda_streamer()
+            return 2
+
+        physiology_recording_path = Path(str(lsl_recorder_info["recording_path"]))
+        print(f"Python recorder ready (PID: {lsl_recorder_info['pid']})")
+        print(f"Recording to: {physiology_recording_path}")
+        print("=" * 60 + "\n")
+
     # Final launch checkpoint (only for real runs, not verification)
-    if not args.verification and not args.dry_run:
+    if not args.verification:
         print("\n" + "=" * 60)
         print("FINAL LAUNCH CHECKLIST")
         print("=" * 60)
@@ -1657,8 +1787,9 @@ def main() -> int:
         print(f"  Scenarios:    {len(playlist)}")
         print("-" * 60)
         print("  Before pressing Enter, confirm:")
-        print("    [ ] LabRecorder is RECORDING (red button pressed)")
-        print("    [ ] All streams visible in LabRecorder (EEG, EDA, OpenMATB*)")
+        if args.pilot1:
+            print("    [ ] Physiology recorder is active (Python recorder or external .xdf)")
+            print("    [ ] Required streams visible (EEG, EDA, OpenMATB*)")
         print("    [ ] Participant is seated and ready")
         print("    [ ] Electrodes are attached and signal looks good")
         print("-" * 60)
@@ -1668,6 +1799,8 @@ def main() -> int:
         launch = input("\nStart session now? (y/n): ").strip().lower()
         if launch not in ("y", "yes"):
             print("Session aborted by user at final checkpoint.")
+            if args.pilot1:
+                _stop_python_lsl_recorder()
             if args.with_eda:
                 _stop_eda_streamer()
             return 1
@@ -1690,6 +1823,10 @@ def main() -> int:
 
         if exit_code != 0:
             print(f"\n!!! Scenario {scenario_filename} failed (code {exit_code}). Stopping sequence. !!!", file=sys.stderr)
+            if args.pilot1:
+                _stop_python_lsl_recorder()
+            if args.with_eda:
+                _stop_eda_streamer()
             return exit_code
 
         if manifest_path:
@@ -1701,48 +1838,22 @@ def main() -> int:
 
     print("\nAll scenarios in playlist completed successfully.")
 
-    if args.pilot1 and not args.xdf_path:
-        # We require an explicit .xdf to create the run-level manifest and enforce QC.
-        print("\n" + "-" * 50)
-        print("XDF PATH REQUIRED")
-        print("-" * 50)
-        print("Stop LabRecorder recording now (if not already stopped).")
-        print("Enter the path to the .xdf file that was just recorded.")
-        print("-" * 50)
-        
-        while True:
-            xdf_in = input("\nEnter LabRecorder .xdf path: ").strip()
-            if not xdf_in:
-                print("ERROR: --pilot1 requires an .xdf path (LabRecorder output).", file=sys.stderr)
-                retry = input("Try again? (y/n): ").strip().lower()
-                if retry not in ("y", "yes"):
-                    return 2
-                continue
-            
-            # Validate the path exists
-            xdf_path = Path(xdf_in)
-            if not xdf_path.exists():
-                print(f"ERROR: File not found: {xdf_path}", file=sys.stderr)
-                print("Check the path and try again.")
-                continue
-            
-            if not xdf_path.suffix.lower() == ".xdf":
-                print(f"WARNING: File does not have .xdf extension: {xdf_path.name}")
-                confirm = input("Use this file anyway? (y/n): ").strip().lower()
-                if confirm not in ("y", "yes"):
-                    continue
-            
-            # Check file size (sanity check)
-            file_size_mb = xdf_path.stat().st_size / (1024 * 1024)
-            if file_size_mb < 0.1:
-                print(f"WARNING: XDF file is very small ({file_size_mb:.2f} MB) - may be incomplete.")
-                confirm = input("Use this file anyway? (y/n): ").strip().lower()
-                if confirm not in ("y", "yes"):
-                    continue
-            
-            print(f"Using XDF: {xdf_path} ({file_size_mb:.1f} MB)")
-            args.xdf_path = str(xdf_path)
-            break
+    if args.pilot1 and lsl_recorder_info and lsl_recorder_info.get("started"):
+        print("\nStopping Python LSL recorder...")
+        recorded_path = _stop_python_lsl_recorder()
+        if recorded_path is not None:
+            physiology_recording_path = recorded_path
+            print(f"Saved recording artifact: {physiology_recording_path}")
+
+    if args.pilot1 and physiology_recording_path is None:
+        print(
+            "ERROR: --pilot1 requires a physiology recording artifact. "
+            "Provide --xdf-path, or allow auto recorder (omit --no-python-recorder).",
+            file=sys.stderr,
+        )
+        if args.with_eda:
+            _stop_eda_streamer()
+        return 2
 
     # Write run-level manifest linking the playlist to OpenMATB outputs (and optional physiology XDF).
     try:
@@ -1781,7 +1892,6 @@ def main() -> int:
             "mode": {
                 "pilot1": bool(args.pilot1),
                 "calibration_only": bool(args.calibration_only),
-                "dry_run": bool(args.dry_run),
                 "verification": bool(args.verification),
             },
             "repo": {
@@ -1795,7 +1905,9 @@ def main() -> int:
                 "openmatb_dir": str(openmatb_dir),
             },
             "physiology": {
-                "xdf_path": str(args.xdf_path) if args.xdf_path else None,
+                "xdf_path": str(physiology_recording_path) if (physiology_recording_path and physiology_recording_path.suffix.lower() == ".xdf") else None,
+                "recording_path": str(physiology_recording_path) if physiology_recording_path else None,
+                "recording_format": (physiology_recording_path.suffix.lower().lstrip(".") if physiology_recording_path else None),
                 "recording_scope": "calibration_only",
                 "expected_streams": {
                     "markers": {"name": "OpenMATB", "type": "Markers"},
@@ -1835,10 +1947,10 @@ def main() -> int:
         print(f"ERROR: Failed to write run-level manifest: {exc}", file=sys.stderr)
         return 2
     
-    # Run XDF↔CSV marker alignment QC if --pilot1 and not --skip-xdf-qc
-    if args.pilot1 and not args.skip_xdf_qc and args.xdf_path:
+    # Run recording↔CSV marker alignment QC if --pilot1 and not --skip-xdf-qc
+    if args.pilot1 and not args.skip_xdf_qc and physiology_recording_path:
         print("\n" + "="*60)
-        print("Running XDF↔CSV marker alignment QC...")
+        print("Running recording↔CSV marker alignment QC...")
         print("="*60)
         
         try:
@@ -1854,7 +1966,7 @@ def main() -> int:
             qc_report_path = run_manifest_path.with_suffix(".qc_alignment.json")
             
             qc_report = run_qc(
-                xdf_path=Path(args.xdf_path),
+                xdf_path=Path(physiology_recording_path),
                 csv_paths=csv_paths,
                 thresholds=run_manifest["qc"]["xdf_alignment"]["thresholds"],
                 output_path=qc_report_path,
@@ -1880,18 +1992,17 @@ def main() -> int:
                 print(f"  95th pct:     {timing.get('p95_abs_error_ms', 0):.1f} ms")
         
         except ImportError as exc:
-            print(f"WARNING: Could not run XDF QC (missing dependency): {exc}", file=sys.stderr)
-            print("Install with: pip install pyxdf", file=sys.stderr)
+            print(f"WARNING: Could not run marker-alignment QC (missing dependency): {exc}", file=sys.stderr)
             run_manifest["qc"]["xdf_alignment"]["status"] = "skipped_missing_dep"
             _atomic_write_json(run_manifest_path, run_manifest)
         except Exception as exc:
-            print(f"WARNING: XDF QC failed with error: {exc}", file=sys.stderr)
+            print(f"WARNING: Marker-alignment QC failed with error: {exc}", file=sys.stderr)
             run_manifest["qc"]["xdf_alignment"]["status"] = f"error: {exc}"
             _atomic_write_json(run_manifest_path, run_manifest)
 
     # Automatic external-only exports (results summary + cohort status)
     # Option A: always attempt; failures are warnings only.
-    if not args.dry_run:
+    if not args.verification:
         _auto_export_pilot_results(
             repo_root=repo_root,
             output_root_path=output_root_path,
@@ -1923,7 +2034,7 @@ def main() -> int:
         
         # Save assignments
         assignments["participants"] = participants_data
-        _save_assignments(repo_root, assignments, dry_run=args.skip_assignment_update)
+        _save_assignments(repo_root, assignments, skip_write=args.skip_assignment_update)
         print(f"Updated participant assignments: {participant} completed {session}")
     
     # Stop EDA streamer if we started it

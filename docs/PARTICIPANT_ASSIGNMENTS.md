@@ -100,7 +100,7 @@ participants:
 
 ### Testing Modes
 
-**Dry-run (skip assignment updates):**
+**Skip assignment updates:**
 ```bash
 python src/python/run_openmatb.py --skip-assignment-update
 ```

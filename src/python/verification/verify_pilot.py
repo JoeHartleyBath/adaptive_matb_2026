@@ -477,7 +477,7 @@ def main() -> int:
         # Manifest checks (aligned to current runner contract)
         if manifest.get("seq_id") != args.seq_id:
             failures.append(CheckFailure("Manifest seq_id mismatch", [str(manifest_path)]))
-        if manifest.get("dry_run") is not False:
+        if "dry_run" in manifest and manifest.get("dry_run") is not False:
             failures.append(CheckFailure("Manifest dry_run is not false", [str(manifest_path)]))
         if manifest.get("unattended") is not False:
             failures.append(CheckFailure("Manifest unattended not false", [str(manifest_path)]))

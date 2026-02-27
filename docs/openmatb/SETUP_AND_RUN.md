@@ -43,7 +43,7 @@ Dependencies are pinned in [src/python/vendor/openmatb/requirements.txt](../../s
   - If you do not need the physical parallel-port trigger path, a pragmatic local workaround is:
 
 ```powershell
-python -m pip install pyglet==1.5.26 rstr==3.1.0 pylsl==1.16.1
+python -m pip install pyglet==1.5.31 rstr==3.1.0 pylsl==1.16.1
 ```
 
   - In that case, the `parallelport` plugin will not function (and may display an error), but the rest of OpenMATB can still run.

@@ -884,7 +884,7 @@ python -m pytest src/python/tests/ -v
 
 1. **Simulated full loop:**
    ```powershell
-   python src/python/run_openmatb.py --participant PTEST --session STEST --seq-id SEQ1 --adaptation-mode=simulated --dry-run
+  python src/python/run_openmatb.py --participant PTEST --session STEST --seq-id SEQ1 --adaptation-mode=simulated
    ```
    - Verify difficulty changes appear in logs
    - Verify adaptation log written
