@@ -178,7 +178,8 @@ class ShimmerEDAStreamer:
         self.start_time = 0.0
         self.channel_index: dict[EChannelType, int] = {}
         self.extract_errors = 0
-        
+        self.battery: Optional[float] = None  # percentage (0–100), or None if unreadable
+
         # Shimmer GSR3 nominal sample rate
         self.sample_rate = 51.2
 
@@ -192,6 +193,41 @@ class ShimmerEDAStreamer:
             return method()
         except Exception:
             return None
+
+    def _get_battery_pct(self) -> Optional[float]:
+        """Attempt to read battery level as a percentage (0–100).
+
+        Tries several method names in order (pyshimmer API varies by version).
+        Returns None if the device does not expose battery level.
+        """
+        # Direct percentage-returning methods
+        for method in ("get_battery_percent", "battery_percent", "get_battery_pct"):
+            val = self._safe_get(method)
+            if val is not None:
+                try:
+                    pct = float(val)
+                    if 0.0 <= pct <= 100.0:
+                        return round(pct, 1)
+                except (TypeError, ValueError):
+                    pass
+
+        # Voltage-returning methods — convert LiPo range (3.2 V = 0 %, 4.2 V = 100 %)
+        for method in ("get_vsense_batt", "get_battery_voltage", "get_battery"):
+            val = self._safe_get(method)
+            if val is not None:
+                try:
+                    v = float(val)
+                    if 3.0 <= v <= 4.5:           # raw volts
+                        pct = (v - 3.2) / 1.0 * 100.0
+                    elif 3000 <= v <= 4500:        # millivolts
+                        pct = (v - 3200) / 1000.0 * 100.0
+                    else:
+                        continue
+                    return round(max(0.0, min(100.0, pct)), 1)
+                except (TypeError, ValueError):
+                    pass
+
+        return None
 
     def describe_device(self) -> None:
         """Print device-reported details for verification."""
@@ -217,7 +253,23 @@ class ShimmerEDAStreamer:
         gsr_idx = self.channel_index.get(EChannelType.GSR_RAW)
         if gsr_idx is not None:
             print(f"  gsr_raw_channel_index: {gsr_idx}")
+        if self.battery is not None:
+            print(f"  battery: {self.battery:.0f}%")
+        else:
+            print(f"  battery: unknown (not reported by pyshimmer)")
         print("  streamer_channel: GSR_RAW (unit=raw_counts)")
+
+    def probe_json(self) -> dict:
+        """Return device info as a JSON-serialisable dict (for --probe-json mode)."""
+        device_name = self._safe_get("get_device_name")
+        firmware = self._safe_get("get_firmware_version")
+        return {
+            "ok": True,
+            "device_name": str(device_name) if device_name is not None else None,
+            "firmware": str(firmware) if firmware is not None else None,
+            "port": self.port,
+            "battery_pct": self.battery,
+        }
 
     def _extract_gsr_value(self, packet) -> float:
         channels = getattr(packet, "channels", None)
@@ -289,8 +341,10 @@ class ShimmerEDAStreamer:
                 }
             
             print(f"Connected to Shimmer (sample rate: {self.sample_rate} Hz)")
+            # Attempt battery reading before describe so it can be displayed
+            self.battery = self._get_battery_pct()
             self.describe_device()
-            
+
         except Exception as e:
             print(f"ERROR: Failed to connect to Shimmer: {e}", file=sys.stderr)
             return False
@@ -468,7 +522,12 @@ alongside OpenMATB markers and EEG using LabRecorder.
     parser.add_argument(
         "--probe",
         action="store_true",
-        help="Connect to Shimmer, print device details, and exit",
+        help="Connect to Shimmer, print device details, and exit.",
+    )
+    parser.add_argument(
+        "--probe-json",
+        action="store_true",
+        help="Connect, print device info (including battery) as a single JSON line, and exit.",
     )
     
     args = parser.parse_args()
@@ -527,11 +586,18 @@ alongside OpenMATB markers and EEG using LabRecorder.
     if not streamer.connect():
         return 1
 
+    if args.probe_json:
+        import json as _json
+        info = streamer.probe_json()
+        print(_json.dumps(info))
+        streamer.stop()
+        return 0
+
     if args.probe:
         print("Probe successful. Exiting without starting stream.")
         streamer.stop()
         return 0
-    
+
     streamer.start_streaming()
     return 0
 
