@@ -1,0 +1,35 @@
+# OpenMATB Scenario: adaptation_skeleton.txt
+# Skeleton scenario for online staircase calibration.
+#
+# All stimuli (comms prompts, sysmon failures, resman pump failures) are
+# intentionally absent: AdaptationScheduler generates them dynamically
+# via Poisson event generators driven by DifficultyState.
+#
+# Parameters at t=0 match DifficultyState(d_init=0.50):
+#   track_update_ms     = 30  (lerp 50→10 at d=0.50)
+#   track_joystick_force= 2   (lerp  3→1  at d=0.50)
+#   resman_loss_per_min = 500 (1200*0.50 − 100 offset)
+#
+# AdaptationScheduler will call set_parameter() on each tick to update
+# these live; the values here are the starting point only.
+
+0:00:00;labstreaminglayer;start
+0:00:00;labstreaminglayer;marker;STUDY/V0/ADAPTATION/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:00:00;scheduling;start
+0:00:00;communications;voiceidiom;english
+0:00:00;communications;voicegender;male
+0:00:00;track;taskupdatetime;30
+0:00:00;track;joystickforce;2
+0:00:00;track;start
+0:00:00;sysmon;start
+0:00:00;communications;start
+0:00:00;resman;start
+0:00:00;resman;tank-a-lossperminute;500
+0:00:00;resman;tank-b-lossperminute;500
+0:05:00;track;stop
+0:05:00;sysmon;stop
+0:05:00;communications;stop
+0:05:00;resman;stop
+0:05:00;scheduling;stop
+0:05:00;labstreaminglayer;marker;STUDY/V0/ADAPTATION/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;labstreaminglayer;stop
