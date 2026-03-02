@@ -1,28 +1,118 @@
 # Pilot 1 Session Checklist
 
-This checklist covers the complete procedure for running a Pilot 1 session with OpenMATB, EEG, and EDA recording.
+Physical setup steps before launching the runner. All software, stream, battery, and recording checks are automated — this document covers only things the code cannot verify.
 
-## Pre-Session Setup (one-time)
+---
 
-### Software Dependencies
+## Physical Setup
+
+### 1. EEG
+
+- [ ] Fit EEG cap on participant
+- [ ] Open eego software and check impedances (target: < 30 kΩ for all channels)
+- [ ] Confirm EEG is streaming to LSL in eego (two amplifiers → two EEG streams)
+- [ ] Confirm EEG amplifier battery is adequate (check eego or hardware LED) — you will be prompted to confirm this at session start
+
+### 2. Shimmer GSR3 (EDA)
+
+- [ ] Attach Shimmer electrodes to participant (index and middle finger, non-dominant hand)
+- [ ] Power on Shimmer device
+- [ ] Pair via Bluetooth; confirm COM port in Device Manager (e.g., COM5)
+
+### 3. Polar H10 (HR/ECG)
+
+- [ ] Strap Polar H10 on participant (chest strap, moistened)
+- [ ] Confirm device is worn and detects heart rate (LED indicates connection)
+
+### 4. Participant
+
+- [ ] Participant seated, electrodes attached, instructions read
+- [ ] Remind participant: Communications task requires pressing **ENTER** to submit a frequency — tuning alone is scored as MISS
+
+---
+
+## Run the Session
 
 ```powershell
-# From repo root, activate venv
+cd C:\phd_projects\adaptive_matb_2026
 .\.venv\Scripts\Activate.ps1
 
-# Verify dependencies
-pip list | Select-String "pyxdf|pylsl|pyshimmer|PyYAML"
+python src/python/run_openmatb.py --pilot1 --eda-port COM5
 ```
 
-Required packages:
-- `pylsl` - Lab Streaming Layer Python bindings
-- `pyxdf` - XDF file parsing for QC
-- `pyshimmer` - Shimmer GSR3 communication
-- `PyYAML` - Configuration files
+The runner will automatically:
+1. Start the Shimmer EDA streamer and verify EDA battery (fails if < 25%)
+2. Start the Polar H10 streamer and verify HR battery (fails if < 20%)
+3. Prompt to confirm EEG amplifier battery
+4. Check all LSL streams are live and streaming data
+5. Start the Python LSL recorder
+6. Ask to confirm participant/session/sequence before first scenario
+7. Stop all streamers and recorder when the session ends
 
-### Participant Assignment
+To abort: press **Ctrl+C** — all subprocesses will be cleaned up automatically.
 
-Before first session, add participant to assignments:
+### Optional: record XDF via LabRecorder without using the GUI
+
+This uses LabRecorder's Remote Control Socket (RCS) to start/stop recording.
+
+1. Launch LabRecorder (RCS enabled):
+    - Install location (local): `C:\LabRecorder`
+    - Ensure RCS is enabled in LabRecorder config: `RCSEnabled=1`, `RCSPort=22345`
+2. Run the session with integrated LabRecorder control:
+
+```powershell
+python src/python/run_openmatb.py --pilot1 --labrecorder-rcs --no-python-recorder --eda-port COM5 --labrecorder-required-stream "OpenMATB::Markers"
+```
+
+The runner will:
+- Send `update/select all/filename/start` to LabRecorder RCS before the playlist
+- Auto-compute the expected `.xdf` path under `C:\data\adaptive_matb\physiology\sub-...\ses-...\...`
+- Send `stop` to LabRecorder RCS after the playlist
+
+Fallback (manual control):
+
+```powershell
+python scripts/control_labrecorder_rcs.py start-bids --participant P001 --session S001 --print-expected-path
+python src/python/run_openmatb.py --pilot1 --no-python-recorder --xdf-path <PATH_PRINTED_ABOVE> --eda-port COM5
+python scripts/control_labrecorder_rcs.py stop
+```
+
+---
+
+## Calibration-Only (self-testing)
+
+```powershell
+python src/python/run_openmatb.py --pilot1 --calibration-only --eda-port COM5
+```
+
+---
+
+## Output Files
+
+```
+C:\data\adaptive_matb\
+├── openmatb\P001\S001\
+│   ├── session.csv                       # OpenMATB event log
+│   ├── session.manifest.json             # Per-scenario metadata
+│   ├── run_manifest_*.json               # Run-level manifest
+│   └── run_manifest_*.qc_alignment.json  # Marker-alignment QC report
+└── physiology\P001\S001\
+    └── lsl_recording_*.jsonl             # Python LSL recorder output
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| EDA streamer fails to start | Check COM port in Device Manager; confirm Shimmer is paired and powered |
+| Polar HR timeout | Ensure chest strap is on and moist; runner will scan automatically |
+| EEG stream not found | Check eego software is streaming; expect 2 streams for dual-amp setup |
+| Shimmer battery blocked (< 25%) | Charge Shimmer before session |
+| Wrong participant loaded | Answer `n` at the confirmation prompt; rerun with `--participant P00X` |
+
+### Add a new participant
 
 ```powershell
 python scripts/generate_participant_assignments.py \
@@ -30,197 +120,4 @@ python scripts/generate_participant_assignments.py \
     --sequences SEQ1 SEQ2 SEQ3
 ```
 
-Or manually edit `config/participant_assignments.yaml`.
-
----
-
-## Equipment Setup
-
-### 1. EEG Setup
-
-- [ ] Fit EEG cap on participant
-- [ ] Check impedances (target: < 30 kΩ)
-- [ ] Verify EEG amplifier streaming to LSL
-- [ ] Confirm LSL stream visible in LabRecorder (name: )
-
-### 2. EDA Setup
-
-- [ ] Attach Shimmer GSR3 electrodes to participant
-- [ ] Power on Shimmer device
-- [ ] Pair via Bluetooth (note COM port, e.g., COM5)
-
-**Option A: Integrated EDA (recommended)**
-
-Use `--with-eda` to let the runner manage the EDA streamer:
-```powershell
-python src/python/run_openmatb.py --pilot1 --with-eda --eda-port COM5
-```
-The runner will:
-- Start the Shimmer EDA→LSL streamer
-- Wait for the stream to appear (health check)
-- Stop the streamer when the session ends
-
-**Option B: Manual EDA (if integration fails)**
-
-Start EDA streamer in a separate terminal:
-```powershell
-python scripts/stream_shimmer_eda.py --port COM5
-```
-
-- [ ] Verify stream in LabRecorder (name: `ShimmerEDA`, type: `EDA`)
-
-### 3. LabRecorder Setup
-
-- [ ] Open LabRecorder
-- [ ] Refresh streams and verify all present:
-  - [ ] EEG stream
-  - [ ] `ShimmerEDA` (type: EDA)
-  - [ ] `OpenMATB` (type: Markers) - will appear when OpenMATB starts
-- [ ] Set output directory: `C:\data\adaptive_matb\physiology\`
-- [ ] Set filename template: `P%p%_%b.xdf` or similar
-
----
-
-## Session Execution
-
-### 1. Start LabRecorder
-
-- [ ] Click "Start" in LabRecorder **before** running OpenMATB
-- [ ] Note start time and filename
-
-### 2. Run OpenMATB Session
-
-```powershell
-cd C:\phd_projects\adaptive_matb_2026
-.\.venv\Scripts\Activate.ps1
-
-# Full pilot session with integrated EDA (recommended)
-python src/python/run_openmatb.py --pilot1 --with-eda --eda-port COM5
-
-# Or without EDA (if using manual EDA streamer)
-python src/python/run_openmatb.py --pilot1
-
-# Or calibration-only for self-testing
-python src/python/run_openmatb.py --pilot1 --calibration-only --with-eda --eda-port COM5
-```
-
-Interactive prompts will ask for:
-- Participant number (e.g., `1` → `P001`)
-- Sequence is auto-assigned from `participant_assignments.yaml`
-- Session is auto-incremented
-
-### 3. During Session
-
-- [ ] Monitor participant for issues
-- [ ] **Do not pause** during calibration blocks (B1-B3)
-- [ ] Communications task: after selecting the radio and tuning the frequency, participant must press **ENTER** to validate/submit (tuning alone is scored as MISS)
-- [ ] If must abort, use Ctrl+C and restart
-
-### 4. Post-Session
-
-- [ ] Stop LabRecorder recording
-- [ ] Note final XDF filename
-- [ ] When prompted by runner, enter XDF path
-
----
-
-## QC Verification
-
-### Automatic QC (via runner)
-
-When using `--pilot1`, the runner automatically:
-1. Prompts for XDF path after playlist completes
-2. Runs XDF↔CSV marker alignment QC
-3. Reports pass/fail with metrics
-
-### Manual QC (if needed)
-
-```powershell
-python src/python/verification/verify_xdf_alignment.py \
-    --run-manifest C:\data\adaptive_matb\openmatb\P001\S001\run_manifest_*.json
-```
-
-### QC Pass Criteria
-
-| Metric | Pass Threshold |
-|--------|----------------|
-| Median absolute error | ≤ 20 ms |
-| 95th percentile error | ≤ 50 ms |
-| Drift | ≤ 5 ms/min |
-| Discontinuities | None |
-
----
-
-## Troubleshooting
-
-### EDA Stream Not Appearing
-
-```powershell
-# Test pyshimmer connection
-python scripts/stream_shimmer_eda.py --port COM5 --test
-```
-
-Common issues:
-- Wrong COM port (check Device Manager)
-- Shimmer not paired
-- Battery low
-
-### OpenMATB Markers Not in XDF
-
-- Ensure LabRecorder started **before** OpenMATB
-- Check `labstreaminglayer` plugin enabled in OpenMATB config
-- Verify "OpenMATB" stream appears in LabRecorder
-
-### QC Fails with High Drift
-
-- Check LabRecorder was running throughout entire session
-- Verify no stream dropouts
-- May need to repeat session
-
----
-
-## Output Files
-
-After a successful session:
-
-```
-C:\data\adaptive_matb\
-├── openmatb\
-│   └── P001\
-│       └── S001\
-│           ├── session.csv                    # OpenMATB event log
-│           ├── session.manifest.json          # Per-scenario metadata
-│           ├── run_manifest_*.json            # Run-level manifest
-│           └── run_manifest_*.qc_alignment.json  # QC report
-└── physiology\
-    └── P001_S001.xdf                          # LabRecorder output
-```
-
----
-
-## Quick Reference
-
-### Start EDA Streaming (manual mode)
-```powershell
-python scripts/stream_shimmer_eda.py --port COM5
-```
-
-### Run Pilot Session (with integrated EDA)
-```powershell
-python src/python/run_openmatb.py --pilot1 --with-eda --eda-port COM5
-```
-
-### Run Pilot Session (manual EDA)
-```powershell
-python src/python/run_openmatb.py --pilot1
-```
-
-### Run QC Only
-```powershell
-python src/python/verification/verify_xdf_alignment.py --run-manifest <path>
-```
-
-### Check Assignments
-```powershell
-cat config/participant_assignments.yaml
-```
+Or edit `config/participant_assignments.yaml` directly.

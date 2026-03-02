@@ -2,6 +2,38 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "OpenMATB: Staircase calibration (DEBUG — no preflight, no prompts)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--participant", "DEV",
+        "--session", "S001",
+        "--seq-id", "SEQ1",
+        "--only-scenario", "adaptation_skeleton.txt",
+        "--adaptation",
+        "--adaptation-seed", "42",
+        "--skip-stream-check",
+        "--verification"
+      ]
+    },
+    {
+      "name": "OpenMATB: Staircase calibration (adaptation_skeleton, attended)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--pilot1",
+        "--only-scenario", "adaptation_skeleton.txt",
+        "--adaptation",
+        "--adaptation-seed", "42"
+      ]
+    },
+    {
       "name": "OpenMATB: Pilot1 (attended, with preflight)",
       "type": "debugpy",
       "request": "launch",
