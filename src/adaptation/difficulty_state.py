@@ -52,10 +52,9 @@ _TRACK_FORCE_HARD: float = 1.0        # d=1: compensation limit — a perfect us
 #   infinite-capacity pumps 2+4 : 600+600  = 1200 ml/min
 #   finite-capacity pumps  5+6  : 600+600  = 1200 ml/min
 #   maximum_single_leakage      = (1200+1200)/2 = 1200 ml/min
-# _RESMAN_MAX_LEAK_PER_MIN is set to 1140 so that d=1 → int(1140)-200 = 940 ml/min,
-# matching the HIGH scenario drain (d=0.95 original scale).  The scale is linear:
-# d=0 → 0, d=0.55 → 527, d=0.95 → 883, d=1.0 → 940 ml/min.
-_RESMAN_MAX_LEAK_PER_MIN: int = 1140
+# _RESMAN_MAX_LEAK_PER_MIN matches generate_pilot_scenarios.py: maximum_single_leakage=1200.
+# Key values (with two-step offset): d=0.20→240, d=0.55→560, d=0.95→940 ml/min.
+_RESMAN_MAX_LEAK_PER_MIN: int = 1200
 _RESMAN_OFFSET_D_THRESHOLD: float = 0.50   # subtract 100 ml/min above this d
 _RESMAN_OFFSET_MODERATE: int = -100
 _RESMAN_OFFSET_HIGH_THRESHOLD: float = 0.90  # subtract a further 100 above this d
