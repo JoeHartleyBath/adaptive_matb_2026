@@ -16,7 +16,7 @@ assert epochs.shape == (33, 128, 1000), f"unexpected shape {epochs.shape}"
 block = slice_block(data, 0, 5000, cfg)
 print(f"slice_block: warmup trim -> {block.shape}")
 
-from training import EEGNet, HIGH_CLASS, LABEL_MAP, N_CLASSES
+from ml import EEGNet, HIGH_CLASS, LABEL_MAP, N_CLASSES
 import torch
 
 model = EEGNet(n_channels=128, n_times=1000)

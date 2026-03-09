@@ -56,7 +56,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from eeg import EegPreprocessingConfig, EegPreprocessor, WindowConfig, extract_windows, slice_block  # noqa: E402
-from training.dataset import LABEL_MAP  # noqa: E402
+from ml.dataset import LABEL_MAP  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Marker patterns

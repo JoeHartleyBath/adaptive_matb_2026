@@ -66,8 +66,8 @@ from eeg import (  # noqa: E402
     extract_windows,
     slice_block,
 )
-from training import EEGNet, HIGH_CLASS  # noqa: E402
-from training.dataset import LABEL_MAP, N_CLASSES  # noqa: E402
+from ml import EEGNet, HIGH_CLASS  # noqa: E402
+from ml.dataset import LABEL_MAP, N_CLASSES  # noqa: E402
 
 # Reuse the same path helpers and XDF utilities from the dataset builder
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))

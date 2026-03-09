@@ -42,7 +42,7 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 import yaml  # noqa: E402
 
-from training import EEGNet, MwlDataset  # noqa: E402
+from ml import EEGNet, MwlDataset  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

@@ -29,8 +29,8 @@ sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
 import torch  # noqa: E402
 
-from training import EEGNet, HIGH_CLASS, LABEL_MAP, N_CLASSES  # noqa: E402
-from training.dataset import MwlDataset  # noqa: E402
+from ml import EEGNet, HIGH_CLASS, LABEL_MAP, N_CLASSES  # noqa: E402
+from ml.dataset import MwlDataset  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants matching the real pipeline
