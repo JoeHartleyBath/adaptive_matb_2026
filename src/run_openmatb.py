@@ -1897,7 +1897,7 @@ def _run_single_scenario(
 
     if getattr(args, "summarise_performance", False):
         try:
-            summariser = (repo_root / "src" / "summarise_openmatb_performance.py").resolve()
+            summariser = (repo_root / "src" / "performance" / "summarise_openmatb_performance.py").resolve()
             subprocess.run(
                 [sys.executable, str(summariser), "--manifest", str(manifest_path)],
                 check=False,
@@ -2022,7 +2022,7 @@ def _run_single_scenario(
 def _ensure_performance_summaries(repo_root: Path, scenario_manifests: list[Path]) -> None:
     """Best-effort: ensure *.performance_summary.json exists next to each scenario manifest."""
 
-    summariser = (repo_root / "src" / "summarise_openmatb_performance.py").resolve()
+    summariser = (repo_root / "src" / "performance" / "summarise_openmatb_performance.py").resolve()
     if not summariser.exists():
         return
 

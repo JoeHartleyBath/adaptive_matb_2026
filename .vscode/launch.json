@@ -174,7 +174,7 @@
       "name": "Export: Pilot performance table CSV (from run manifest)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/export_pilot_performance_table.py",
+      "program": "${workspaceFolder}/src/performance/export_pilot_performance_table.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -265,7 +265,7 @@
       "name": "Summarise: Pilot cohort status (external output root)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/summarise_pilot_cohort_status.py",
+      "program": "${workspaceFolder}/src/performance/summarise_pilot_cohort_status.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
