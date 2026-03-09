@@ -355,8 +355,9 @@ class TestConvergence(unittest.TestCase):
         self.assertEqual(ctrl._schedule_idx, 2, "Did not reach final step")
         self.assertAlmostEqual(ctrl.step_up, 0.05)
 
-        # Now feed on-target score for exactly stable_ticks ticks (each separated by cooldown)
-        t += ctrl.cooldown_sec + 1
+        # Advance time by window_sec so all extreme-score samples from _advance_to_final_step
+        # fall outside the rolling window before we start counting stable ticks.
+        t += ctrl.window_sec + ctrl.cooldown_sec + 1
         for i in range(3):
             # Fill window with on-target scores
             for _ in range(5):
@@ -373,8 +374,8 @@ class TestConvergence(unittest.TestCase):
         state = DifficultyState(d_init=0.5)
         t = self._advance_to_final_step(ctrl, state)
 
-        # Accumulate 2 stable ticks (not yet converged)
-        t += ctrl.cooldown_sec + 1
+        # Flush stale extreme-score samples from the window before counting stable ticks.
+        t += ctrl.window_sec + ctrl.cooldown_sec + 1
         for _ in range(2):
             for _ in range(5):
                 ctrl.push_performance(t, 0.70)
