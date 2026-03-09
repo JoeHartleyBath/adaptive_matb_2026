@@ -20,14 +20,13 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-# Post-migration layout: source packages live directly under src/
-packages = ["src/adaptation", "src/eeg", "src/ml", "src/performance"]
+# Packages live directly under src/ (flattened from src/python/ in refactor)
+packages = ["src/adaptation", "src/eeg", "src/training", "src/verification"]
 
 [tool.pyright]
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-# Updated to src/ after flattening src/python/ in refactor/repo-structure
 extraPaths = ["src"]
 
 [tool.pytest.ini_options]

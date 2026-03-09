@@ -2204,28 +2204,28 @@ def main() -> int:
         default=r"sub-%p\\ses-%s\\physio\\sub-%p_ses-%s_task-%b_acq-%a_%m.xdf",
         help=(
             "BIDS-like path template relative to --labrecorder-root. "
-            "Supports placeholders %p %s %b %a %m (and optionally %r/%n if used with --labrecorder-run)."
+            "Supports placeholders %%p %%s %%b %%a %%m (and optionally %%r/%%n if used with --labrecorder-run)."
         ),
     )
     parser.add_argument(
         "--labrecorder-task",
         default="matb",
-        help="Value for %b (task/block) in LabRecorder template (default: matb)",
+        help="Value for %%b (task/block) in LabRecorder template (default: matb)",
     )
     parser.add_argument(
         "--labrecorder-acq",
         default="pilot1",
-        help="Value for %a (acquisition) in LabRecorder template (default: pilot1)",
+        help="Value for %%a (acquisition) in LabRecorder template (default: pilot1)",
     )
     parser.add_argument(
         "--labrecorder-modality",
         default="physio",
-        help="Value for %m (modality) in LabRecorder template (default: physio)",
+        help="Value for %%m (modality) in LabRecorder template (default: physio)",
     )
     parser.add_argument(
         "--labrecorder-run",
         default=None,
-        help="Optional run index for %r/%n in LabRecorder template.",
+        help="Optional run index for %%r/%%n in LabRecorder template.",
     )
 
     parser.add_argument(
