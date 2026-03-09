@@ -109,7 +109,7 @@
       "name": "Verify: Static scenarios (repo gate; must PASS)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/verification/verify_pilot_scenarios.py",
+      "program": "${workspaceFolder}/tests/verification/verify_pilot_scenarios.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": []
@@ -118,7 +118,7 @@
       "name": "Verify: Pilot playlist (run + verify; requires participant in assignments)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/verification/verify_pilot.py",
+      "program": "${workspaceFolder}/tests/verification/verify_pilot.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -136,7 +136,7 @@
       "name": "Verify: Pilot outputs only (skip run; verify existing session)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/verification/verify_pilot.py",
+      "program": "${workspaceFolder}/tests/verification/verify_pilot.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -153,7 +153,7 @@
       "name": "QC: XDF alignment (from run manifest; edit path)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/verification/verify_xdf_alignment.py",
+      "program": "${workspaceFolder}/tests/verification/verify_xdf_alignment.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -165,7 +165,7 @@
       "name": "Verify: Preprocessing checks",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/scripts/verify_preprocessing.py",
+      "program": "${workspaceFolder}/tests/verify_preprocessing.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": []
@@ -230,7 +230,7 @@
       "name": "PSELF: Verify fixed-block session (skip run; check existing outputs)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/verification/verify_pilot.py",
+      "program": "${workspaceFolder}/tests/verification/verify_pilot.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -242,7 +242,7 @@
       "name": "PSELF: Verify staircase session (check latest CSV)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/scripts/verify_adaptation_session.py",
+      "program": "${workspaceFolder}/tests/verify_adaptation_session.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -253,7 +253,7 @@
       "name": "PSELF: XDF alignment QC (from run manifest; edit path after run)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/verification/verify_xdf_alignment.py",
+      "program": "${workspaceFolder}/tests/verification/verify_xdf_alignment.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [

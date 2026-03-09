@@ -21,7 +21,8 @@ from threading import Thread
 # Fix import path to find the src/ modules
 import os
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# parents[2] = repo root when file lives at tests/verification/
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from eeg.eeg_inlet import EegInlet
 from eeg.eeg_stream_config import EegStreamConfig

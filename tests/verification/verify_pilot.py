@@ -37,11 +37,15 @@ from typing import Iterable, Optional
 
 
 # Ensure we can import runner/util modules when executed from repo root.
-# File is located at <repo>/src/verification/verify_pilot.py.
+# File is located at <repo>/tests/verification/verify_pilot.py.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_PYTHON = REPO_ROOT / "src"
 if str(SRC_PYTHON) not in sys.path:
     sys.path.insert(0, str(SRC_PYTHON))
+# Also add tests/ so 'from verification import ...' resolves to tests/verification/
+_TESTS_DIR = REPO_ROOT / "tests"
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
 
 
 # We reuse verifier utilities (parsers + constants) but do NOT reuse unattended-only assumptions.
@@ -61,7 +65,7 @@ def _repo_root() -> Path:
 def _run_calibration_verifier(python: str) -> int:
     """Run the repo-level static checks (scenarios/assets/contracts)."""
     proc = subprocess.run(
-        [python, str(_repo_root() / "src" / "verification" / "verify_pilot_scenarios.py")]
+        [python, str(_repo_root() / "tests" / "verification" / "verify_pilot_scenarios.py")]
     )
     return int(proc.returncode)
 
