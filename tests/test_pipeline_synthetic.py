@@ -256,7 +256,7 @@ def test_calibration(pretrained_path: Path, model_dir: Path, rng: np.random.Gene
               f"AUC={metrics['auc_high_vs_rest']:.3f}  threshold={thresh:.3f}")
 
     # Save a minimal comparison table to results/ (mirrors calibrate_participant.py output)
-    results_dir = _REPO_ROOT / "results" / "_synthetic_test"
+    results_dir = _REPO_ROOT / "results" / "synthetic_test"
     results_dir.mkdir(parents=True, exist_ok=True)
     import csv
     with open(results_dir / "adaptation_comparison.csv", "w", newline="") as f:
@@ -264,7 +264,7 @@ def test_calibration(pretrained_path: Path, model_dir: Path, rng: np.random.Gene
         w.writerow(["mode", "balanced_accuracy", "auc_high_vs_rest", "threshold_youden"])
         w.writerows(results)
 
-    print(f"  OK  comparison table → results/_synthetic_test/adaptation_comparison.csv")
+    print(f"  OK  comparison table → results/synthetic_test/adaptation_comparison.csv")
 
 
 # ---------------------------------------------------------------------------
