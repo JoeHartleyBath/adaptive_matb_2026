@@ -165,7 +165,7 @@
       "name": "Verify: Preprocessing checks",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/tests/verify_preprocessing.py",
+      "program": "${workspaceFolder}/tests/verification/verify_preprocessing.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": []
@@ -242,7 +242,7 @@
       "name": "PSELF: Verify staircase session (check latest CSV)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/tests/verify_adaptation_session.py",
+      "program": "${workspaceFolder}/tests/verification/verify_adaptation_session.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
