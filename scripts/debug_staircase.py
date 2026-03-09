@@ -67,10 +67,15 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--target", type=float, default=0.70, help="Staircase target score.")
     p.add_argument("--tolerance", type=float, default=0.05, help="Dead-band tolerance.")
     p.add_argument("--window", type=float, default=45.0, help="Evaluation window (s).")
-    p.add_argument("--step", type=float, default=0.05, help="Step size (fraction of [0,1]).")
+    p.add_argument(
+        "--step-schedule", default="0.2,0.1,0.05",
+        help="Comma-separated graduated step sizes, coarse first (e.g. 0.2,0.1,0.05).",
+    )
+    p.add_argument(
+        "--stable-ticks", type=int, default=3,
+        help="Consecutive no-step ticks at finest step required for convergence.",
+    )
     p.add_argument("--cooldown", type=float, default=20.0, help="Cooldown between steps (s).")
-    p.add_argument("--n-reversals-halve", type=int, default=4,
-                   help="Reversals before step halves (0=disabled).")
     p.add_argument("--d-init", type=float, default=0.50, help="Starting difficulty.")
     p.add_argument("--d-min", type=float, default=0.0, help="Lower difficulty bound.")
     p.add_argument("--d-max", type=float, default=1.0, help="Upper difficulty bound.")
@@ -139,6 +144,7 @@ class _StepRecord:
     reversal_count: int
     step_up: float
     step_down: float
+    schedule_idx: int
 
 
 def run_simulation(args: argparse.Namespace) -> Tuple[List[Tuple[float, float]], List[_StepRecord]]:
@@ -149,15 +155,15 @@ def run_simulation(args: argparse.Namespace) -> Tuple[List[Tuple[float, float]],
         d_max=args.d_max,
         seed=args.seed,
     )
+    step_schedule = tuple(float(x) for x in args.step_schedule.split(",") if x.strip())
     ctrl = StaircaseController(
         target_score=args.target,
         tolerance=args.tolerance,
         window_sec=args.window,
         min_samples=3,
-        step_up=args.step,
-        step_down=args.step,
+        step_schedule=step_schedule,
         cooldown_sec=args.cooldown,
-        n_reversals_to_halve=args.n_reversals_halve,
+        stable_ticks_required=args.stable_ticks,
     )
     score_fn = _make_score_fn(args)
 
@@ -170,6 +176,10 @@ def run_simulation(args: argparse.Namespace) -> Tuple[List[Tuple[float, float]],
         score = score_fn(t)
         ctrl.push_performance(t, score)
         delta = ctrl.tick(t)
+        if ctrl.converged:
+            print(f"\n>>> CONVERGED at t={t:.1f}s  d={state.d:.3f}  (block would end here)")            
+            trajectory.append((t, state.d))
+            break
         if delta is not None:
             d_before = state.d
             state.update(state.d + delta)
@@ -183,6 +193,7 @@ def run_simulation(args: argparse.Namespace) -> Tuple[List[Tuple[float, float]],
                     reversal_count=ctrl.reversal_count,
                     step_up=ctrl.step_up,
                     step_down=ctrl.step_down,
+                    schedule_idx=ctrl._schedule_idx,
                 )
             )
         trajectory.append((t, state.d))
@@ -255,7 +266,8 @@ def print_summary(
     n_up = sum(1 for s in steps if s.delta > 0)
     n_down = sum(1 for s in steps if s.delta < 0)
     reversals = steps[-1].reversal_count if steps else 0
-    step_final = steps[-1].step_up if steps else args.step
+    step_final = steps[-1].step_up if steps else float(args.step_schedule.split(",")[0])
+    schedule_str = args.step_schedule
 
     print()
     print(_colour("━" * 60, _BOLD))
@@ -267,7 +279,8 @@ def print_summary(
         ("Duration",              f"{args.duration:.0f}s"),
         ("Window",                f"{args.window:.0f}s"),
         ("Target score",          f"{args.target:.2f}  ±{args.tolerance:.2f}"),
-        ("Initial step",          f"{args.step:.4f}"),
+        ("Step schedule",         schedule_str),
+        ("Stable ticks req.",     str(args.stable_ticks)),
         ("d_init → d_final",      f"{args.d_init:.3f} → {d_final:.3f}"),
         ("d min / max seen",      f"{min(d_values):.3f} / {max(d_values):.3f}"),
         ("Steps total",           f"{len(steps)}  (↑{n_up}  ↓{n_down})"),
@@ -281,6 +294,8 @@ def print_summary(
     print()
     print(_colour("  CHECKS", _BOLD))
     checks = []
+    initial_step = float(args.step_schedule.split(",")[0].strip())
+    final_schedule_step = float(args.step_schedule.split(",")[-1].strip())
 
     # Bounds
     bound_ok = all(args.d_min <= d <= args.d_max for _, d in trajectory)
@@ -297,7 +312,7 @@ def print_summary(
         checks.append(("Fewer than 10 steps (near-target noise)",   len(steps) < 10))
     elif args.score == "alternating":
         checks.append(("At least 2 reversals detected",             reversals >= 2))
-        checks.append(("Step size reduced from initial",            step_final < args.step))
+        checks.append(("Step size reduced from initial",            step_final < initial_step))
 
     for label, ok in checks:
         mark = _colour("  ✓", _GREEN) if ok else _colour("  ✗", _RED)
@@ -409,7 +424,7 @@ def main() -> None:
     print(_colour("━" * 60, _BOLD))
     print(f"  score={args.score}  seed={args.seed}  duration={args.duration:.0f}s")
     print(f"  target={args.target}±{args.tolerance}  window={args.window}s")
-    print(f"  step={args.step}  cooldown={args.cooldown}s  d_init={args.d_init}")
+    print(f"  step_schedule={args.step_schedule}  cooldown={args.cooldown}s  d_init={args.d_init}")
     print()
 
     trajectory, steps = run_simulation(args)

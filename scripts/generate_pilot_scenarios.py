@@ -1,3 +1,15 @@
+"""generate_pilot_scenarios.py
+
+⚠  DO NOT RE-RUN without explicit intent.
+
+The committed scenario files under scenarios/ are the locked source of truth
+for Pilot 1. This generator uses unseeded randomness — regenerating would
+silently change event schedules and invalidate any prior runs.
+
+Only re-run if deliberately regenerating scenarios (e.g. after a protocol
+change), and immediately re-run the static verifier afterwards:
+    python src/python/verification/verify_pilot_scenarios.py
+"""
 import sys
 import os
 from pathlib import Path

@@ -101,16 +101,18 @@ HH:MM:SS;plugin;command[;param]
 
 ### 5. Existing Contracts
 
-**Input contract:** [docs/contracts/mwl_eeg_input_contract.md](../contracts/mwl_eeg_input_contract.md)
-- Defines windowing (5s window, 0.25s step, 250 Hz effective rate)
-- Defines preprocessing (causal bandpass 0.5–40 Hz, CAR, notch)
-- Defines representation class: `EEGLogBandpowerFeatureVectorV0`
-- Defines normalisation: per-participant baseline → z-score
+**Input contract:** `docs/contracts/mwl_eeg_input_contract.md` — **not yet written; proposals only**
+- Proposed windowing: 5s window, 0.25s step, 250 Hz effective rate
+- Proposed preprocessing: causal bandpass 0.5–40 Hz, CAR, notch
+- Proposed representation: `EEGLogBandpowerFeatureVectorV0`
+- Proposed normalisation: per-participant baseline → z-score
+- All values are open until Pilot 1 EEG data quality is assessed
 
-**Label contract:** [docs/contracts/eeg_mwl_label_contract_v0.md](../contracts/eeg_mwl_label_contract_v0.md)
-- Defines MWL semantic (task-related demand/effort)
-- Defines admissible label sources (task-demand, subjective)
-- Defines window–label alignment (window centre timestamp)
+**Label contract:** `docs/contracts/eeg_mwl_label_contract_v0.md` — **not yet written; proposals only**
+- Proposed MWL semantic: task-related demand/effort
+- Proposed label sources: task-demand (block condition), subjective (NASA-TLX)
+- Proposed window–label alignment: window centre timestamp
+- All values are open until Pilot 1
 
 **Adaptation design:** [docs/openmatb/ADAPTATION_DESIGN.md](../openmatb/ADAPTATION_DESIGN.md)
 - Proposes two-process model (MWL estimator external, policy inside MATB loop)

@@ -10,9 +10,9 @@ Scope:
 
 - Covers **scenario structure + marker semantics** for both training and calibration blocks described in `docs/pilot/PILOT_STUDY_SPEC_V0.md`.
 - Specifies the minimum inputs required to run the scenario in a way that is **one-shot reproducible** and **log-bracketed**.
-- Defines the scenario-side requirements only (not EEG ingestion). EEG alignment and labeling are governed by:
-  - `docs/contracts/mwl_eeg_input_contract.md`
-  - `docs/contracts/eeg_mwl_label_contract_v0.md`
+- Defines the scenario-side requirements only (not EEG ingestion). EEG alignment and labeling will be governed by contracts to be written post-Pilot 1:
+  - `docs/contracts/mwl_eeg_input_contract.md` (not yet written)
+  - `docs/contracts/eeg_mwl_label_contract_v0.md` (not yet written)
 
 Non-goals (v0):
 

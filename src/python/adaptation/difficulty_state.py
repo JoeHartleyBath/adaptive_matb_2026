@@ -25,13 +25,28 @@ from typing import Optional
 # Constant parameter bounds
 # ---------------------------------------------------------------------------
 # Tracking – matched to add_scenario_phase() in generate_pilot_scenarios.py
-# Hard endpoints are 30% harder than the pilot-scenario HIGH level (d=0.95):
-#   update_ms: 10/1.3 ≈ 7.7 ms  (HIGH d=0.95 gives ~9.8 ms)
-#   joystick:  1.0/1.3 ≈ 0.77   (HIGH d=0.95 gives ~0.88)
-_TRACK_UPDATE_EASY_MS: float = 50.0   # d=0: slow cursor drift (easier)
-_TRACK_UPDATE_HARD_MS: float = 5.9    # d=1: fast cursor drift (~60% harder than original d=1 of 10 ms)
+#
+# Hard endpoints are set to the theoretical performance limits of the task:
+#
+#   _TRACK_FORCE_HARD = 1.0
+#     The joystick physics applies `x_input * joystickforce` pixels per step as
+#     correction.  Pyglet normalises physical axes to ±1.0, so max correction
+#     per step = 1.0 * joystickforce.  Peak sinusoidal y-drift per step is
+#     xgain * 0.006 ≈ 160 * 0.006 = 0.96 px/step (for a ~400 px wide reticle).
+#     At joystickforce=1.0, a perfect user can just barely cancel peak drift.
+#     Values below 1.0 make perfect compensation physically impossible and
+#     were removed from the previous 0.59 hard endpoint (a 30%-more-extreme
+#     extrapolation beyond the calibrated pilot HIGH).
+#
+#   _TRACK_UPDATE_HARD_MS = 10.0
+#     Reverts to the original OpenMATB design value.  The previous 5.9 ms was
+#     an untested 30% extrapolation beyond the calibrated pilot HIGH.
+#     At 10 ms the cursor updates 100 ×/s; both drift and correction scale
+#     equally with step rate so this does not affect the difficulty balance.
+_TRACK_UPDATE_EASY_MS: float = 50.0   # d=0: slow cursor update rate (easier)
+_TRACK_UPDATE_HARD_MS: float = 10.0   # d=1: fast cursor update rate (original design value)
 _TRACK_FORCE_EASY: float = 3.0        # d=0: strong joystick correction (easier)
-_TRACK_FORCE_HARD: float = 0.59       # d=1: weak joystick correction (~60% harder than original d=1 of 1.0)
+_TRACK_FORCE_HARD: float = 1.0        # d=1: compensation limit — a perfect user can just cancel peak drift
 
 # ResMan continuous drain – pump network totals from vendor resman.py defaults:
 #   infinite-capacity pumps 2+4 : 600+600  = 1200 ml/min

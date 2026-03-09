@@ -85,7 +85,7 @@
       "program": "${workspaceFolder}/src/python/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
-      "args": ["--pilot1", "--with-eda", "--eda-port", "COM5"]
+      "args": ["--pilot1", "--eda-port", "COM5"]
     },
     {
       "name": "OpenMATB: Pilot1 (attended, calibration-only, with EDA; edit COM port)",
@@ -94,7 +94,7 @@
       "program": "${workspaceFolder}/src/python/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
-      "args": ["--pilot1", "--calibration-only", "--with-eda", "--eda-port", "COM5"]
+      "args": ["--pilot1", "--calibration-only", "--eda-port", "COM5"]
     },
     {
       "name": "OpenMATB: Preflight checks only",
@@ -184,6 +184,81 @@
         "S001",
         "--output-root",
         "C:/data/adaptive_matb"
+      ]
+    },
+    {
+      // ---------------------------------------------------------------
+      // PSELF — researcher self-pilot configs (press-play for self-runs)
+      // ---------------------------------------------------------------
+      // Note: --session is intentionally omitted — the runner auto-derives
+      // the next session number from config/participant_assignments.yaml.
+      // Update --eda-port if the Shimmer COM port changes.
+      // ---------------------------------------------------------------
+      "name": "PSELF: Fixed-block self-pilot (LOW→MOD→HIGH, full physio)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--pilot1",
+        "--calibration-trend",
+        "--summarise-performance",
+        "--eda-port", "COM5",
+        "--participant", "PSELF",
+        "--seq-id", "SEQ1"
+      ]
+    },
+    {
+      "name": "PSELF: Staircase self-pilot (adaptation_skeleton, full physio)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--pilot1",
+        "--adaptation",
+        "--only-scenario", "adaptation_skeleton.txt",
+        "--adaptation-seed", "42",
+        "--eda-port", "COM5",
+        "--participant", "PSELF",
+        "--seq-id", "SEQ1"
+      ]
+    },
+    {
+      "name": "PSELF: Verify fixed-block session (skip run; check existing outputs)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/verification/verify_pilot.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--participant", "PSELF",
+        "--skip-run"
+      ]
+    },
+    {
+      "name": "PSELF: Verify staircase session (check latest CSV)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/verify_adaptation_session.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--participant", "PSELF"
+      ]
+    },
+    {
+      "name": "PSELF: XDF alignment QC (from run manifest; edit path after run)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/python/verification/verify_xdf_alignment.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--run-manifest",
+        "C:/data/adaptive_matb/openmatb/PSELF/S001/run_manifest_YYYYMMDDTHHMMSS.json"
       ]
     },
     {

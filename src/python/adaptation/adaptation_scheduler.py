@@ -65,7 +65,7 @@ class AdaptationConfig:
     """
 
     # Difficulty
-    d_init: float = 0.9
+    d_init: float = 1.0
     d_min: float = 0.0
     d_max: float = 1.0
     seed: int = 0
@@ -75,10 +75,12 @@ class AdaptationConfig:
     tolerance: float = 0.05
     window_sec: float = 45.0
     min_samples: int = 5
-    step_up: float = 0.05
-    step_down: float = 0.05
+    # Graduated step schedule: coarse → fine, advancing on each direction reversal.
+    # The final entry is the minimum fine step; convergence is declared once
+    # stable_ticks_required consecutive no-step ticks occur at that finest step.
+    step_schedule: tuple = (0.2, 0.1, 0.05)
+    stable_ticks_required: int = 3
     cooldown_sec: float = 20.0
-    n_reversals_to_halve: int = 4
 
     # Actuation flags (set False to freeze individual task parameters)
     actuate_tracking: bool = True
@@ -93,8 +95,10 @@ class AdaptationConfig:
     # minimum prompt-to-prompt spacing.  Use 20 s here to match that with margin.
     min_comms_gap_sec: float = 20.0
 
-    # Maximum expected cursor deviation (pixels) used to normalise the RMSE score
-    # to [0, 1].  Tune to the actual reticle half-width on the target display.
+    # Maximum cursor deviation (pixels) used to normalise the RMSE score to [0, 1].
+    # This is overridden at runtime with the actual track plugin xgain value
+    # (= reticle_container.w * 0.4) so that the score range is display-agnostic.
+    # This value is only used as a fallback if the track plugin is unavailable.
     max_deviation: float = 200.0
 
 
@@ -165,10 +169,9 @@ class AdaptationScheduler(Scheduler):
             tolerance=cfg.tolerance,
             window_sec=cfg.window_sec,
             min_samples=cfg.min_samples,
-            step_up=cfg.step_up,
-            step_down=cfg.step_down,
+            step_schedule=cfg.step_schedule,
             cooldown_sec=cfg.cooldown_sec,
-            n_reversals_to_halve=cfg.n_reversals_to_halve,
+            stable_ticks_required=cfg.stable_ticks_required,
         )
 
         p = self.state.params
@@ -209,6 +212,19 @@ class AdaptationScheduler(Scheduler):
 
         logger.log_performance = _patched_log_performance
 
+        # Read actual reticle half-width from the track plugin geometry.
+        # Track.create_widgets() sets xgain = reticle_container.w * gain_ratio / 2
+        # (gain_ratio = 0.8), making xgain the maximum possible cursor displacement.
+        # Using this as max_deviation means score = 1 - RMSE/xgain spans the full
+        # [0, 1] range on this display, rather than the static 200 px fallback.
+        if "track" in self.plugins and hasattr(self.plugins["track"], "xgain"):
+            self._adapt_cfg.max_deviation = self.plugins["track"].xgain
+            print(
+                f"[ADAPTATION] max_deviation set from track geometry: "
+                f"{self._adapt_cfg.max_deviation:.1f} px",
+                flush=True,
+            )
+
         # Apply d_init parameters to plugins immediately
         self._actuate()
 
@@ -224,7 +240,8 @@ class AdaptationScheduler(Scheduler):
         print(
             f"[ADAPTATION] Initialised at t={t0:.2f}s  "
             f"d={cfg.d_init}  target={cfg.target_score}  "
-            f"window={cfg.window_sec}s  step={cfg.step_up}/{cfg.step_down}",
+            f"window={cfg.window_sec}s  schedule={list(cfg.step_schedule)}  "
+            f"stable_ticks={cfg.stable_ticks_required}",
             flush=True,
         )
 
@@ -237,9 +254,10 @@ class AdaptationScheduler(Scheduler):
                     "target_score": cfg.target_score,
                     "tolerance": cfg.tolerance,
                     "window_sec": cfg.window_sec,
-                    "step_up": cfg.step_up,
-                    "step_down": cfg.step_down,
+                    "step_schedule": list(cfg.step_schedule),
+                    "stable_ticks_required": cfg.stable_ticks_required,
                     "cooldown_sec": cfg.cooldown_sec,
+                    "max_deviation": cfg.max_deviation,
                 },
                 "initial_params": self.state.as_dict(),
             }),
@@ -297,23 +315,48 @@ class AdaptationScheduler(Scheduler):
         )
 
         delta = self.controller.tick(t)
+
+        # Convergence: staircase has stabilised at the finest step.
+        if self.controller.converged:
+            print(
+                f"[ADAPTATION t={t:6.1f}s] CONVERGED  "
+                f"d={self.state.d:.3f}  Ending block.",
+                flush=True,
+            )
+            self._log_adaptation(t, delta=None, score=score)
+            logger.log_manual_entry(
+                json.dumps({"event": "adaptation_converged", "t": round(t, 3), "d": self.state.d}),
+                key="adaptation",
+            )
+            try:
+                import pyglet
+                pyglet.app.exit()
+            except Exception:
+                pass
+            return
+
         if delta is not None:
             d_old = self.state.d
             self.state.update(self.state.d + delta)
             self._actuate()
             self._log_adaptation(t, delta=delta, score=score)
             direction = "UP  " if delta > 0 else "DOWN"
+            step_idx = self.controller._schedule_idx
+            step_val = self.controller.step_up
             print(
                 f"[ADAPTATION t={t:6.1f}s] STEP {direction}  "
                 f"d: {d_old:.3f} -> {self.state.d:.3f}  "
-                f"score={score:.3f}  buf={n_buf}",
+                f"score={score:.3f}  step={step_val:.2f} (schedule[{step_idx}])  buf={n_buf}",
                 flush=True,
             )
         else:
             score_str = f"{score:.3f}" if score is not None else "N/A (window filling)"
+            stable = self.controller._stable_ticks_at_final_step
+            at_final = self.controller._schedule_idx >= len(self.controller._step_schedule) - 1
+            stable_str = f"  stable={stable}/{self.controller.stable_ticks_required}" if at_final else ""
             print(
                 f"[ADAPTATION t={t:6.1f}s] monitoring  "
-                f"d={self.state.d:.3f}  score={score_str}  buf={n_buf}",
+                f"d={self.state.d:.3f}  score={score_str}  buf={n_buf}{stable_str}",
                 flush=True,
             )
 
@@ -357,8 +400,9 @@ class AdaptationScheduler(Scheduler):
             )
             # set_parameter writes directly to the parameters dict without running
             # validation, so floats are accepted here (no need for int conversion).
-            # Keeping joystickforce as a float gives continuous control over the
-            # full difficulty range (3.0 at d=0 → 0.59 at d=1).
+            # joystickforce range: 3.0 (d=0, easy) → 1.0 (d=1, hard).
+            # 1.0 is the theoretical floor: at full joystick deflection (±1.0)
+            # the participant can just barely cancel peak sinusoidal drift.
             self.plugins["track"].set_parameter(
                 "joystickforce", float(p.track_joystick_force)
             )

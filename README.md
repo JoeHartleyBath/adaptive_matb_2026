@@ -1,49 +1,74 @@
 # adaptive_matb_2026
 
-Research repository for the 2026 adaptive MATB study: experiment code, analysis pipelines, and paper-ready outputs.
+Solo PhD research repository for the 2026 adaptive MATB study: experiment code, analysis pipelines, and paper-ready outputs.
 
 ## Repository structure
 
-- `analysis/` — notebooks and analysis reports
-- `archive/` — deprecated/legacy artifacts kept for reference
-- `assets/` — static assets (e.g., images, stimuli metadata)
-- `config/` — configuration files (study/app/analysis)
-- `docs/` — decisions, lab notes, study/paper documentation
-- `results/` — derived outputs (figures, metrics, tables, model cards)
-- `scripts/` — one-off and helper scripts (data munging, utilities)
-- `src/` — source code
-	- `src/matlab/`, `src/python/`, `src/r/`
+- `config/` — participant assignments, path configuration (local `paths.yaml` is gitignored)
+- `docs/` — decisions, lab notes, pilot specs, study/paper documentation
+  - `docs/decisions/` — ADRs, committed design choices, open decisions
+  - `docs/pilot/` — pilot study spec, build plan, session checklist
+  - `docs/contracts/` — scenario and interface contracts
+  - `docs/lab-notes/` — dated exploratory notes (not commitments)
+  - `docs/openmatb/` — OpenMATB integration documentation
+- `scenarios/` — locked OpenMATB scenario files (source of truth for pilot; do not regenerate casually)
+- `instructions/` — participant-facing task instruction screen text files (used by scenarios at runtime)
+- `scripts/` — standalone helper and utility scripts
+- `src/python/` — production source code
+  - `src/python/run_openmatb.py` — main session runner (entrypoint)
+  - `src/python/adaptation/` — online staircase calibration logic
+  - `src/python/eeg/` — real-time EEG preprocessing pipeline
+  - `src/python/verification/` — post-run verification scripts
+  - `src/python/vendor/openmatb/` — OpenMATB git submodule
+- `analysis/` — notebooks and analysis reports (currently unpopulated; used post-Pilot 1)
+- `results/` — derived outputs (figures, metrics, tables; currently unpopulated)
+
+## Running a session
+
+```powershell
+cd C:\adaptive_matb_2026
+.\.venv\Scripts\Activate.ps1
+
+# Fixed-block pilot (LOW → MODERATE → HIGH), full physiology:
+python src/python/run_openmatb.py --pilot1 --calibration-trend --summarise-performance --eda-port COM5 --participant PSELF --seq-id SEQ1
+
+# Staircase pilot:
+python src/python/run_openmatb.py --pilot1 --adaptation --only-scenario adaptation_skeleton.txt --eda-port COM5 --participant PSELF --seq-id SEQ1
+```
+
+VS Code launch configs for both self-pilot variants are in `.vscode/launch.json` (look for `PSELF:` entries).
+
+Full operator procedure: [`docs/pilot/PILOT_SESSION_CHECKLIST.md`](docs/pilot/PILOT_SESSION_CHECKLIST.md)
 
 ## Data boundaries
 
-This repository is intentionally scoped to shareable research code and derived artifacts.
+This repository stores only shareable research code and derived artifacts.
 
-- No raw or identifiable participant data (PII) is stored here.
-- No large datasets are stored here (use external storage and document access separately).
-- No model checkpoints or training snapshots are stored here.
+- No raw or identifiable participant data (PII)
+- No large datasets (use external storage; see [`docs/DATA_MANAGEMENT.md`](docs/DATA_MANAGEMENT.md))
+- No model checkpoints or training snapshots
+- Session outputs go to `C:\data\adaptive_matb\` (external; gitignored by path)
 
 ## Working rules
 
-- Branching: protect `main`; work on short-lived topic branches (e.g., `feat/...`, `fix/...`, `chore/...`).
-- PRs: changes land via pull request with a brief description and review when feasible.
-- Commit rhythm: commit small, coherent units of work; write messages that explain intent and scope.
+Solo PhD trunk-based workflow. Small, focused commits directly to `main` are fine for incremental work. Use a short-lived branch only for substantial changes that could temporarily break things. Full rules: [`docs/REPO_RULES.md`](docs/REPO_RULES.md)
 
 ## Decision logging
 
-- `docs/decisions/design_choices/` contains committed, defensible design choices only.
-- `docs/decisions/open_decisions.md` contains active but unresolved design questions.
-- `docs/lab-notes/` is for exploratory thinking and narrative, not commitments.
+- `docs/decisions/design_choices/` — committed, locked design choices
+- `docs/decisions/open_decisions.md` — active unresolved questions (reviewed after each pilot phase)
+- `docs/decisions/ADR/` — architectural decision records
+- `docs/lab-notes/` — exploratory thinking and narrative (not commitments)
 
 ## Naming conventions
 
-Naming and style conventions are defined in `docs/STYLEGUIDE.md` (canonical source).
+[`docs/STYLEGUIDE.md`](docs/STYLEGUIDE.md) is the canonical source.
 
-## OpenMATB (MATB-II-style) docs
+## OpenMATB documentation
 
-OpenMATB is integrated as a third-party submodule and documented here:
+OpenMATB runs as a git submodule at `src/python/vendor/openmatb/`. Study-specific docs:
 
-- Docs index: [docs/openmatb/index.md](docs/openmatb/index.md)
-- Architecture/session flow: [docs/openmatb/OVERVIEW.md](docs/openmatb/OVERVIEW.md)
-- Setup/run + log paths: [docs/openmatb/SETUP_AND_RUN.md](docs/openmatb/SETUP_AND_RUN.md)
-- Instrumentation + event schema: [docs/openmatb/INSTRUMENTATION_POINTS.md](docs/openmatb/INSTRUMENTATION_POINTS.md)
-- Closed-loop adaptation design: [docs/openmatb/ADAPTATION_DESIGN.md](docs/openmatb/ADAPTATION_DESIGN.md)
+- Index: [`docs/openmatb/index.md`](docs/openmatb/index.md)
+- Setup and run: [`docs/openmatb/SETUP_AND_RUN.md`](docs/openmatb/SETUP_AND_RUN.md)
+- Instrumentation and event schema: [`docs/openmatb/INSTRUMENTATION_POINTS.md`](docs/openmatb/INSTRUMENTATION_POINTS.md)
+- Closed-loop adaptation design: [`docs/openmatb/ADAPTATION_DESIGN.md`](docs/openmatb/ADAPTATION_DESIGN.md)

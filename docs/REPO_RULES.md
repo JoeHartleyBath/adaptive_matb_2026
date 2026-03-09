@@ -28,15 +28,22 @@ Do not create new top-level folders.
 
 Use existing locations:
 
-docs/ documentation, ADRs, lab notes
+docs/         documentation, ADRs, lab notes, pilot specs, contracts
 
-src/ reusable code
+src/          reusable source code
 
-analysis/ notebooks + analysis reports
+scenarios/    locked OpenMATB scenario files (source of truth for Pilot 1)
+              ⚠ Do not regenerate casually — committed files are the authoritative schedule.
+              Only modify if deliberately changing protocol, then re-run the static verifier.
 
-results/ derived, shareable artifacts only
+instructions/ participant-facing task instruction screen text (used by scenarios at runtime)
+              Must stay in English. Do not reference French upstream filenames from pilot scenarios.
 
-scripts/ one-off helpers
+analysis/     notebooks + analysis reports
+
+results/      derived, shareable artifacts only (no raw data, no large binaries)
+
+scripts/      standalone helper and utility scripts (not imported by src/)
 
 Do not write to ignored paths (respect .gitignore).
 

@@ -20,8 +20,8 @@ Non-goals (v0):
 
 Canonical constraints (non-negotiable):
 
-- Input contract: `docs/contracts/mwl_eeg_input_contract.md`
-- Label contract: `docs/contracts/eeg_mwl_label_contract_v0.md`
+- EEG input contract: `docs/contracts/mwl_eeg_input_contract.md` — **not yet written; to be defined post-Pilot 1**
+- Label contract: `docs/contracts/eeg_mwl_label_contract_v0.md` — **not yet written; to be defined post-Pilot 1**
 - Logging/manifest/non-overwrite: treat as frozen; only use as documented.
 - Data boundaries: no raw/identifiable participant data or large artifacts in git; follow `docs/DATA_MANAGEMENT.md`.
 
@@ -67,7 +67,7 @@ LSL integration points:
 
 Verification docs already present:
 
-- Manifest + CSV expectations: `docs/run_logging_verification.md`.
+- Manifest + CSV expectations: `docs/verification/run_logging_verification.md`.
 - Two-run no-overwrite verification example: `docs/two_run_no_overwrite_verification.md`.
 
 ---
@@ -119,10 +119,10 @@ Reproducibility requirements:
 
 ## Interfaces and invariants (what must not change)
 
-### Canonical contracts (interfaces)
+### Canonical contracts (interfaces — to be defined post-Pilot 1)
 
-- EEG windows must match `docs/contracts/mwl_eeg_input_contract.md` (v0): fixed-length, fixed-step windows on a declared effective sampling rate.
-- Label assignment must match `docs/contracts/eeg_mwl_label_contract_v0.md` (v0): window-center assignment; deterministic boundary rule.
+- EEG windows: a fixed-length, fixed-step windowing contract will be defined in `docs/contracts/mwl_eeg_input_contract.md` after Pilot 1 establishes acceptable data quality.
+- Label assignment: a window-label alignment contract (window-centre assignment; deterministic boundary rule) will be defined in `docs/contracts/eeg_mwl_label_contract_v0.md` after Pilot 1.
 
 ### Logging and storage (frozen infrastructure)
 
@@ -341,9 +341,9 @@ Objective:
 
 Files touched:
 
-- `docs/contracts/mwl_eeg_input_contract.md`
-- `docs/contracts/eeg_mwl_label_contract_v0.md`
-- `docs/pilot/PILOT_CONTRACT_RESOLUTIONS_V0.md` (recommended as the single ledger of resolved values)
+- `docs/contracts/mwl_eeg_input_contract.md` (to be created)
+- `docs/contracts/eeg_mwl_label_contract_v0.md` (to be created)
+- `docs/pilot/PILOT_CONTRACT_RESOLUTIONS_V0.md` (recommended as the single ledger of resolved values; to be created)
 
 Success criteria:
 
@@ -414,7 +414,7 @@ Failure modes:
 
 Recommended: maintain a single ledger file `docs/pilot/PILOT_CONTRACT_RESOLUTIONS_V0.md` that lists the resolved values and where they are implemented/recorded.
 
-Input contract (`docs/contracts/mwl_eeg_input_contract.md`) resolution checklist:
+Input contract (`docs/contracts/mwl_eeg_input_contract.md`) — **file not yet written**; parameters to resolve when defining it:
 
 - `TBD_FIXED_WINDOW_S`
 - `TBD_STEP_SIZE_S`
@@ -427,7 +427,7 @@ Input contract (`docs/contracts/mwl_eeg_input_contract.md`) resolution checklist
 - `TBD_BASELINE_REFERENCE_SEGMENTS_V0`
 - `TBD_MIN_VALID_WINDOW_FRACTION`
 
-Label contract (`docs/contracts/eeg_mwl_label_contract_v0.md`) resolution checklist:
+Label contract (`docs/contracts/eeg_mwl_label_contract_v0.md`) — **file not yet written**; parameters to resolve when defining it:
 
 - `TBD_MWL_TARGET_SPACE_V0`
 - `TBD_MWL_TARGET_RANGE_V0`

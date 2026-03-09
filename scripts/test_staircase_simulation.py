@@ -13,10 +13,11 @@ Tests
 -----
 1. DifficultyState – parameter ranges and monotonicity
 2. Staircase monotone – perfect scores drive d upward; d never exceeds bounds
-3. Staircase reversal – step size halves after n reversals
-4. Staircase reproducibility – identical seeds → identical trajectories
-5. Generator rate-response – mean IEI shortens after rate increase
-6. Generator reproducibility – same seed → same event sequence
+3. Staircase schedule – step advances 0.2→0.1→0.05 on reversals; never below final entry
+4. Convergence – converged flag set after stable_ticks_required in-band ticks at finest step
+5. Reproducibility – identical seeds → identical trajectories
+6. Generator rate-response – mean IEI shortens after rate increase
+7. Generator reproducibility – same seed → same event sequence
 """
 
 from __future__ import annotations
@@ -125,10 +126,10 @@ class TestStaircaseMonotone(unittest.TestCase):
             target_score=target,
             tolerance=tolerance,
             window_sec=window_sec,
-            step_up=step,
-            step_down=step,
+            # Single-entry schedule keeps step fixed; no reversal advancement.
+            step_schedule=(step,),
             cooldown_sec=cooldown_sec,
-            n_reversals_to_halve=0,   # disable halving for monotone test
+            stable_ticks_required=9999,   # disable convergence for monotone test
         )
 
         trajectory = [(0.0, state.d)]
@@ -185,7 +186,8 @@ class TestStaircaseMonotone(unittest.TestCase):
             tolerance=0.05,
             window_sec=45.0,
             cooldown_sec=5.0,
-            n_reversals_to_halve=0,
+            step_schedule=(0.05,),
+            stable_ticks_required=9999,
         )
         # Fill window with target score
         for t in range(1, 200):
@@ -198,55 +200,81 @@ class TestStaircaseMonotone(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 3. Staircase reversal and step-size halving
+# 3. Staircase – graduated step schedule
 # ---------------------------------------------------------------------------
 
 class TestStaircaseReversals(unittest.TestCase):
 
-    def test_step_size_halves_after_n_reversals(self):
+    def test_step_advances_through_schedule_on_reversals(self):
+        """Step size must advance from 0.2 → 0.1 → 0.05 with each reversal."""
         ctrl = StaircaseController(
             target_score=0.70,
             tolerance=0.05,
             window_sec=30.0,
-            step_up=0.10,
-            step_down=0.10,
+            step_schedule=(0.20, 0.10, 0.05),
             cooldown_sec=5.0,
-            n_reversals_to_halve=2,
-            min_step=0.005,
+            stable_ticks_required=9999,   # disable convergence
         )
         state = DifficultyState(d_init=0.5)
-        original_step = ctrl.step_up
+
+        # Step size should start at 0.20
+        self.assertAlmostEqual(ctrl.step_up, 0.20)
 
         t = 0.0
         dt = 1.0
-        direction = "up"   # feed alternating high/low blocks
+        direction = "up"
 
-        # simulate long enough to force 4+ reversals
-        while ctrl.reversal_count < 4 and t < 2000:
+        # Drive at least 2 reversals
+        while ctrl.reversal_count < 2 and t < 2000:
             score = 1.0 if direction == "up" else 0.0
             ctrl.push_performance(t, score)
             delta = ctrl.tick(t)
             if delta is not None:
                 state.update(state.d + delta)
-                # flip score direction
                 direction = "down" if delta > 0 else "up"
             t += dt
 
-        self.assertGreaterEqual(ctrl.reversal_count, 4, "Not enough reversals generated")
-        # Step size should have halved at least once (at rev 2 and again at rev 4)
-        self.assertLess(ctrl.step_up, original_step, "Step size was not reduced")
+        self.assertGreaterEqual(ctrl.reversal_count, 2)
+        # After 2 reversals the schedule index should be at position 2 (step=0.05)
+        self.assertAlmostEqual(ctrl.step_up, 0.05)
 
-    def test_step_size_floor(self):
-        """Step size never falls below min_step."""
+    def test_step_after_first_reversal(self):
+        """After exactly 1 reversal step must advance to 0.10."""
+        ctrl = StaircaseController(
+            target_score=0.70,
+            tolerance=0.05,
+            window_sec=30.0,
+            step_schedule=(0.20, 0.10, 0.05),
+            cooldown_sec=5.0,
+            stable_ticks_required=9999,
+        )
+        state = DifficultyState(d_init=0.5)
+
+        t = 0.0
+        dt = 1.0
+        direction = "up"
+
+        while ctrl.reversal_count < 1 and t < 2000:
+            score = 1.0 if direction == "up" else 0.0
+            ctrl.push_performance(t, score)
+            delta = ctrl.tick(t)
+            if delta is not None:
+                state.update(state.d + delta)
+                direction = "down" if delta > 0 else "up"
+            t += dt
+
+        self.assertEqual(ctrl.reversal_count, 1)
+        self.assertAlmostEqual(ctrl.step_up, 0.10)
+
+    def test_step_does_not_advance_beyond_final(self):
+        """step_up must not decrease below the last schedule entry."""
         ctrl = StaircaseController(
             target_score=0.70,
             tolerance=0.05,
             window_sec=20.0,
-            step_up=0.20,
-            step_down=0.20,
+            step_schedule=(0.20, 0.10, 0.05),
             cooldown_sec=5.0,
-            n_reversals_to_halve=1,   # halve on every reversal
-            min_step=0.01,
+            stable_ticks_required=9999,
         )
         state = DifficultyState(d_init=0.5)
         t = 0.0
@@ -259,12 +287,129 @@ class TestStaircaseReversals(unittest.TestCase):
                 state.update(state.d + delta)
                 direction = "down" if delta > 0 else "up"
             t += 1.0
-            self.assertGreaterEqual(ctrl.step_up, 0.01, "step_up fell below min_step")
-            self.assertGreaterEqual(ctrl.step_down, 0.01, "step_down fell below min_step")
+            self.assertGreaterEqual(ctrl.step_up, 0.05, "step_up fell below final schedule entry")
+            self.assertGreaterEqual(ctrl.step_down, 0.05, "step_down fell below final schedule entry")
 
 
 # ---------------------------------------------------------------------------
-# 4. Reproducibility
+# 4. Convergence detection
+# ---------------------------------------------------------------------------
+
+class TestConvergence(unittest.TestCase):
+    """Convergence must only trigger after stable_ticks_required consecutive
+    no-step ticks once the staircase has already reached the finest step."""
+
+    def _build_ctrl(self, *, stable_ticks: int = 3) -> StaircaseController:
+        return StaircaseController(
+            target_score=0.70,
+            tolerance=0.05,
+            window_sec=20.0,
+            min_samples=3,
+            step_schedule=(0.20, 0.10, 0.05),
+            cooldown_sec=5.0,
+            stable_ticks_required=stable_ticks,
+        )
+
+    def _advance_to_final_step(self, ctrl, state, dt=1.0):
+        """Drive alternating scores until schedule reaches the final 0.05 entry."""
+        t = 0.0
+        direction = "up"
+        while ctrl._schedule_idx < len(ctrl._step_schedule) - 1 and t < 3000:
+            score = 1.0 if direction == "up" else 0.0
+            ctrl.push_performance(t, score)
+            delta = ctrl.tick(t)
+            if delta is not None:
+                state.update(state.d + delta)
+                direction = "down" if delta > 0 else "up"
+            t += dt
+        return t
+
+    def test_no_convergence_before_final_step(self):
+        """Stable ticks are not counted until the finest step is reached."""
+        ctrl = StaircaseController(
+            target_score=0.70,
+            tolerance=0.05,
+            window_sec=20.0,
+            min_samples=3,
+            step_schedule=(0.20, 0.10, 0.05),
+            cooldown_sec=5.0,
+            stable_ticks_required=3,
+        )
+        state = DifficultyState(d_init=0.5)
+        # Feed on-target score before any reversal (still on first schedule entry)
+        for t in range(1, 400):
+            ctrl.push_performance(float(t), 0.70)
+            ctrl.tick(float(t))
+            if ctrl._schedule_idx > 0:
+                break
+        # Confirm stable counter hasn't accumulated toward convergence
+        self.assertFalse(ctrl.converged)
+        self.assertEqual(ctrl._stable_ticks_at_final_step, 0)
+
+    def test_convergence_triggers_after_stable_ticks_at_final_step(self):
+        """After reaching 0.05 step, 3 in-band ticks must set converged=True."""
+        ctrl = self._build_ctrl(stable_ticks=3)
+        state = DifficultyState(d_init=0.5)
+
+        t = self._advance_to_final_step(ctrl, state)
+        self.assertEqual(ctrl._schedule_idx, 2, "Did not reach final step")
+        self.assertAlmostEqual(ctrl.step_up, 0.05)
+
+        # Now feed on-target score for exactly stable_ticks ticks (each separated by cooldown)
+        t += ctrl.cooldown_sec + 1
+        for i in range(3):
+            # Fill window with on-target scores
+            for _ in range(5):
+                ctrl.push_performance(t, 0.70)
+                t += 1.0
+            ctrl.tick(t)
+            t += ctrl.cooldown_sec + 1
+
+        self.assertTrue(ctrl.converged, "Controller did not converge after 3 stable ticks")
+
+    def test_stability_counter_resets_on_step_at_final_step(self):
+        """A step at the finest level must reset the stability counter."""
+        ctrl = self._build_ctrl(stable_ticks=3)
+        state = DifficultyState(d_init=0.5)
+        t = self._advance_to_final_step(ctrl, state)
+
+        # Accumulate 2 stable ticks (not yet converged)
+        t += ctrl.cooldown_sec + 1
+        for _ in range(2):
+            for _ in range(5):
+                ctrl.push_performance(t, 0.70)
+                t += 1.0
+            ctrl.tick(t)
+            t += ctrl.cooldown_sec + 1
+        self.assertEqual(ctrl._stable_ticks_at_final_step, 2)
+        self.assertFalse(ctrl.converged)
+
+        # Now fire a step by pushing above-target score
+        t += 1.0
+        for _ in range(5):
+            ctrl.push_performance(t, 1.0)
+            t += 1.0
+        ctrl.tick(t)
+        self.assertEqual(ctrl._stable_ticks_at_final_step, 0, "Counter not reset after step")
+
+    def test_tick_always_returns_none_after_convergence(self):
+        """Once converged, tick() must always return None regardless of score."""
+        ctrl = self._build_ctrl(stable_ticks=3)
+        state = DifficultyState(d_init=0.5)
+        t = self._advance_to_final_step(ctrl, state)
+
+        # Force convergence
+        ctrl._converged = True
+        for score in [0.0, 0.5, 1.0]:
+            for _ in range(5):
+                ctrl.push_performance(t, score)
+                t += 1.0
+            result = ctrl.tick(t)
+            self.assertIsNone(result, f"tick() returned {result} after convergence")
+
+
+# ---------------------------------------------------------------------------
+# 5. Reproducibility (formerly §4)
 # ---------------------------------------------------------------------------
 
 class TestReproducibility(unittest.TestCase):
@@ -277,7 +422,8 @@ class TestReproducibility(unittest.TestCase):
             target_score=0.70,
             window_sec=30.0,
             cooldown_sec=10.0,
-            n_reversals_to_halve=0,
+            step_schedule=(0.05,),    # fixed step; reproducibility test only
+            stable_ticks_required=9999,
         )
 
         trajectory = []
@@ -304,7 +450,7 @@ class TestReproducibility(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 5. PoissonEventGenerator – rate-response
+# 6. PoissonEventGenerator – rate-response
 # ---------------------------------------------------------------------------
 
 class TestGeneratorRateResponse(unittest.TestCase):
@@ -387,7 +533,7 @@ class TestGeneratorRateResponse(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 6. Generator reproducibility
+# 7. Generator reproducibility
 # ---------------------------------------------------------------------------
 
 class TestGeneratorReproducibility(unittest.TestCase):

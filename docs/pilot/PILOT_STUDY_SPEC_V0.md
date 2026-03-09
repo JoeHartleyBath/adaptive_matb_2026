@@ -10,9 +10,9 @@ Constraints:
 
 - No raw/identifiable data in git; follow `docs/DATA_MANAGEMENT.md`.
 - Logging/manifest/non-overwrite infrastructure is frozen (use as-is).
-- Canonical contracts (must remain consistent with this spec):
-  - `docs/contracts/mwl_eeg_input_contract.md`
-  - `docs/contracts/eeg_mwl_label_contract_v0.md`
+- EEG/ML interface contracts (to be defined post-Pilot 1):
+  - `docs/contracts/mwl_eeg_input_contract.md` — EEG windowing, preprocessing, feature representation (not yet written)
+  - `docs/contracts/eeg_mwl_label_contract_v0.md` — MWL label semantics and window-label alignment (not yet written)
 
 Operational context (implementation already present in repo):
 
