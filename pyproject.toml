@@ -21,7 +21,7 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 # Packages live directly under src/ (flattened from src/python/ in refactor)
-packages = ["src/adaptation", "src/eeg", "src/ml"]
+packages = ["src/adaptation", "src/eeg", "src/ml", "src/performance"]
 
 [tool.pyright]
 pythonVersion = "3.13"

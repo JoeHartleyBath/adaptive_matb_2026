@@ -5,21 +5,25 @@ Solo PhD research repository for the 2026 adaptive MATB study: experiment code, 
 ## Repository structure
 
 - `config/` — participant assignments, path configuration (local `paths.yaml` is gitignored)
+- `experiment/` — locked experiment asset files
+  - `experiment/scenarios/` — OpenMATB scenario `.txt` files (source of truth for Pilot 1; do not regenerate casually)
+  - `experiment/instructions/` — participant-facing task instruction screen text files (copied into OpenMATB at runtime)
 - `docs/` — decisions, lab notes, pilot specs, study/paper documentation
   - `docs/decisions/` — ADRs, committed design choices, open decisions
   - `docs/pilot/` — pilot study spec, build plan, session checklist
   - `docs/contracts/` — scenario and interface contracts
   - `docs/lab-notes/` — dated exploratory notes (not commitments)
   - `docs/openmatb/` — OpenMATB integration documentation
-- `scenarios/` — locked OpenMATB scenario files (source of truth for pilot; do not regenerate casually)
-- `instructions/` — participant-facing task instruction screen text files (used by scenarios at runtime)
-- `scripts/` — standalone helper and utility scripts
-- `src/python/` — production source code
-  - `src/python/run_openmatb.py` — main session runner (entrypoint)
-  - `src/python/adaptation/` — online staircase calibration logic
-  - `src/python/eeg/` — real-time EEG preprocessing pipeline
-  - `src/python/verification/` — post-run verification scripts
-  - `src/python/vendor/openmatb/` — OpenMATB git submodule
+- `scripts/` — standalone operational and data-pipeline scripts
+- `src/` — production source code (installed as editable package via `pip install -e .`)
+  - `src/run_openmatb.py` — main session runner (entrypoint)
+  - `src/adaptation/` — online staircase calibration logic
+  - `src/eeg/` — real-time EEG preprocessing pipeline
+  - `src/ml/` — MWL model definition (EEGNet) and dataset loader
+  - `src/performance/` — session performance summary and export scripts
+  - `src/vendor/openmatb/` — OpenMATB git submodule
+- `tests/` — test and verification scripts
+  - `tests/verification/` — post-run session verification scripts
 - `analysis/` — notebooks and analysis reports (currently unpopulated; used post-Pilot 1)
 - `results/` — derived outputs (figures, metrics, tables; currently unpopulated)
 
@@ -30,10 +34,10 @@ cd C:\adaptive_matb_2026
 .\.venv\Scripts\Activate.ps1
 
 # Fixed-block pilot (LOW → MODERATE → HIGH), full physiology:
-python src/python/run_openmatb.py --pilot1 --calibration-trend --summarise-performance --eda-port COM5 --participant PSELF --seq-id SEQ1
+python src/run_openmatb.py --pilot1 --calibration-trend --summarise-performance --eda-port COM5 --participant PSELF --seq-id SEQ1
 
 # Staircase pilot:
-python src/python/run_openmatb.py --pilot1 --adaptation --only-scenario adaptation_skeleton.txt --eda-port COM5 --participant PSELF --seq-id SEQ1
+python src/run_openmatb.py --pilot1 --adaptation --only-scenario adaptation_skeleton.txt --eda-port COM5 --participant PSELF --seq-id SEQ1
 ```
 
 VS Code launch configs for both self-pilot variants are in `.vscode/launch.json` (look for `PSELF:` entries).
@@ -66,7 +70,7 @@ Solo PhD trunk-based workflow. Small, focused commits directly to `main` are fin
 
 ## OpenMATB documentation
 
-OpenMATB runs as a git submodule at `src/python/vendor/openmatb/`. Study-specific docs:
+OpenMATB runs as a git submodule at `src/vendor/openmatb/`. Study-specific docs:
 
 - Index: [`docs/openmatb/index.md`](docs/openmatb/index.md)
 - Setup and run: [`docs/openmatb/SETUP_AND_RUN.md`](docs/openmatb/SETUP_AND_RUN.md)
