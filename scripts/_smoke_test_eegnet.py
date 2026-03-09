@@ -1,6 +1,7 @@
-"""Quick smoke test for EEG windower and EEGNet. Run from repo root."""
+"""Quick smoke test for EEG windower and EEGNet."""
 import sys
-sys.path.insert(0, "src/python")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import numpy as np
 from eeg import WindowConfig, extract_windows, slice_block

@@ -54,7 +54,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
+sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 import pyxdf  # noqa: E402
 import yaml   # noqa: E402

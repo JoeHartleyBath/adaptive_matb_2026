@@ -33,8 +33,8 @@ import sys
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-# Make src/python importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "python"))
+# Make src/ importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from adaptation.difficulty_state import DifficultyState
 from adaptation.staircase_controller import StaircaseController

@@ -18,13 +18,13 @@ import pylsl
 import numpy as np
 from threading import Thread
 
-# Fix import path to find the src/python modules
+# Fix import path to find the src/ modules
 import os
 from pathlib import Path
-sys.path.append(str(Path(__file__).parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.python.eeg.eeg_inlet import EegInlet
-from src.python.eeg.eeg_stream_config import EegStreamConfig
+from eeg.eeg_inlet import EegInlet
+from eeg.eeg_stream_config import EegStreamConfig
 
 def run_mock_outlet(name="eego", type="EEG", srate=500, n_ch=66):
     """Publishes random data to LSL."""

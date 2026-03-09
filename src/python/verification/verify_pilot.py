@@ -37,9 +37,9 @@ from typing import Iterable, Optional
 
 
 # Ensure we can import runner/util modules when executed from repo root.
-# File is located at <repo>/src/python/verification/verify_pilot.py.
-REPO_ROOT = Path(__file__).resolve().parents[3]
-SRC_PYTHON = REPO_ROOT / "src" / "python"
+# File is located at <repo>/src/verification/verify_pilot.py.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_PYTHON = REPO_ROOT / "src"
 if str(SRC_PYTHON) not in sys.path:
     sys.path.insert(0, str(SRC_PYTHON))
 
@@ -55,13 +55,13 @@ class CheckFailure:
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    return Path(__file__).resolve().parents[2]
 
 
 def _run_calibration_verifier(python: str) -> int:
     """Run the repo-level static checks (scenarios/assets/contracts)."""
     proc = subprocess.run(
-        [python, str(_repo_root() / "src" / "python" / "verification" / "verify_pilot_scenarios.py")]
+        [python, str(_repo_root() / "src" / "verification" / "verify_pilot_scenarios.py")]
     )
     return int(proc.returncode)
 
@@ -385,7 +385,7 @@ def main() -> int:
     if not args.skip_run:
         cmd = [
             sys.executable,
-            str(repo_root / "src" / "python" / "run_openmatb.py"),
+            str(repo_root / "src" / "run_openmatb.py"),
             "--participant",
             args.participant,
             "--session",

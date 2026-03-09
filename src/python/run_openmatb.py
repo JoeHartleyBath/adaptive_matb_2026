@@ -1715,7 +1715,7 @@ def _run_single_scenario(
     adaptation_mode: bool = False,
     adaptation_seed: Optional[int] = None,
 ) -> tuple[int, Optional[Path]]:
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[1]
 
     try:
         _stage_pilot_instruction_files(openmatb_dir, repo_root)
@@ -1897,7 +1897,7 @@ def _run_single_scenario(
 
     if getattr(args, "summarise_performance", False):
         try:
-            summariser = (repo_root / "src" / "python" / "summarise_openmatb_performance.py").resolve()
+            summariser = (repo_root / "src" / "summarise_openmatb_performance.py").resolve()
             subprocess.run(
                 [sys.executable, str(summariser), "--manifest", str(manifest_path)],
                 check=False,
@@ -2022,7 +2022,7 @@ def _run_single_scenario(
 def _ensure_performance_summaries(repo_root: Path, scenario_manifests: list[Path]) -> None:
     """Best-effort: ensure *.performance_summary.json exists next to each scenario manifest."""
 
-    summariser = (repo_root / "src" / "python" / "summarise_openmatb_performance.py").resolve()
+    summariser = (repo_root / "src" / "summarise_openmatb_performance.py").resolve()
     if not summariser.exists():
         return
 
@@ -2102,7 +2102,7 @@ def main() -> int:
     parser.add_argument(
         "--openmatb-dir",
         default=None,
-        help="Path to OpenMATB directory (default: <repo>/src/python/vendor/openmatb).",
+        help="Path to OpenMATB directory (default: <repo>/src/vendor/openmatb).",
     )
 
     parser.add_argument(
@@ -2378,8 +2378,8 @@ def main() -> int:
         )
         args.speed = 1
 
-    repo_root = Path(__file__).resolve().parents[2]
-    openmatb_dir = Path(args.openmatb_dir) if args.openmatb_dir else repo_root / "src" / "python" / "vendor" / "openmatb"
+    repo_root = Path(__file__).resolve().parents[1]
+    openmatb_dir = Path(args.openmatb_dir) if args.openmatb_dir else repo_root / "src" / "vendor" / "openmatb"
 
     if not openmatb_dir.exists():
         print(f"OpenMATB directory not found: {openmatb_dir}", file=sys.stderr)

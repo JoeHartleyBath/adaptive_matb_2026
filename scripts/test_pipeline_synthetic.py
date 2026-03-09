@@ -24,7 +24,7 @@ import h5py
 import numpy as np
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
+sys.path.insert(0, str(_REPO_ROOT / "src"))
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
 import torch  # noqa: E402

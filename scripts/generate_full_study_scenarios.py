@@ -63,10 +63,10 @@ from pathlib import Path
 from typing import Optional
 
 # ---------------------------------------------------------------------------
-# Path setup: allow importing from src/python without installation
+# Path setup: allow importing from src/ without installation
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
+sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from adaptation.difficulty_state import DifficultyState  # noqa: E402
 

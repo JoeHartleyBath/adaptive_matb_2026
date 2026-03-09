@@ -25,9 +25,9 @@ from __future__ import annotations
 import sys
 import os
 
-# Make src/python importable regardless of cwd
+# Make src/ importable regardless of cwd
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(_HERE, "..", "src", "python"))
+sys.path.insert(0, os.path.join(_HERE, "..", "src"))
 
 import math
 import random

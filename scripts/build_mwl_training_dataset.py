@@ -50,10 +50,10 @@ import pyxdf
 import yaml
 
 # ---------------------------------------------------------------------------
-# Repo root on sys.path so we can import src.python.*
+# src/ on sys.path so we can import package modules
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
+sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from eeg import EegPreprocessingConfig, EegPreprocessor, WindowConfig, extract_windows, slice_block  # noqa: E402
 from training.dataset import LABEL_MAP  # noqa: E402

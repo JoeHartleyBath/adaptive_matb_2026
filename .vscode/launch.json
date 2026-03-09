@@ -5,7 +5,7 @@
       "name": "OpenMATB: Staircase calibration (DEBUG — no preflight, no prompts)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -23,7 +23,7 @@
       "name": "OpenMATB: Staircase calibration (adaptation_skeleton, attended)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -37,7 +37,7 @@
       "name": "OpenMATB: Pilot1 (attended, with preflight)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--pilot1"]
@@ -46,7 +46,7 @@
       "name": "OpenMATB: Pilot1 (attended, calibration-only, with preflight)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--pilot1", "--calibration-only"]
@@ -55,7 +55,7 @@
       "name": "OpenMATB: Run HIGH only (calibration_high)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--only-scenario", "pilot_calibration_high.txt"]
@@ -64,7 +64,7 @@
       "name": "OpenMATB: Calibration trend (LOW→MODERATE→HIGH)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--calibration-trend", "--summarise-performance"]
@@ -73,7 +73,7 @@
       "name": "OpenMATB: Pilot1 (attended, skip preflight stream check)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--pilot1", "--skip-stream-check"]
@@ -82,7 +82,7 @@
       "name": "OpenMATB: Pilot1 (attended, with EDA streamer; edit COM port)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--pilot1", "--eda-port", "COM5"]
@@ -91,7 +91,7 @@
       "name": "OpenMATB: Pilot1 (attended, calibration-only, with EDA; edit COM port)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--pilot1", "--calibration-only", "--eda-port", "COM5"]
@@ -100,7 +100,7 @@
       "name": "OpenMATB: Preflight checks only",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": ["--check-streams"]
@@ -109,7 +109,7 @@
       "name": "Verify: Static scenarios (repo gate; must PASS)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/verification/verify_pilot_scenarios.py",
+      "program": "${workspaceFolder}/src/verification/verify_pilot_scenarios.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": []
@@ -118,7 +118,7 @@
       "name": "Verify: Pilot playlist (run + verify; requires participant in assignments)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/verification/verify_pilot.py",
+      "program": "${workspaceFolder}/src/verification/verify_pilot.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -136,7 +136,7 @@
       "name": "Verify: Pilot outputs only (skip run; verify existing session)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/verification/verify_pilot.py",
+      "program": "${workspaceFolder}/src/verification/verify_pilot.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -153,7 +153,7 @@
       "name": "QC: XDF alignment (from run manifest; edit path)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/verification/verify_xdf_alignment.py",
+      "program": "${workspaceFolder}/src/verification/verify_xdf_alignment.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -174,7 +174,7 @@
       "name": "Export: Pilot performance table CSV (from run manifest)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/export_pilot_performance_table.py",
+      "program": "${workspaceFolder}/src/export_pilot_performance_table.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -197,7 +197,7 @@
       "name": "PSELF: Fixed-block self-pilot (LOW→MOD→HIGH, full physio)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -213,7 +213,7 @@
       "name": "PSELF: Staircase self-pilot (adaptation_skeleton, full physio)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/run_openmatb.py",
+      "program": "${workspaceFolder}/src/run_openmatb.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -230,7 +230,7 @@
       "name": "PSELF: Verify fixed-block session (skip run; check existing outputs)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/verification/verify_pilot.py",
+      "program": "${workspaceFolder}/src/verification/verify_pilot.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -253,7 +253,7 @@
       "name": "PSELF: XDF alignment QC (from run manifest; edit path after run)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/verification/verify_xdf_alignment.py",
+      "program": "${workspaceFolder}/src/verification/verify_xdf_alignment.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
@@ -265,7 +265,7 @@
       "name": "Summarise: Pilot cohort status (external output root)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/summarise_pilot_cohort_status.py",
+      "program": "${workspaceFolder}/src/summarise_pilot_cohort_status.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": [
