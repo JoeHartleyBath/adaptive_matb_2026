@@ -209,5 +209,9 @@ __marimo__/
 # Local-only path configuration
 config/paths.yaml
 
+# Participant-specific generated scenario files (derived from calibration data;
+# not committed — regenerate per participant using generate_full_study_scenarios.py)
+scenarios/full_calibration_*.txt
+
 # Local-only ethics templates (do not track binary docs here)
 docs/ethics/
