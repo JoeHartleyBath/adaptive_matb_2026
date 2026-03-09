@@ -38,7 +38,7 @@ python src/python/run_openmatb.py --pilot1 --adaptation --only-scenario adaptati
 
 VS Code launch configs for both self-pilot variants are in `.vscode/launch.json` (look for `PSELF:` entries).
 
-Full operator procedure: [`docs/pilot/PILOT_SESSION_CHECKLIST.md`](docs/pilot/PILOT_SESSION_CHECKLIST.md)
+Full operator procedure: [`docs/pilot/pilot_session_checklist.md`](docs/pilot/pilot_session_checklist.md)
 
 ## Data boundaries
 

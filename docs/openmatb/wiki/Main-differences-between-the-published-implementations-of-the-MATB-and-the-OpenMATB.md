@@ -1,4 +1,4 @@
-﻿| Task | Implementations differences | OpenMATB default implementation |
+| Task | Implementations differences | OpenMATB default implementation |
 | --- | --- | --- |
 | System monitoring | In the original MATB, the scale cursor is an arrow mark whereas in the MATB-II, it is a range of bars moving inside a larger set of bars of lighter colors. In the latter, an &quot;out of range&quot; action means the cursor moves of at least three units above or under the middle of the scale. | As this change appears to be done to simplify the implementation, we favored the original MATB aesthetic by default. Still, the experimenter can switch to the MATB-II aesthetic display, if needed. |
 | | In MATB-II, failures have a default timeout of 10 seconds instead of 20 seconds in the original MATB. | Default is 10 seconds but it can be easily altered. |

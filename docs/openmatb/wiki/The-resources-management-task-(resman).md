@@ -1,4 +1,4 @@
-ÔªøYou should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
+You should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
 
 ## Presentation of the `resman` plugin.
 
@@ -18,12 +18,12 @@ In the `resman` task, major experimental manipulations concern `pumps` and `tank
 - depletable nature (e.g., `tank-d-depletable`=False will give you a tank D with infinite capacity)
 - leak debit if relevant (e.g., `tank-a-lossperminute`=800)
 
-By default, a `toleranceradius` is set (to 250), which defines the area in which the target tanks should be maintained for a correct performance. If you don√î√á√ñt want to use a tolerance area, but rather instruct the participant to keep the levels as close as possible of the target level, you can set this `toleranceradius` to 0. If you use the tolerance area, and you want to warn the participant when he or she is outside, you can set a different color to the tolerance area with the `tolerancecoloroutside` parameter.
+By default, a `toleranceradius` is set (to 250), which defines the area in which the target tanks should be maintained for a correct performance. If you don‘«÷t want to use a tolerance area, but rather instruct the participant to keep the levels as close as possible of the target level, you can set this `toleranceradius` to 0. If you use the tolerance area, and you want to warn the participant when he or she is outside, you can set a different color to the tolerance area with the `tolerancecoloroutside` parameter.
 
 As for each pump, you can set its:
 
-- flow, i.e., its debit per minute (e.g., `pump-1-flow` to modify flow of the pump n‚î¨‚ñë1)
-- state, that can be `on`, `off` or `failure` (e.g., `pump-1-state`=`failure` will turn the pump n‚î¨‚ñë1 to failure)
+- flow, i.e., its debit per minute (e.g., `pump-1-flow` to modify flow of the pump n-¶1)
+- state, that can be `on`, `off` or `failure` (e.g., `pump-1-state`=`failure` will turn the pump n-¶1 to failure)
 
 You can alter the color associated with each pump state via the `pumpcoloron`, `pumpcoloroff` and `pumpcolorfailure` parameters, respectively.
 

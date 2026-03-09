@@ -1,4 +1,4 @@
-ÔªøYou should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
+You should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
 
 ## Presentation of the `instructions` plugin.
 
@@ -37,7 +37,7 @@ Note that you can also use the `maxdurationsec` parameter to define a time limit
 |taskupdatetime|Delay between plugin updates (ms)|(positive integer)|15|
 |filename|Name of the instructions file to use|(string)|(empty)|
 |maxdurationsec|Maximum displaying duration (seconds)|(positive integer)|0|
-|response-text|String chain to prompt the subject to press a continuing key|(string)|'Press SPACE to continue√î√á√ñ|
+|response-text|String chain to prompt the subject to press a continuing key|(string)|'Press SPACE to continue‘«÷|
 |response-key|Keyboard key to continue|(keyboard key)|space|
 
 

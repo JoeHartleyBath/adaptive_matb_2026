@@ -23,5 +23,5 @@ Proposed (pilot-tuned)
 
 **References**  
 - Pontiggia et al., 2024 (review of MATB(-II) practice practices; notes high interindividual variability and common use of short repeated practice trials)
-- Internal: `docs/pilot/PILOT_STUDY_SPEC_V0.md`
-- Internal: `docs/pilot/PILOT_BUILD_PLAN_V0.md`
+- Internal: `docs/pilot/pilot_study_spec.md`
+- Internal: `docs/pilot/pilot_build_plan.md`

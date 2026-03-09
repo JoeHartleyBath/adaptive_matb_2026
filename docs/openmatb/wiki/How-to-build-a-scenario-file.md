@@ -1,4 +1,4 @@
-﻿### Table of contents
+### Table of contents
 - [Scenario syntax](#scenario-syntax)
  * [Time](#time)
  * [Object](#object)
@@ -133,17 +133,17 @@ When one executes a scenario file in OpenMATB, all the commands are first ordere
 
 ```
 
-If you want to start a task at, say, 2 minutes, itÔÇÖs important to start it at OpenMATB startup anyway, like this :
+If you want to start a task at, say, 2 minutes, it���s important to start it at OpenMATB startup anyway, like this :
 
 ```
 # Scenario title
 # Comments
 
-[ÔÇª]
+[�Ǫ]
 
 # 2. Start tasks that will be used
 # Say you want to start the sysmon task only at 2 minutes
-# Just start, pause and hide itÔÇª
+# Just start, pause and hide it�Ǫ
 0:00:00;sysmon;start
 0:00:00;resman;start
 0:00:00;sysmon;pause
@@ -157,7 +157,7 @@ If you want to start a task at, say, 2 minutes, itÔÇÖs important to start it 
 0:02:00:sysmon;show
 
 # 3.b. Resources management events
-[ÔÇª]
+[�Ǫ]
 
 # 4. Stop tasks
 0:00:00;sysmon;stop

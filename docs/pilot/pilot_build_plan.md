@@ -246,7 +246,7 @@ Objective:
 
 Files touched:
 
-- `docs/pilot/PILOT_BUILD_PLAN_V0.md` (this file)
+- `docs/pilot/pilot_build_plan.md` (this file)
 - (optionally) `docs/pilot/DECISIONS_PILOT_V0.md` (if you prefer a separate decision ledger)
 
 Success criteria:
@@ -269,7 +269,7 @@ Objective:
 Files touched:
 
 - Scenario files under `src/python/vendor/openmatb/includes/scenarios/` (new pilot scenario files)
-- `docs/pilot/PILOT_STUDY_SPEC_V0.md` (new; non-sensitive parameters/targets)
+- `docs/pilot/pilot_study_spec.md` (new; non-sensitive parameters/targets)
 
 Success criteria:
 
@@ -363,7 +363,7 @@ Objective:
 
 Files touched:
 
-- `docs/pilot/PILOT_STUDY_SPEC_V0.md` (QC rules)
+- `docs/pilot/pilot_study_spec.md` (QC rules)
 - `docs/pilot/PILOT_READINESS_CHECKLIST_v0.md`
 
 Success criteria:
@@ -665,22 +665,22 @@ Must be true before pilot recruitment/recording:
    - Alternative: 50 ms (if acquisition/LSL path introduces unavoidable jitter; must be justified).
 
 3) Workload block durations and full session structure
-  - Default: session structure is exactly as defined in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (training T1–T3 with breaks; calibration B1–B3 with TLX after each calibration block and breaks).
+  - Default: session structure is exactly as defined in `docs/pilot/pilot_study_spec.md` (training T1–T3 with breaks; calibration B1–B3 with TLX after each calibration block and breaks).
    - Alternative: 3 × 7 minutes if more stable EEG windows are needed; keep total session bounded.
 
 4) Event rate targets per level (per task)
-  - v0 targets are fixed and must match `docs/pilot/PILOT_STUDY_SPEC_V0.md` and `docs/contracts/training_scenario_contract_v0.md`.
+  - v0 targets are fixed and must match `docs/pilot/pilot_study_spec.md` and `docs/contracts/training_scenario_contract_v0.md`.
   - Total event-rate targets (events/min): `LOW`=3, `MODERATE`=8, `HIGH`=18.
   - Scaling rule (v0): `HIGH` total event rate is ~5–6× `LOW` (operationalized as 18/3 = 6×).
   - Scheduling is deterministic and must follow the contract’s authoritative per-block template (integer second offsets, guard bands, collision rules).
 
 5) Counterbalancing scheme
-  - v0 calibration counterbalancing is exactly the 3-sequence Latin-square defined by `seq_id` in `docs/pilot/PILOT_STUDY_SPEC_V0.md` (`SEQ1|SEQ2|SEQ3`).
+  - v0 calibration counterbalancing is exactly the 3-sequence Latin-square defined by `seq_id` in `docs/pilot/pilot_study_spec.md` (`SEQ1|SEQ2|SEQ3`).
 
 6) Label target space choice under label contract
    - Default: 3-level ordinal label `{LOW, MODERATE, HIGH}` with `TBD_MWL_NUM_LEVELS_V0 = 3`.
    - Alternative: continuous numeric label in a bounded range (requires a defined mapping from block condition to numeric level).
 
 7) Where the resolved parameter ledger lives (non-sensitive)
-   - Default: `docs/pilot/PILOT_CONTRACT_RESOLUTIONS_V0.md` + `docs/pilot/PILOT_STUDY_SPEC_V0.md`.
-   - Alternative: a single consolidated `docs/pilot/PILOT_STUDY_SPEC_V0.md` appendix.
+   - Default: `docs/pilot/PILOT_CONTRACT_RESOLUTIONS_V0.md` + `docs/pilot/pilot_study_spec.md`.
+   - Alternative: a single consolidated `docs/pilot/pilot_study_spec.md` appendix.

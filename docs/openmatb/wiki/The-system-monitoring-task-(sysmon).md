@@ -1,6 +1,6 @@
-﻿You should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
+You should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
 
-## Presentation of the `sysmon`┬áplugin.
+## Presentation of the `sysmon`-�plugin.
 
 In the system monitoring task the participant has to monitor six different gauges (2 lights and 4 scales) that may be subject to failures. It is these failures that the participant is responsible for detecting and recovering through six corresponding response buttons.
 

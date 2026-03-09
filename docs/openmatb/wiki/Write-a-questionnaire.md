@@ -1,4 +1,4 @@
-﻿OpenMATB offers the possibility to present and record responses from a questionnaire, at any desired time. Available questionnaires can be found in the `Scales` folder.
+OpenMATB offers the possibility to present and record responses from a questionnaire, at any desired time. Available questionnaires can be found in the `Scales` folder.
 
 ## Present a questionnaire
 To present a questionnaire during the experiment, all one has to do is adding the corresponding statement at the desired time, in the relevant scenario file. For instance, if the english version of the Nasa-TLX has to be presented after 1 minute of multitasking, one should add the following to the scenario : 
@@ -34,7 +34,7 @@ and default value for each question.
 # Item 1
 Short title;Question;Minimum/Maximum;0/50/25
 
-#┬áItem 2
+#-�Item 2
 Short title;Question;Minimum/Maximum;0/50/25
 
 # ...

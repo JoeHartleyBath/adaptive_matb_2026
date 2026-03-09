@@ -21,5 +21,5 @@ For the full study (post-Pilot 1), calibration will consist of **two 9-minute co
 Final (locked; implement after Pilot 1)
 
 **References**  
-- Internal: [docs/pilot/PILOT_STUDY_SPEC_V0.md](../../pilot/PILOT_STUDY_SPEC_V0.md) (Pilot 1 structure)
+- Internal: [docs/pilot/pilot_study_spec.md](../../pilot/pilot_study_spec.md) (Pilot 1 structure)
 - Internal: [docs/decisions/open_decisions.md](../../open_decisions.md) (OD-07 context)

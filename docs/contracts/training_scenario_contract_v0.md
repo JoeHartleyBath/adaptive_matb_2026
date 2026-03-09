@@ -8,7 +8,7 @@ Purpose: define the **deterministic, contract-compliant structure** of the OpenM
 
 Scope:
 
-- Covers **scenario structure + marker semantics** for both training and calibration blocks described in `docs/pilot/PILOT_STUDY_SPEC_V0.md`.
+- Covers **scenario structure + marker semantics** for both training and calibration blocks described in `docs/pilot/pilot_study_spec.md`.
 - Specifies the minimum inputs required to run the scenario in a way that is **one-shot reproducible** and **log-bracketed**.
 - Defines the scenario-side requirements only (not EEG ingestion). EEG alignment and labeling will be governed by contracts to be written post-Pilot 1:
   - `docs/contracts/mwl_eeg_input_contract.md` (not yet written)
@@ -59,7 +59,7 @@ A contract-compliant run must yield:
 
 ## 4) Session structure (exact)
 
-The scenario must implement the pilot session structure from `docs/pilot/PILOT_STUDY_SPEC_V0.md`:
+The scenario must implement the pilot session structure from `docs/pilot/pilot_study_spec.md`:
 
 
 ### 4.0 Instructions / familiarisation (no separate scenario phase in v0)
@@ -68,7 +68,7 @@ The scenario must implement the pilot session structure from `docs/pilot/PILOT_S
 - Any pre-run briefing is out-of-band (operator procedure) and not represented as a separate scenario phase.
 - A participant ID entry popup must appear before training begins, and the scenario must not proceed until a valid ID is submitted.
 - Pilot scenarios MUST NOT reuse the upstream demo scenario (`default.txt`) and MUST NOT reference any demo/French instruction assets.
-- Any on-screen instruction content used by the pilot scenario MUST be study-owned English instruction assets (see `docs/pilot/PILOT_BUILD_PLAN_V0.md`).
+- Any on-screen instruction content used by the pilot scenario MUST be study-owned English instruction assets (see `docs/pilot/pilot_build_plan.md`).
 
 
 
@@ -189,7 +189,7 @@ All markers must use:
 
 ### 6.3 Marker list (exact)
 
-The scenario must emit the exact markers defined in `docs/pilot/PILOT_STUDY_SPEC_V0.md` Section 4.
+The scenario must emit the exact markers defined in `docs/pilot/pilot_study_spec.md` Section 4.
 
 ### 6.4 Pause/abort semantics
 
