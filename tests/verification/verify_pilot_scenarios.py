@@ -398,8 +398,8 @@ def _static_check_scenario_file(path: Path) -> list[str]:
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parents[3]
-    scenario_dir = repo_root / "scenarios"
+    repo_root = Path(__file__).resolve().parents[2]
+    scenario_dir = repo_root / "experiment" / "scenarios"
     if not scenario_dir.exists():
         print(f"ERROR: scenarios dir not found: {scenario_dir}")
         return 2

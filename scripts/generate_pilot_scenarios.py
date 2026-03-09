@@ -19,7 +19,7 @@ import math
 # --------------------------------------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------------------------------------
-OUTPUT_DIR = Path('scenarios')
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "experiment" / "scenarios"
 BLOCK_DURATION_SEC = 300
 
 # Targeted Difficulty Config (0.0 - 1.0) to approximate 5/15/30 events

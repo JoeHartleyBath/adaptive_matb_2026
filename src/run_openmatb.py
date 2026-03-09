@@ -1614,7 +1614,7 @@ def _stage_pilot_instruction_files(openmatb_dir: Path, repo_root: Path) -> None:
     includes/instructions/ or includes/questionnaires/.
     """
 
-    source_dir = repo_root / "instructions"
+    source_dir = repo_root / "experiment" / "instructions"
     required_names = [
         "1_welcome.txt",
         "2_sysmon.txt",
@@ -1627,7 +1627,7 @@ def _stage_pilot_instruction_files(openmatb_dir: Path, repo_root: Path) -> None:
     missing = [name for name in required_names if not (source_dir / name).exists()]
     if missing:
         raise FileNotFoundError(
-            "Missing required pilot instruction files under <repo>/instructions: " + ", ".join(missing)
+            "Missing required pilot instruction files under <repo>/experiment/instructions: " + ", ".join(missing)
         )
 
     # Keep pilot assets namespaced to avoid collisions with vendor examples.
@@ -1723,7 +1723,7 @@ def _run_single_scenario(
         print(str(exc), file=sys.stderr)
         return 2, None
 
-    scenario_source_path = repo_root / "scenarios" / scenario_filename
+    scenario_source_path = repo_root / "experiment" / "scenarios" / scenario_filename
     if not scenario_source_path.exists():
         print(f"Scenario file not found: {scenario_source_path}", file=sys.stderr)
         return 2, None
@@ -2680,10 +2680,10 @@ def main() -> int:
 
     missing_scenarios: list[str] = []
     for scenario_filename in playlist:
-        if not (repo_root / "scenarios" / scenario_filename).exists():
+        if not (repo_root / "experiment" / "scenarios" / scenario_filename).exists():
             missing_scenarios.append(scenario_filename)
     if missing_scenarios:
-        print("Missing scenario files under <repo>/scenarios:", file=sys.stderr)
+        print("Missing scenario files under <repo>/experiment/scenarios:", file=sys.stderr)
         for name in missing_scenarios:
             print(f" - {name}", file=sys.stderr)
         return 2
