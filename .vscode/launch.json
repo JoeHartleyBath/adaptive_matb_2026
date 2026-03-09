@@ -165,7 +165,7 @@
       "name": "Verify: Preprocessing checks",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/python/verify_preprocessing.py",
+      "program": "${workspaceFolder}/scripts/verify_preprocessing.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "args": []
