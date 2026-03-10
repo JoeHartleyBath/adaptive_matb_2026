@@ -430,16 +430,20 @@ def generate_block_lines(
     rng: random.Random,
     *,
     is_first_block: bool,
+    condition_prefix: str = "calibration_condition",
 ) -> list[_Line]:
     """Return all scenario lines for one 1-minute block.
 
     Parameters
     ----------
-    level_label  : "LOW", "MODERATE", or "HIGH"
-    d            : difficulty scalar for this level
-    block_index  : 0-based index (0–8)
-    block_start_sec : absolute start time within the scenario (s)
-    is_first_block  : emit plugin start commands when True (first block only)
+    level_label      : "LOW", "MODERATE", or "HIGH"
+    d                : difficulty scalar for this level
+    block_index      : 0-based index (0–8)
+    block_start_sec  : absolute start time within the scenario (s)
+    is_first_block   : emit plugin start commands when True (first block only)
+    condition_prefix : first segment of the LSL marker path
+                       (default: "calibration_condition", override for other
+                       study conditions e.g. "adaptive_automation")
     """
     params = DifficultyState(d_init=d).params
     lines: list[_Line] = []
@@ -451,7 +455,7 @@ def generate_block_lines(
     payload = f"pid={pid_tok}|sid={sid_tok}|seq={seq_tok}"
 
     block_num_str = f"{block_index + 1:02d}"
-    marker_base = f"calibration_condition/{condition}/block_{block_num_str}/{level_label}"
+    marker_base = f"{condition_prefix}/{condition}/block_{block_num_str}/{level_label}"
 
     # Block-start LSL marker
     lines.append(_Line(t0, "labstreaminglayer",
