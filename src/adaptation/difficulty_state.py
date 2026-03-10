@@ -63,39 +63,42 @@ _RESMAN_OFFSET_HIGH: int = -100
 # Comms event rate – TOTAL rate across all comms channels.
 #   build_standard_generators splits it equally: each of the 2 channels (own/other)
 #   gets rate * 0.5.  So total events per 300s = rate * 300.
-#   Calibrated against pilot scenario files:
-#     LOW  (d=0.20):  3 prompts  → rate = 3/300 = 0.010  Hz
-#     MOD  (d=0.55):  8 prompts  → rate = 8/300 = 0.027  Hz  (lerp gives ~0.030)
-#     HIGH (d=0.95): 14 prompts  → rate = 14/300 ≈ 0.047 Hz  (lerp gives ~0.048)
-#   Hard endpoint stretched 30% beyond the original d=1 calibration value of 0.050:
-#     d=1 → 0.050 * 1.3 = 0.065 → ~19.5 prompts/300s
-_COMMS_RATE_EASY_HZ: float = 0.005   # ~1.5 prompts/300 s at d=0
-_COMMS_RATE_HARD_HZ: float = 0.065   # 0.050 * 1.3; ~19.5 total prompts/300 s at d=1
+#
+#   Anchoring (pilot scenario files → d mapping):
+#     LOW  → d=0.00:   3 prompts,  rate =  3/300 = 0.010 Hz
+#     MOD  → d=0.30: ≈8-9 prompts, rate ≈  8/300 = 0.027 Hz  (lerp gives 0.028)
+#     HIGH → d=0.60:  14 prompts,  rate = 14/300 = 0.047 Hz  (lerp gives 0.047)
+#   Gradient extrapolated to d=1.0 for headroom: ≈21 prompts/300 s.
+#   Effective ceiling: AdaptationScheduler enforces min_comms_gap=20 s,
+#   so delivered rate is capped at ~0.050 Hz (≈15 prompts/300 s) regardless.
+_COMMS_RATE_EASY_HZ: float = 0.010   # exactly 3 prompts/300 s at d=0 (pilot LOW)
+_COMMS_RATE_HARD_HZ: float = 0.071   # ≈21 prompts/300 s at d=1; scheduler caps at ~15
 
 # SysMon event rate – TOTAL rate used identically for lights and scales groups.
 #   build_standard_generators splits each group: lights ÷ 2, scales ÷ 4.
 #   Total events per 300s = (sysmon_light_rate + sysmon_scale_rate) * 300
 #                         = 2 * sysmon_rate * 300.
-#   Calibrated against pilot scenario files:
-#     LOW  (d=0.20): 10 failures → rate = 10/600 = 0.017 Hz  (lerp gives ~0.024)
-#     MOD  (d=0.55): 30 failures → rate = 30/600 = 0.050 Hz  (lerp gives ~0.051)
-#     HIGH (d=0.95): 50 failures → rate = 50/600 = 0.083 Hz  (lerp gives ~0.083)
-#   Hard endpoint stretched 30% beyond the original d=1 calibration value of 0.087:
-#     d=1 → 0.087 * 1.3 = 0.113 → ~67.8 failures/300s
-_SYSMON_RATE_EASY_HZ: float = 0.008  # ~4.8 failures/300 s (total) at d=0
-_SYSMON_RATE_HARD_HZ: float = 0.113  # 0.087 * 1.3; ~67.8 total failures/300 s at d=1
+#
+#   Anchoring (pilot scenario files → d mapping):
+#     LOW  → d=0.00: 10 total failures, sysmon_rate = 10/600 = 0.017 Hz
+#     MOD  → d=0.30: 30 total failures, sysmon_rate = 30/600 = 0.050 Hz  (lerp gives 0.050)
+#     HIGH → d=0.60: 50 total failures, sysmon_rate = 50/600 = 0.083 Hz  (lerp gives 0.083)
+#   Gradient extrapolated to d=1.0: ≈77 total failures/300 s.
+#   Physical ceiling (6 channels × 1/alerttimeout ≈ 0.54 Hz total) is well above this.
+_SYSMON_RATE_EASY_HZ: float = 0.017  # exactly 10 total failures/300 s at d=0 (pilot LOW)
+_SYSMON_RATE_HARD_HZ: float = 0.128  # ≈77 total failures/300 s at d=1 (extrapolated)
 
 # ResMan pump failure rate – TOTAL rate across all 8 pump channels.
 #   build_standard_generators divides equally: each pump gets rate / 8.
 #   Total events per 300s = rate * 300.
-#   Calibrated against pilot scenario files:
-#     LOW  (d=0.20):  2 failures → rate =  2/300 = 0.007 Hz  (lerp gives ~0.010)
-#     MOD  (d=0.55):  6 failures → rate =  6/300 = 0.020 Hz  (lerp gives ~0.024)
-#     HIGH (d=0.95): 12 failures → rate = 12/300 = 0.040 Hz  (lerp gives ~0.039)
-#   Hard endpoint stretched 30% beyond the original d=1 calibration value of 0.040:
-#     d=1 → 0.040 * 1.3 = 0.052 → ~15.6 pump failures/300s
-_RESMAN_PUMP_RATE_EASY_HZ: float = 0.003   # ~0.9 failures/300 s at d=0
-_RESMAN_PUMP_RATE_HARD_HZ: float = 0.052   # 0.040 * 1.3; ~15.6 total pump failures/300 s at d=1
+#
+#   Anchoring (pilot scenario files → d mapping):
+#     LOW  → d=0.00:  2 failures, rate =  2/300 = 0.007 Hz
+#     MOD  → d=0.30: ≈6-7 failures, rate ≈ 6/300 = 0.020 Hz  (lerp gives 0.024)
+#     HIGH → d=0.60: 12 failures, rate = 12/300 = 0.040 Hz  (lerp gives 0.040)
+#   Gradient extrapolated to d=1.0: ≈19 pump failures/300 s.
+_RESMAN_PUMP_RATE_EASY_HZ: float = 0.007   # exactly 2 failures/300 s at d=0 (pilot LOW)
+_RESMAN_PUMP_RATE_HARD_HZ: float = 0.062   # ≈19 pump failures/300 s at d=1 (extrapolated)
 
 
 # ---------------------------------------------------------------------------
