@@ -1,0 +1,92 @@
+# MWL pretraining dataset (VR-TSST EEG) — QC exclusions
+#
+# Participants excluded from continuous EEG export, LOSO-CV,
+# and all downstream analysis.  Update this file when new exclusion
+# decisions are made; do not hardcode PIDs in scripts.
+#
+# Reason codes
+# ------------
+#   EEG_QUALITY        : amplitude outlier, artefact drift, or impedance failure
+#   ARTIFACT_SEPARABLE : high AUC driven by amplitude/alpha artefact, not workload
+#   CLASS_IMBALANCE    : fewer condition blocks than expected (< 4)
+#
+# Method (2026-03-13 revision)
+# ----------------------------
+# Within-participant AUC recomputed with:
+#   - Non-overlapping 2 s epochs (step=2.0 s) to eliminate train/test leakage
+#   - RepeatedStratifiedKFold (5 folds × 10 repeats, seed 42) for stability
+#   - LogisticRegression(C=0.01, balanced) on Welch PSD features, per-PP z-scored
+# Full audit: scripts/_qc_audit_all_participants.py → results/qc_audit.csv
+#
+# Previous NO_SIGNAL exclusions (P04, P06, P09, P20, P23, P33, P35, P39,
+# P44, P46) were based on overlapping-epoch AUC and are no longer applied.
+# Under corrected (non-overlapping) CV, no participant meets a principled
+# below-chance criterion.  See notes below.
+#
+# Current set: 6 excluded → 41 effective included (P14 excluded at data
+# load due to missing/corrupt XDF, not listed here).
+
+excluded_participants:
+
+  # --- Tier 1: Clear excludes (catastrophic data quality) ---
+
+  P21:
+    reason: EEG_QUALITY
+    detail: >
+      RMS 6.8× cohort median, condRatio 4.49×, alphaRatio 32.1×, drift.
+      AUC 0.962±0.026 is classifier learning the artefact, not workload.
+
+  P34:
+    reason: EEG_QUALITY
+    detail: >
+      RMS 28.6× cohort median — catastrophically noisy.
+      AUC 0.466±0.059 (below chance, no recoverable signal).
+
+  P37:
+    reason: EEG_QUALITY
+    detail: >
+      RMS 8.2× cohort median, condRatio 12.64×, alphaRatio 83.9×, drift.
+      AUC 0.639±0.068 inflated by artefact asymmetry.
+
+  # --- Tier 2: Artefact-driven separability ---
+
+  P43:
+    reason: ARTIFACT_SEPARABLE
+    detail: >
+      condRatio 3.58×, drift. AUC 0.850±0.045 is high but likely reflects
+      amplitude asymmetry between conditions rather than neural workload.
+
+  P45:
+    reason: ARTIFACT_SEPARABLE
+    detail: >
+      condRatio 2.82×, alphaRatio 5.9×, drift. AUC 0.912±0.039 —
+      separability driven by alpha/amplitude artefact.
+
+  P27:
+    reason: ARTIFACT_SEPARABLE
+    detail: >
+      condRatio 2.84×, drift. AUC 0.716±0.053 may be inflated by
+      amplitude asymmetry between conditions.
+
+# --- Notes on participants NOT excluded ---
+#
+# Previously excluded, now retained (corrected AUC above chance):
+#   P04: AUC 0.530±0.067  (was 0.497 with leaky CV)
+#   P06: AUC 0.504±0.059  (was 0.440)
+#   P09: AUC 0.518±0.069  (was 0.397)
+#   P23: AUC 0.555±0.064  (was 0.461)
+#   P33: AUC 0.573±0.059  (was 0.498)
+#   P39: AUC 0.576±0.069  (was 0.421)
+#   P44: AUC 0.548±0.080  (was 0.454)
+#   P46: AUC 0.552±0.066  (was 0.481)
+#
+# Flagged but retained (minor flags, data quality acceptable):
+#   P10: BELOW-CHANCE AUC 0.483±0.068 — borderline, within 1 SD of chance
+#   P13: COND-AMP condRatio 2.09× — barely over threshold, AUC 0.720 likely real
+#   P16: CLASS-IMBAL (3 blocks not 4) — data quality itself is fine
+#   P18: DRIFT only — no other flags, AUC 0.519 is low but not disqualifying
+#   P20: BELOW-CHANCE AUC 0.445±0.087 — low signal but not artefactual
+#   P24: BELOW-CHANCE AUC 0.482±0.070 — borderline, within 1 SD of chance
+#   P31: COND-AMP condRatio 2.81× — moderate, AUC 0.672 is reasonable
+#   P35: BELOW-CHANCE AUC 0.492±0.051 — 0.008 below threshold, smallest SD
+#   P47: BELOW-CHANCE AUC 0.464±0.060 — low signal, not artefactual

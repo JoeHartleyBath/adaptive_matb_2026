@@ -2,7 +2,7 @@
 #
 # Device : ANT Neuro eego amplifier
 # Cap    : NA-271, 128-channel
-# Srate  : 500 Hz
+# Srate  : 128 Hz  (hardware streams at 500 Hz; pipeline downsamples to 128 Hz)
 #
 # channel_names gives the EXACT ordered list as the amplifier streams them via LSL.
 # This is the canonical source of truth for:
@@ -12,7 +12,7 @@
 #
 # Do NOT reorder. The order matches the NA-271.elc electrode-position file.
 
-srate: 500.0
+srate: 128.0
 n_channels: 128
 
 channel_names:
