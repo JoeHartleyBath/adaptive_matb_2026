@@ -1,0 +1,600 @@
+{
+  "seed": 42,
+  "n_seeds": 10,
+  "test_frac": 0.3,
+  "C": 0.001,
+  "n_participants": 41,
+  "n_features": 54,
+  "feature_names": [
+    "FM_Theta",
+    "FM_Alpha",
+    "FM_Delta",
+    "FM_Beta",
+    "Par_Alpha",
+    "Occ_Alpha",
+    "Cen_Beta",
+    "Cen_Theta",
+    "FAA",
+    "Cen_Engagement",
+    "FM_Theta_Alpha",
+    "FM_Theta_Beta",
+    "Cen_Theta_Beta",
+    "Fro_HjAct",
+    "Fro_HjMob",
+    "Fro_HjComp",
+    "Fro_SpEnt",
+    "Fro_PeEnt",
+    "Fro_Skew",
+    "Fro_Kurt",
+    "Fro_ZCR",
+    "Par_HjAct",
+    "Par_HjMob",
+    "Par_HjComp",
+    "Par_SpEnt",
+    "Par_PeEnt",
+    "Par_Skew",
+    "Par_Kurt",
+    "Par_ZCR",
+    "Cen_HjAct",
+    "Cen_HjMob",
+    "Cen_HjComp",
+    "Cen_SpEnt",
+    "Cen_PeEnt",
+    "Cen_Skew",
+    "Cen_Kurt",
+    "Cen_ZCR",
+    "Occ_HjAct",
+    "Occ_HjMob",
+    "Occ_HjComp",
+    "Occ_SpEnt",
+    "Occ_PeEnt",
+    "Occ_Skew",
+    "Occ_Kurt",
+    "Occ_ZCR",
+    "Fro_1fSlope",
+    "Par_1fSlope",
+    "Cen_1fSlope",
+    "Occ_1fSlope",
+    "wPLI_Fro_Par_Th",
+    "wPLI_Fro_Par_Al",
+    "wPLI_Fro_Cen_Th",
+    "wPLI_Cen_Par_Al",
+    "wPLI_Fro_Occ_Al"
+  ],
+  "k_sweep": {
+    "10": {
+      "mean_auc": 0.5416748962225364,
+      "std_auc": 0.029451791273327147,
+      "median_auc": 0.5417250330181728,
+      "per_seed": [
+        0.5980597423346167,
+        0.569020577391322,
+        0.49311415937214986,
+        0.5227971234038854,
+        0.565908000537864,
+        0.5516140150344513,
+        0.5475602215571351,
+        0.5358898444792104,
+        0.5163251403547887,
+        0.5164601377599414
+      ]
+    },
+    "15": {
+      "mean_auc": 0.5358037808843928,
+      "std_auc": 0.019825609031659516,
+      "median_auc": 0.541080159132792,
+      "per_seed": [
+        0.5486770673602763,
+        0.5514165339326675,
+        0.506646311518707,
+        0.5176352784611296,
+        0.5651529873494894,
+        0.5462958239333099,
+        0.5563394616132644,
+        0.535864494332274,
+        0.5085840950973761,
+        0.5214257552454336
+      ]
+    },
+    "20": {
+      "mean_auc": 0.5273197829267533,
+      "std_auc": 0.02191133507055174,
+      "median_auc": 0.5277102298707237,
+      "per_seed": [
+        0.5064207068489018,
+        0.5481756121194488,
+        0.49990051624756154,
+        0.5209346355121234,
+        0.5590557456029304,
+        0.5560005625637793,
+        0.537992745449255,
+        0.534485824229324,
+        0.5139384673206691,
+        0.4962930133735409
+      ]
+    },
+    "25": {
+      "mean_auc": 0.5261006239853437,
+      "std_auc": 0.0239204146355693,
+      "median_auc": 0.5309698789081738,
+      "per_seed": [
+        0.5083599006706897,
+        0.5474360885006695,
+        0.4934556983488326,
+        0.5222714227636132,
+        0.5399032765930915,
+        0.5674489983522336,
+        0.5412056010283657,
+        0.5396683350527346,
+        0.5120623202658837,
+        0.4891945982773237
+      ]
+    },
+    "30": {
+      "mean_auc": 0.5277524292567285,
+      "std_auc": 0.025779624671135808,
+      "median_auc": 0.5314132210935896,
+      "per_seed": [
+        0.5041728956968308,
+        0.5493804723251974,
+        0.5003151687995293,
+        0.5259207023785681,
+        0.5400215051122271,
+        0.5795121632236745,
+        0.5415069095683106,
+        0.536905739808611,
+        0.5101718448671778,
+        0.48961689078715825
+      ]
+    },
+    "35": {
+      "mean_auc": 0.5253793798728349,
+      "std_auc": 0.02748835265302901,
+      "median_auc": 0.5248489107624442,
+      "per_seed": [
+        0.49702791262714163,
+        0.5484356479434574,
+        0.4989900673975724,
+        0.5238225447201784,
+        0.52587527680471,
+        0.5820890265395706,
+        0.5457063936534569,
+        0.5384414706045364,
+        0.5029132987185737,
+        0.49049215971915183
+      ]
+    },
+    "40": {
+      "mean_auc": 0.5261080792766663,
+      "std_auc": 0.025747025686339825,
+      "median_auc": 0.5254994825263484,
+      "per_seed": [
+        0.5027196401629135,
+        0.5493920255365728,
+        0.4961211194559167,
+        0.5232976313515502,
+        0.5277013337011467,
+        0.5789546722121259,
+        0.5391632215659526,
+        0.541846814100602,
+        0.5096807054520766,
+        0.49220362922780614
+      ]
+    },
+    "45": {
+      "mean_auc": 0.5281432784793944,
+      "std_auc": 0.029091298052194032,
+      "median_auc": 0.5297248186441041,
+      "per_seed": [
+        0.49605486541269495,
+        0.5564299978523229,
+        0.5002110435673115,
+        0.5274842829088995,
+        0.5319653543793088,
+        0.5875218375462361,
+        0.5427020666510471,
+        0.5406555540125031,
+        0.5107942815107049,
+        0.48761350095291356
+      ]
+    },
+    "54": {
+      "mean_auc": 0.5285153901234951,
+      "std_auc": 0.026319623705614928,
+      "median_auc": 0.5287847867784969,
+      "per_seed": [
+        0.5068705812496375,
+        0.555598678359855,
+        0.4994894782993158,
+        0.5291967561888998,
+        0.5332190451087758,
+        0.5847440761984753,
+        0.5418276440360709,
+        0.5283728173680942,
+        0.5131818402254242,
+        0.4926529842004028
+      ]
+    }
+  },
+  "best_k": 10,
+  "feature_ranking": [
+    {
+      "rank": 1,
+      "feature": "FM_Beta",
+      "f_score": 502.41558087319856,
+      "p_value": 1.0396444573623395e-110,
+      "selected": true
+    },
+    {
+      "rank": 2,
+      "feature": "Fro_PeEnt",
+      "f_score": 500.1002034173408,
+      "p_value": 3.27716819067625e-110,
+      "selected": true
+    },
+    {
+      "rank": 3,
+      "feature": "Occ_HjAct",
+      "f_score": 302.9164698311632,
+      "p_value": 1.2265297587480949e-67,
+      "selected": true
+    },
+    {
+      "rank": 4,
+      "feature": "Fro_HjMob",
+      "f_score": 225.14910371990536,
+      "p_value": 8.864183679697981e-51,
+      "selected": true
+    },
+    {
+      "rank": 5,
+      "feature": "FM_Alpha",
+      "f_score": 207.92120081508347,
+      "p_value": 4.886791878120728e-47,
+      "selected": true
+    },
+    {
+      "rank": 6,
+      "feature": "Fro_ZCR",
+      "f_score": 187.98468363141637,
+      "p_value": 1.0522913211583784e-42,
+      "selected": true
+    },
+    {
+      "rank": 7,
+      "feature": "Fro_HjComp",
+      "f_score": 172.8086006542939,
+      "p_value": 2.105517785310776e-39,
+      "selected": true
+    },
+    {
+      "rank": 8,
+      "feature": "Cen_Beta",
+      "f_score": 169.95731112917574,
+      "p_value": 8.787864331542659e-39,
+      "selected": true
+    },
+    {
+      "rank": 9,
+      "feature": "Fro_1fSlope",
+      "f_score": 155.70566264139953,
+      "p_value": 1.1141454299238132e-35,
+      "selected": true
+    },
+    {
+      "rank": 10,
+      "feature": "FAA",
+      "f_score": 145.83087370209657,
+      "p_value": 1.579675651415696e-33,
+      "selected": true
+    },
+    {
+      "rank": 11,
+      "feature": "Cen_PeEnt",
+      "f_score": 143.71065423093677,
+      "p_value": 4.5785004440862524e-33,
+      "selected": false
+    },
+    {
+      "rank": 12,
+      "feature": "FM_Theta",
+      "f_score": 114.34071359955787,
+      "p_value": 1.1752684709693597e-26,
+      "selected": false
+    },
+    {
+      "rank": 13,
+      "feature": "Fro_SpEnt",
+      "f_score": 109.0570137333561,
+      "p_value": 1.6784576260931074e-25,
+      "selected": false
+    },
+    {
+      "rank": 14,
+      "feature": "Cen_HjAct",
+      "f_score": 106.75915403891159,
+      "p_value": 5.33711370265299e-25,
+      "selected": false
+    },
+    {
+      "rank": 15,
+      "feature": "Par_PeEnt",
+      "f_score": 106.46075824504544,
+      "p_value": 6.20233817119105e-25,
+      "selected": false
+    },
+    {
+      "rank": 16,
+      "feature": "Fro_HjAct",
+      "f_score": 99.26316668437602,
+      "p_value": 2.3284385492267218e-23,
+      "selected": false
+    },
+    {
+      "rank": 17,
+      "feature": "Occ_Alpha",
+      "f_score": 95.79420098054898,
+      "p_value": 1.337779718372854e-22,
+      "selected": false
+    },
+    {
+      "rank": 18,
+      "feature": "Par_HjMob",
+      "f_score": 78.49350217085713,
+      "p_value": 8.292060556822611e-19,
+      "selected": false
+    },
+    {
+      "rank": 19,
+      "feature": "Cen_SpEnt",
+      "f_score": 75.26440846089437,
+      "p_value": 4.242518721191454e-18,
+      "selected": false
+    },
+    {
+      "rank": 20,
+      "feature": "Par_HjAct",
+      "f_score": 72.57224040696025,
+      "p_value": 1.6558690617931014e-17,
+      "selected": false
+    },
+    {
+      "rank": 21,
+      "feature": "Cen_1fSlope",
+      "f_score": 58.92601226538552,
+      "p_value": 1.6677397617273942e-14,
+      "selected": false
+    },
+    {
+      "rank": 22,
+      "feature": "Par_ZCR",
+      "f_score": 58.675206519903455,
+      "p_value": 1.8941743891382737e-14,
+      "selected": false
+    },
+    {
+      "rank": 23,
+      "feature": "Cen_HjMob",
+      "f_score": 51.140187472062024,
+      "p_value": 8.721373277145031e-13,
+      "selected": false
+    },
+    {
+      "rank": 24,
+      "feature": "Occ_HjComp",
+      "f_score": 48.247133487040976,
+      "p_value": 3.8047611697221655e-12,
+      "selected": false
+    },
+    {
+      "rank": 25,
+      "feature": "Cen_Kurt",
+      "f_score": 45.38541529906002,
+      "p_value": 1.636406113263566e-11,
+      "selected": false
+    },
+    {
+      "rank": 26,
+      "feature": "FM_Delta",
+      "f_score": 41.16287176187447,
+      "p_value": 1.4134755095528721e-10,
+      "selected": false
+    },
+    {
+      "rank": 27,
+      "feature": "Cen_ZCR",
+      "f_score": 32.53163927291469,
+      "p_value": 1.1794929557960165e-08,
+      "selected": false
+    },
+    {
+      "rank": 28,
+      "feature": "Cen_Skew",
+      "f_score": 27.29217566449666,
+      "p_value": 1.7564048234102307e-07,
+      "selected": false
+    },
+    {
+      "rank": 29,
+      "feature": "wPLI_Fro_Par_Al",
+      "f_score": 27.04151234362591,
+      "p_value": 1.9994083790191925e-07,
+      "selected": false
+    },
+    {
+      "rank": 30,
+      "feature": "Occ_HjMob",
+      "f_score": 24.516639837009432,
+      "p_value": 7.391823755151522e-07,
+      "selected": false
+    },
+    {
+      "rank": 31,
+      "feature": "Occ_Kurt",
+      "f_score": 23.278887303166112,
+      "p_value": 1.405556507091694e-06,
+      "selected": false
+    },
+    {
+      "rank": 32,
+      "feature": "Fro_Kurt",
+      "f_score": 22.805130167845174,
+      "p_value": 1.7981016880362771e-06,
+      "selected": false
+    },
+    {
+      "rank": 33,
+      "feature": "Occ_PeEnt",
+      "f_score": 22.521549165814683,
+      "p_value": 2.0839192743603696e-06,
+      "selected": false
+    },
+    {
+      "rank": 34,
+      "feature": "Par_SpEnt",
+      "f_score": 21.251284632107662,
+      "p_value": 4.038677739289469e-06,
+      "selected": false
+    },
+    {
+      "rank": 35,
+      "feature": "FM_Theta_Beta",
+      "f_score": 20.742932612759663,
+      "p_value": 5.265296136265687e-06,
+      "selected": false
+    },
+    {
+      "rank": 36,
+      "feature": "Cen_Engagement",
+      "f_score": 20.285712422450143,
+      "p_value": 6.685239825354052e-06,
+      "selected": false
+    },
+    {
+      "rank": 37,
+      "feature": "Cen_Theta",
+      "f_score": 18.696019040776395,
+      "p_value": 1.5360822836608205e-05,
+      "selected": false
+    },
+    {
+      "rank": 38,
+      "feature": "Cen_Theta_Beta",
+      "f_score": 17.13496406820738,
+      "p_value": 3.487432041703027e-05,
+      "selected": false
+    },
+    {
+      "rank": 39,
+      "feature": "Fro_Skew",
+      "f_score": 14.756639837678906,
+      "p_value": 0.00012247188818265945,
+      "selected": false
+    },
+    {
+      "rank": 40,
+      "feature": "Par_Skew",
+      "f_score": 11.071682536500296,
+      "p_value": 0.0008772138048448634,
+      "selected": false
+    },
+    {
+      "rank": 41,
+      "feature": "wPLI_Fro_Occ_Al",
+      "f_score": 10.502007545854433,
+      "p_value": 0.0011932544916152654,
+      "selected": false
+    },
+    {
+      "rank": 42,
+      "feature": "Occ_ZCR",
+      "f_score": 9.757170330241747,
+      "p_value": 0.0017872999039264148,
+      "selected": false
+    },
+    {
+      "rank": 43,
+      "feature": "Par_Kurt",
+      "f_score": 9.546037375033272,
+      "p_value": 0.0020049507795001937,
+      "selected": false
+    },
+    {
+      "rank": 44,
+      "feature": "wPLI_Fro_Cen_Th",
+      "f_score": 9.014758360312412,
+      "p_value": 0.0026794493935997227,
+      "selected": false
+    },
+    {
+      "rank": 45,
+      "feature": "Par_1fSlope",
+      "f_score": 5.077801716129035,
+      "p_value": 0.024238532866100487,
+      "selected": false
+    },
+    {
+      "rank": 46,
+      "feature": "Par_HjComp",
+      "f_score": 4.44205715083828,
+      "p_value": 0.03506910095188843,
+      "selected": false
+    },
+    {
+      "rank": 47,
+      "feature": "FM_Theta_Alpha",
+      "f_score": 4.017274944791073,
+      "p_value": 0.04504198589482638,
+      "selected": false
+    },
+    {
+      "rank": 48,
+      "feature": "Cen_HjComp",
+      "f_score": 3.373408607388868,
+      "p_value": 0.06626266635912402,
+      "selected": false
+    },
+    {
+      "rank": 49,
+      "feature": "Occ_Skew",
+      "f_score": 1.5322769745973088,
+      "p_value": 0.21577703634367937,
+      "selected": false
+    },
+    {
+      "rank": 50,
+      "feature": "Occ_1fSlope",
+      "f_score": 0.7007168218984355,
+      "p_value": 0.40254706883779684,
+      "selected": false
+    },
+    {
+      "rank": 51,
+      "feature": "Occ_SpEnt",
+      "f_score": 0.46575189618777457,
+      "p_value": 0.4949512797050337,
+      "selected": false
+    },
+    {
+      "rank": 52,
+      "feature": "wPLI_Fro_Par_Th",
+      "f_score": 0.2944908363028602,
+      "p_value": 0.5873594633893676,
+      "selected": false
+    },
+    {
+      "rank": 53,
+      "feature": "Par_Alpha",
+      "f_score": 0.04283143865244067,
+      "p_value": 0.8360438603287198,
+      "selected": false
+    },
+    {
+      "rank": 54,
+      "feature": "wPLI_Cen_Par_Al",
+      "f_score": 0.014416138111913793,
+      "p_value": 0.9044303948007725,
+      "selected": false
+    }
+  ]
+}

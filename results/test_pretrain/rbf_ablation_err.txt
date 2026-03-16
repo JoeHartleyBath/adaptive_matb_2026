@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\phd_projects\adaptive_matb_2026\scripts\rbf_ablation_loso.py", line 658, in <module>
+    main()
+  File "C:\phd_projects\adaptive_matb_2026\scripts\rbf_ablation_loso.py", line 528, in main
+    sys.stdout.reconfigure(encoding="utf-8")
+AttributeError: 'NoneType' object has no attribute 'reconfigure'
