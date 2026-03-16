@@ -51,6 +51,7 @@ _eda_subprocess: Optional[subprocess.Popen] = None
 _hr_subprocess: Optional[subprocess.Popen] = None
 _lsl_recorder_subprocess: Optional[subprocess.Popen] = None
 _lsl_recording_path: Optional[Path] = None
+_mwl_subprocess: Optional[subprocess.Popen] = None
 
 _labrecorder_rcs_recording_started: bool = False
 _labrecorder_rcs_host: Optional[str] = None
@@ -178,8 +179,26 @@ def _cleanup_labrecorder_rcs_recording() -> None:
         _labrecorder_rcs_port = None
 
 
+def _cleanup_mwl_subprocess() -> None:
+    """Terminate MWL estimator/simulated subprocess if running."""
+    global _mwl_subprocess
+    if _mwl_subprocess is not None and _mwl_subprocess.poll() is None:
+        print("Terminating MWL subprocess...", file=sys.stderr)
+        try:
+            _mwl_subprocess.terminate()
+            _mwl_subprocess.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            print("MWL subprocess did not terminate, killing...", file=sys.stderr)
+            _mwl_subprocess.kill()
+            _mwl_subprocess.wait()
+        except Exception as e:
+            print(f"Error cleaning up MWL subprocess: {e}", file=sys.stderr)
+        _mwl_subprocess = None
+
+
 def _signal_handler(signum, frame):
     """Handle SIGINT/SIGTERM by cleaning up subprocesses then re-raising."""
+    _cleanup_mwl_subprocess()
     _cleanup_eda_subprocess()
     _cleanup_hr_subprocess()
     _cleanup_lsl_recorder_subprocess()
@@ -189,6 +208,7 @@ def _signal_handler(signum, frame):
 
 
 # Register cleanup handlers
+atexit.register(_cleanup_mwl_subprocess)
 atexit.register(_cleanup_eda_subprocess)
 atexit.register(_cleanup_hr_subprocess)
 atexit.register(_cleanup_lsl_recorder_subprocess)
@@ -1714,6 +1734,10 @@ def _run_single_scenario(
     block_index: int = 0,
     adaptation_mode: bool = False,
     adaptation_seed: Optional[int] = None,
+    mwl_adaptation_mode: bool = False,
+    mwl_simulated_mode: Optional[str] = None,
+    mwl_model_dir: Optional[str] = None,
+    mwl_audit_csv: Optional[str] = None,
 ) -> tuple[int, Optional[Path]]:
     repo_root = Path(__file__).resolve().parents[1]
 
@@ -1853,14 +1877,62 @@ def _run_single_scenario(
             "    raise RuntimeError(f'AdaptationScheduler injection failed: {_adapt_exc}') from _adapt_exc\n"
             if adaptation_mode else ""
         )
+        # -------------------------------------------------------
+        # MWL adaptation mode: monkey-patch Scheduler → MwlAdaptationScheduler
+        # -------------------------------------------------------
+        + (
+            "# --- MWL-driven adaptation ---\n"
+            "try:\n"
+            f"    import sys as _sys; _sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
+            "    from adaptation.mwl_adaptation_scheduler import MwlAdaptationScheduler, MwlAdaptationConfig\n"
+            f"    _mwl_cfg = MwlAdaptationConfig(seed={adaptation_seed!r}"
+            f", audit_csv_path={mwl_audit_csv!r})\n"
+            "    MwlAdaptationScheduler._MWL_CFG = _mwl_cfg\n"
+            "    import core as _core_mod, core.scheduler as _sched_mod\n"
+            "    _sched_mod.Scheduler = MwlAdaptationScheduler\n"
+            "    _core_mod.Scheduler = MwlAdaptationScheduler\n"
+            "except Exception as _mwl_exc:\n"
+            "    import traceback; traceback.print_exc()\n"
+            "    raise RuntimeError(f'MwlAdaptationScheduler injection failed: {_mwl_exc}') from _mwl_exc\n"
+            if mwl_adaptation_mode else ""
+        )
         + "runpy.run_path('main.py', run_name='__main__')\n"
     )
+
+    # Start MWL subprocess (simulated or real estimator) before OpenMATB
+    global _mwl_subprocess
+    if mwl_adaptation_mode and mwl_simulated_mode:
+        mwl_cmd = [
+            sys.executable, "-m", "mwl_simulated",
+            "--mode", mwl_simulated_mode,
+            "--rate", "4",
+        ]
+        print(f"[MWL] Starting simulated source: {' '.join(mwl_cmd)}", flush=True)
+        _mwl_subprocess = subprocess.Popen(
+            mwl_cmd,
+            cwd=str(Path(__file__).resolve().parent),
+            env=env,
+        )
+        time.sleep(1.0)  # let LSL outlet register
+    elif mwl_adaptation_mode and mwl_model_dir:
+        mwl_cmd = [
+            sys.executable, "-m", "mwl_estimator",
+            "--model-dir", mwl_model_dir,
+        ]
+        print(f"[MWL] Starting real estimator: {' '.join(mwl_cmd)}", flush=True)
+        _mwl_subprocess = subprocess.Popen(
+            mwl_cmd,
+            cwd=str(Path(__file__).resolve().parent),
+            env=env,
+        )
+        time.sleep(2.0)  # let EEG connection + warmup begin
 
     try:
         # Pass the modified environment
         proc = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=str(openmatb_dir), env=env)
         exit_code = proc.wait()
     finally:
+        _cleanup_mwl_subprocess()
         # Best-effort cleanup: do not leave the vendor submodule dirty.
         _cleanup_openmatb_staged_assets(openmatb_dir, scenario_filename)
 
@@ -2350,6 +2422,45 @@ def main() -> int:
         help="RNG seed for staircase and Poisson event generators (default: 0).",
     )
 
+    # MWL-driven adaptation
+    parser.add_argument(
+        "--mwl-adaptation",
+        action="store_true",
+        help=(
+            "Enable MWL-driven adaptive difficulty. "
+            "Mutually exclusive with --adaptation (staircase). "
+            "Reads real-time MWL scores from an LSL stream and adjusts MATB difficulty."
+        ),
+    )
+    parser.add_argument(
+        "--mwl-simulated",
+        default=None,
+        metavar="MODE",
+        help=(
+            "Launch a simulated MWL source as a subprocess before OpenMATB. "
+            "MODE is passed to mwl_simulated.py --mode (e.g. block, constant, sinusoid). "
+            "Use with --mwl-adaptation for desk testing without EEG hardware."
+        ),
+    )
+    parser.add_argument(
+        "--mwl-model-dir",
+        default=None,
+        metavar="DIR",
+        help=(
+            "Path to model artefacts directory (pipeline.pkl, selector.pkl, norm_stats.json). "
+            "When provided with --mwl-adaptation, launches the real MWL estimator as a subprocess."
+        ),
+    )
+    parser.add_argument(
+        "--mwl-audit-csv",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path for the MWL adaptation audit CSV. "
+            "If omitted, defaults to <output_root>/<participant>/<session>/mwl_audit.csv."
+        ),
+    )
+
     args = parser.parse_args()
 
     extra_required_streams: list[dict] = []
@@ -2364,6 +2475,42 @@ def main() -> int:
     if args.only_scenario and args.calibration_trend:
         print("ERROR: --only-scenario cannot be combined with --calibration-trend.", file=sys.stderr)
         return 2
+
+    if args.adaptation and args.mwl_adaptation:
+        print("ERROR: --adaptation and --mwl-adaptation are mutually exclusive.", file=sys.stderr)
+        return 2
+
+    if args.mwl_simulated and args.mwl_model_dir:
+        print("ERROR: --mwl-simulated and --mwl-model-dir are mutually exclusive.", file=sys.stderr)
+        return 2
+
+    if (args.mwl_simulated or args.mwl_model_dir) and not args.mwl_adaptation:
+        print("ERROR: --mwl-simulated / --mwl-model-dir require --mwl-adaptation.", file=sys.stderr)
+        return 2
+
+    # --- MWL artefact pre-check ---
+    if args.mwl_adaptation and args.mwl_model_dir and not args.mwl_simulated:
+        _model_dir = Path(args.mwl_model_dir)
+        _required = ["pipeline.pkl", "selector.pkl", "norm_stats.json"]
+        _missing = [f for f in _required if not (_model_dir / f).exists()]
+        if _missing:
+            print(
+                f"ERROR: MWL model artefacts missing from {_model_dir}:\n"
+                + "".join(f"  - {f}\n" for f in _missing)
+                + "Run 'python scripts/calibrate_participant_logreg.py calibrate' first.",
+                file=sys.stderr,
+            )
+            return 2
+
+    if args.mwl_adaptation and args.mwl_audit_csv:
+        _audit_parent = Path(args.mwl_audit_csv).parent
+        if not _audit_parent.exists():
+            try:
+                _audit_parent.mkdir(parents=True, exist_ok=True)
+                print(f"Created audit output directory: {_audit_parent}")
+            except OSError as exc:
+                print(f"ERROR: Cannot create audit CSV directory {_audit_parent}: {exc}", file=sys.stderr)
+                return 2
 
     # --pilot1 implies a dual-amp EEG setup; bump the stream count unless the user
     # has explicitly requested a higher value via --eeg-stream-count.
@@ -2795,6 +2942,10 @@ def main() -> int:
             block_index=block_index,
             adaptation_mode=getattr(args, "adaptation", False),
             adaptation_seed=getattr(args, "adaptation_seed", 0),
+            mwl_adaptation_mode=getattr(args, "mwl_adaptation", False),
+            mwl_simulated_mode=getattr(args, "mwl_simulated", None),
+            mwl_model_dir=getattr(args, "mwl_model_dir", None),
+            mwl_audit_csv=getattr(args, "mwl_audit_csv", None),
         )
 
         if exit_code != 0:
