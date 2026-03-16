@@ -13,7 +13,7 @@ Four implementations are provided:
     EmaSmoother          – exponential moving average (recommended default)
     SmaSmoother          – simple moving average over a fixed sample window
     AdaptiveEmaSmoother  – EMA whose α grows when recent variance is high
-    FixedLagSmoother     – causal average whose centre sits lag_n samples in the past
+    FixedLagSmoother     – Kalman fixed-lag smoother with RTS backward pass
 
 Recommended default: EmaSmoother(alpha=0.10)
     At 4 Hz inference rate this gives an effective time constant of ~22 samples
@@ -52,21 +52,22 @@ class MwlSmootherConfig:
         At 4 Hz inference: alpha=0.10 → τ ≈ 22 samples ≈ 5.5 s.
     window_n : int
         Number of samples in the rolling window. Default 8 (= 2 s at 4 Hz).
-        Used by ``SmaSmoother`` and ``FixedLagSmoother``.
+        Used by ``SmaSmoother``.
     alpha_min : float
         Minimum alpha for ``AdaptiveEmaSmoother``. Default 0.05.
+        Used when classifier confidence is lowest (p ≈ 0.5).
     alpha_max : float
         Maximum alpha for ``AdaptiveEmaSmoother``. Default 0.30.
-    variance_window_n : int
-        Sample window for running variance in ``AdaptiveEmaSmoother``.
-        Default 16 (= 4 s at 4 Hz).
-    var_ceiling : float
-        Variance level that saturates alpha at alpha_max in
-        ``AdaptiveEmaSmoother``. Default 0.04 (std ≈ 0.20 on a [0,1] score).
-        Calibrate from pilot data.
+        Used when classifier confidence is highest (p ≈ 0 or 1).
     lag_n : int
         Fixed lag in samples for ``FixedLagSmoother``. Default 4.
-        Must be < window_n / 2. Adds lag_n * inference_step_s seconds of delay.
+        Adds lag_n * inference_step_s seconds of output delay.
+    process_noise : float
+        Process noise variance (Q) for ``FixedLagSmoother``. Default 0.005.
+        Controls expected step-to-step change in the latent workload state.
+    measurement_noise : float
+        Measurement noise variance (R) for ``FixedLagSmoother``. Default 0.1.
+        Controls how much individual classifier outputs are trusted.
     """
 
     method: Literal["ema", "sma", "adaptive_ema", "fixed_lag"] = "ema"
@@ -74,9 +75,9 @@ class MwlSmootherConfig:
     window_n: int = 8
     alpha_min: float = 0.05
     alpha_max: float = 0.30
-    variance_window_n: int = 16
-    var_ceiling: float = 0.04
     lag_n: int = 4
+    process_noise: float = 0.005
+    measurement_noise: float = 0.1
 
 
 # ---------------------------------------------------------------------------
@@ -171,70 +172,54 @@ class SmaSmoother(MwlSmoother):
 # ---------------------------------------------------------------------------
 
 class AdaptiveEmaSmoother(MwlSmoother):
-    """EMA whose α adapts to recent output volatility.
+    """Confidence-weighted adaptive causal EMA filter.
 
-    When EEGNet output variance over the last *variance_window_n* samples
-    is high, α is increased toward *alpha_max* (faster tracking).
-    When variance is low, α decreases toward *alpha_min* (heavier smoothing).
+    Applies recursive exponential smoothing where the smoothing coefficient
+    α is dynamically adjusted as a function of classifier confidence.
+    Classifier confidence is derived from the input probability:
 
-    Mapping:
-        norm_var = clip(var / var_ceiling, 0, 1)
-        α = alpha_min + (alpha_max − alpha_min) · norm_var
+        confidence = 2 · |p − 0.5|      ∈ [0, 1]
 
-    ⚠ Assumption: high variance = genuine rapid state change, not artefact.
-      Only use if pilot data confirms this. Use EmaSmoother for first
-      deployment (per ADR-0003 and implementation plan).
+    Mapping to α:
+        α = alpha_min + (alpha_max − alpha_min) · confidence
+
+    When the classifier is confident (p near 0 or 1), α is high and the
+    filter tracks new observations closely.  When the classifier is
+    uncertain (p near 0.5), α is low and the filter relies more on its
+    history, stabilising transient fluctuations.
+
+    Operates strictly causally with zero imposed latency.
 
     Parameters
     ----------
     alpha_min : float
-        Minimum α when signal is stable. Default 0.05.
+        Minimum α when classifier confidence is lowest (p ≈ 0.5). Default 0.05.
     alpha_max : float
-        Maximum α when signal is volatile. Default 0.30.
-    variance_window_n : int
-        Samples used to compute running variance. Default 16 (4 s at 4 Hz).
-    var_ceiling : float
-        Variance level that saturates α at alpha_max. Default 0.04.
+        Maximum α when classifier confidence is highest (p ≈ 0 or 1). Default 0.30.
     """
 
     def __init__(
         self,
         alpha_min: float = 0.05,
         alpha_max: float = 0.30,
-        variance_window_n: int = 16,
-        var_ceiling: float = 0.04,
     ) -> None:
         if not (0.0 < alpha_min <= alpha_max <= 1.0):
             raise ValueError(
                 f"Need 0 < alpha_min ≤ alpha_max ≤ 1; "
                 f"got alpha_min={alpha_min}, alpha_max={alpha_max}"
             )
-        if variance_window_n < 2:
-            raise ValueError(f"variance_window_n must be ≥ 2; got {variance_window_n}")
-        if var_ceiling <= 0.0:
-            raise ValueError(f"var_ceiling must be > 0; got {var_ceiling}")
 
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
-        self.variance_window_n = variance_window_n
-        self.var_ceiling = var_ceiling
 
         self._s: Optional[float] = None
-        self._var_buf: Deque[float] = deque(maxlen=variance_window_n)
         self._current_alpha: float = alpha_min
 
-    def _running_variance(self) -> float:
-        n = len(self._var_buf)
-        if n < 2:
-            return 0.0
-        mean = sum(self._var_buf) / n
-        return sum((x - mean) ** 2 for x in self._var_buf) / (n - 1)
-
     def update(self, value: float) -> float:
-        self._var_buf.append(float(value))
-        var = self._running_variance()
-        norm_var = min(1.0, var / self.var_ceiling)
-        self._current_alpha = self.alpha_min + (self.alpha_max - self.alpha_min) * norm_var
+        confidence = 2.0 * abs(float(value) - 0.5)
+        self._current_alpha = (
+            self.alpha_min + (self.alpha_max - self.alpha_min) * confidence
+        )
 
         if self._s is None:
             self._s = float(value)
@@ -244,7 +229,6 @@ class AdaptiveEmaSmoother(MwlSmoother):
 
     def reset(self) -> None:
         self._s = None
-        self._var_buf.clear()
         self._current_alpha = self.alpha_min
 
     @property
@@ -255,8 +239,7 @@ class AdaptiveEmaSmoother(MwlSmoother):
     def __repr__(self) -> str:
         return (
             f"AdaptiveEmaSmoother("
-            f"alpha_min={self.alpha_min}, alpha_max={self.alpha_max}, "
-            f"variance_window_n={self.variance_window_n})"
+            f"alpha_min={self.alpha_min}, alpha_max={self.alpha_max})"
         )
 
 
@@ -265,58 +248,111 @@ class AdaptiveEmaSmoother(MwlSmoother):
 # ---------------------------------------------------------------------------
 
 class FixedLagSmoother(MwlSmoother):
-    """Causal smoother that returns the mean of a window centred *lag_n*
-    samples in the past.
+    """Kalman fixed-lag smoother for scalar workload probability.
 
-    The output is delayed by lag_n * inference_step_s seconds relative to
-    the most recent sample.  The average is taken over a symmetric window
-    of ±lag_n samples around the lagged centre, bounded by buffer contents.
+    Models the latent workload state as a random walk observed through
+    noisy classifier outputs:
 
-    Requires window_n > 2 * lag_n to allow a full symmetric average.
+        x_t = x_{t-1} + w_t,   w_t ~ N(0, Q)   (process model)
+        z_t = x_t + v_t,        v_t ~ N(0, R)   (measurement model)
+
+    At each time step the Kalman filter runs a forward prediction/update
+    pass.  A buffer of the last ``lag_n + 1`` filtered states is maintained.
+    Rauch–Tung–Striebel (RTS) backward smoothing is then applied over the
+    buffer to return the smoothed estimate at time ``t − lag_n``.
+
+    This introduces an explicit, bounded delay of ``lag_n`` samples while
+    reducing posterior variance compared to purely causal filtering.
 
     Parameters
     ----------
-    window_n : int
-        Total buffer capacity (must be > 2 * lag_n). Default 8.
     lag_n : int
-        Samples to look back from the newest sample as centre of average.
-        Default 4. At 4 Hz: lag_n=4 → 1 s output delay.
+        Fixed lag in samples. The output estimates x_{t − lag_n} given
+        observations up to t. Default 4 (1 s at 4 Hz).
+    process_noise : float
+        Process noise variance Q.  Controls expected step-to-step change
+        in the latent workload state. Default 0.005.
+    measurement_noise : float
+        Measurement noise variance R.  Controls how much individual
+        classifier outputs are trusted. Default 0.1.
     """
 
-    def __init__(self, window_n: int = 8, lag_n: int = 4) -> None:
+    def __init__(
+        self,
+        lag_n: int = 4,
+        process_noise: float = 0.005,
+        measurement_noise: float = 0.1,
+    ) -> None:
         if lag_n < 0:
-            raise ValueError(f"lag_n must be ≥ 0; got {lag_n}")
-        if window_n <= 2 * lag_n:
-            raise ValueError(
-                f"window_n ({window_n}) must be > 2 * lag_n ({2 * lag_n}) "
-                "to allow a centred average at the lag position"
-            )
-        self.window_n = window_n
+            raise ValueError(f"lag_n must be >= 0; got {lag_n}")
+        if process_noise <= 0:
+            raise ValueError(f"process_noise must be > 0; got {process_noise}")
+        if measurement_noise <= 0:
+            raise ValueError(f"measurement_noise must be > 0; got {measurement_noise}")
         self.lag_n = lag_n
-        self._buf: Deque[float] = deque(maxlen=window_n)
+        self.process_noise = process_noise
+        self.measurement_noise = measurement_noise
+        # Forward-filtered state buffers (ring buffer, size lag_n + 1)
+        self._x_fwd: Deque[float] = deque(maxlen=max(lag_n + 1, 1))
+        self._P_fwd: Deque[float] = deque(maxlen=max(lag_n + 1, 1))
+        # Current Kalman filter state
+        self._x: Optional[float] = None
+        self._P: Optional[float] = None
 
     def update(self, value: float) -> float:
-        self._buf.append(float(value))
-        buf = list(self._buf)
-        n = len(buf)
+        z = float(value)
+        Q = self.process_noise
+        R = self.measurement_noise
 
-        # Centre position: lag_n samples before the newest element
-        centre = n - 1 - self.lag_n
-        if centre < 0:
-            # Buffer not yet deep enough to reach the lag — average all available
-            return sum(buf) / n
+        if self._x is None:
+            # Initialise filter with first observation
+            self._x = z
+            self._P = R
+        else:
+            # Kalman predict (random walk: predicted state = previous state)
+            P_pred = self._P + Q
+            # Kalman update
+            K = P_pred / (P_pred + R)
+            self._x = self._x + K * (z - self._x)
+            self._P = (1.0 - K) * P_pred
 
-        # Symmetric window of ±lag_n around centre, clipped to buffer bounds
-        lo = max(0, centre - self.lag_n)
-        hi = min(n, centre + self.lag_n + 1)
-        window_slice = buf[lo:hi]
-        return sum(window_slice) / len(window_slice)
+        # Store forward-filtered state
+        self._x_fwd.append(self._x)
+        self._P_fwd.append(self._P)
+
+        if self.lag_n == 0:
+            return max(0.0, min(1.0, self._x))
+
+        # Not enough history yet — return oldest available filtered estimate
+        if len(self._x_fwd) <= self.lag_n:
+            return max(0.0, min(1.0, self._x_fwd[0]))
+
+        # RTS backward smoothing: start from newest, smooth back to index 0
+        xs = list(self._x_fwd)
+        Ps = list(self._P_fwd)
+        n = len(xs)
+
+        x_s = xs[n - 1]
+        P_s = Ps[n - 1]
+        for k in range(n - 2, -1, -1):
+            P_pred_k1 = Ps[k] + Q
+            G = Ps[k] / P_pred_k1          # smoother gain
+            x_s = xs[k] + G * (x_s - xs[k])
+            P_s = Ps[k] + G * G * (P_s - P_pred_k1)
+
+        return max(0.0, min(1.0, x_s))
 
     def reset(self) -> None:
-        self._buf.clear()
+        self._x = None
+        self._P = None
+        self._x_fwd.clear()
+        self._P_fwd.clear()
 
     def __repr__(self) -> str:
-        return f"FixedLagSmoother(window_n={self.window_n}, lag_n={self.lag_n})"
+        return (
+            f"FixedLagSmoother(lag_n={self.lag_n}, "
+            f"Q={self.process_noise}, R={self.measurement_noise})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -347,11 +383,13 @@ def make_smoother(cfg: MwlSmootherConfig) -> MwlSmoother:
         return AdaptiveEmaSmoother(
             alpha_min=cfg.alpha_min,
             alpha_max=cfg.alpha_max,
-            variance_window_n=cfg.variance_window_n,
-            var_ceiling=cfg.var_ceiling,
         )
     elif cfg.method == "fixed_lag":
-        return FixedLagSmoother(window_n=cfg.window_n, lag_n=cfg.lag_n)
+        return FixedLagSmoother(
+            lag_n=cfg.lag_n,
+            process_noise=cfg.process_noise,
+            measurement_noise=cfg.measurement_noise,
+        )
     else:
         raise ValueError(
             f"Unknown smoother method {cfg.method!r}. "

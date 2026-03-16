@@ -67,7 +67,7 @@ from eeg import (  # noqa: E402
     slice_block,
 )
 from ml import EEGNet, HIGH_CLASS  # noqa: E402
-from ml.dataset import LABEL_MAP, N_CLASSES  # noqa: E402
+from ml.dataset import LABEL_MAP, N_CLASSES, zscore_epochs_np  # noqa: E402
 
 # Reuse the same path helpers and XDF utilities from the dataset builder
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
@@ -185,7 +185,7 @@ def _build_loaders(
     batch_size: int,
     device: torch.device,
 ) -> DataLoader:
-    x = torch.from_numpy(train_epochs).unsqueeze(1)   # (N, 1, C, T)
+    x = torch.from_numpy(zscore_epochs_np(train_epochs)).unsqueeze(1)   # (N, 1, C, T)
     y = torch.from_numpy(train_labels)
     ds = TensorDataset(x, y)
     return DataLoader(ds, batch_size=batch_size, shuffle=True)
@@ -200,7 +200,7 @@ def _evaluate(
 ) -> dict:
     """Evaluate model on a numpy epoch array.  Returns metrics dict."""
     model.eval()
-    x = torch.from_numpy(epochs).unsqueeze(1).to(device)   # (N, 1, C, T)
+    x = torch.from_numpy(zscore_epochs_np(epochs)).unsqueeze(1).to(device)   # (N, 1, C, T)
     proba = model.predict_proba(x).cpu().numpy()            # (N, 3)
     preds = proba.argmax(axis=1)
 

@@ -4,8 +4,8 @@ Usage
 -----
     python scripts/train_mwl_model.py [options]
 
-    --dataset PATH     Path to dataset.h5.  Defaults to
-                       {processed_dir}/training/dataset.h5 from paths.yaml.
+    --dataset PATH     Path to continuous data directory.  Defaults to
+                       {processed_dir}/training/continuous from paths.yaml.
     --out-dir PATH     Where to save the model and training log.
                        Defaults to {data_root}/models/.
     --hold-out P1 P2   Participant IDs to exclude from training (test set).
@@ -43,6 +43,7 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 import yaml  # noqa: E402
 
 from ml import EEGNet, MwlDataset  # noqa: E402
+from ml.pretrain_loader import PretrainDataDir  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -102,12 +103,13 @@ def _eval_epoch(
     loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
+    n_classes: int = 3,
 ) -> tuple[float, float]:
-    """Return (mean_loss, balanced_accuracy)."""
+    """Return (mean_loss, auc_high_vs_rest)."""
     model.eval()
     total_loss = 0.0
     n_samples = 0
-    all_preds: list[int] = []
+    all_proba: list[np.ndarray] = []
     all_labels: list[int] = []
 
     for x, y in loader:
@@ -116,22 +118,25 @@ def _eval_epoch(
         loss = criterion(logits, y)
         total_loss += loss.item() * x.size(0)
         n_samples += x.size(0)
-        preds = logits.argmax(dim=1)
-        all_preds.extend(preds.cpu().tolist())
+        proba = torch.softmax(logits, dim=1).cpu().numpy()
+        all_proba.append(proba)
         all_labels.extend(y.cpu().tolist())
 
-    # Balanced accuracy (mean per-class recall)
-    preds_arr = np.array(all_preds)
+    proba_arr = np.concatenate(all_proba, axis=0)   # (N, n_classes)
     labels_arr = np.array(all_labels)
-    n_classes = 3
-    per_class = []
-    for c in range(n_classes):
-        mask = labels_arr == c
-        if mask.sum() > 0:
-            per_class.append((preds_arr[mask] == c).mean())
-    bal_acc = float(np.mean(per_class)) if per_class else 0.0
 
-    return total_loss / n_samples, bal_acc
+    # AUC: P(HIGH) = class index (n_classes-1) after dense remap vs true HIGH label
+    high_scores = proba_arr[:, n_classes - 1]
+    binary_truth = (labels_arr == (n_classes - 1)).astype(int)
+    order = np.argsort(high_scores)[::-1]
+    tp = np.cumsum(binary_truth[order])
+    fp = np.cumsum(1 - binary_truth[order])
+    tpr = np.concatenate([[0.0], tp / max(tp[-1], 1)])
+    fpr = np.concatenate([[0.0], fp / max(fp[-1], 1)])
+    _trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
+    auc = float(_trapz(tpr, fpr))  # type: ignore[misc]
+
+    return total_loss / n_samples, auc
 
 
 # ---------------------------------------------------------------------------
@@ -143,12 +148,19 @@ def main() -> None:
     parser.add_argument("--dataset", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None)
     parser.add_argument("--hold-out", nargs="*", default=[], metavar="PID")
+    parser.add_argument(
+        "--exclude", nargs="*", default=[], metavar="PID",
+        help="Participant IDs to exclude entirely (e.g. QC failures). "
+             "Never used for training or validation.",
+    )
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--f1", type=int, default=8, dest="f1",
+                        help="EEGNet F1 (number of temporal filters). Default 8.")
     args = parser.parse_args()
 
     _set_seed(args.seed)
@@ -165,7 +177,7 @@ def main() -> None:
         path_cfg = _resolve_paths(paths_yaml)
 
     dataset_path: Path = args.dataset or (
-        Path(path_cfg["processed_dir"]) / "training" / "dataset.h5"
+        Path(path_cfg["processed_dir"]) / "training" / "continuous"
     )
     out_dir: Path = args.out_dir or Path(path_cfg["data_root"]) / "models"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -173,21 +185,36 @@ def main() -> None:
     device = torch.device(args.device) if args.device else _auto_device()
     print(f"Device: {device}")
 
+    # ---- read metadata via PretrainDataDir ----
+    data_dir = PretrainDataDir(dataset_path)
+    n_channels = len(data_dir.channel_names())
+    srate = data_dir.srate()
+    window_s = data_dir.win.window_s
+    n_classes = 2  # VR-TSST binary: LOW / HIGH
+    n_times = int(window_s * srate)
+    print(f"Dataset: {n_channels} ch × {n_times} samples  n_classes={n_classes}")
+
     # ---- dataset ----
-    full_dataset = MwlDataset(dataset_path)
-    all_pids = full_dataset.participant_ids
+    all_pids: list[str] = data_dir.available_pids()
+    exclude_set = set(args.exclude)
     hold_out_set = set(args.hold_out)
+    if exclude_set:
+        print(f"Excluding (QC failures): {sorted(exclude_set)}")
+        all_pids = [p for p in all_pids if p not in exclude_set]
     train_pids = [p for p in all_pids if p not in hold_out_set]
     val_frac = 0.15  # 15% of training participants → validation
 
     if not train_pids:
         sys.exit("No training participants after applying --hold-out.")
 
-    # Per-participant split: last val_frac participants → val
-    # Sorted for reproducibility; deterministic given the seed.
+    # Seeded random val split — avoids systematic alphabetical bias
+    # (late PIDs alphabetically are not necessarily representative of the
+    # full performance distribution).
     n_val_pids = max(1, int(len(train_pids) * val_frac))
-    val_pids = train_pids[-n_val_pids:]
-    train_pids_final = train_pids[:-n_val_pids]
+    rng_split = np.random.default_rng(args.seed)
+    val_indices = sorted(rng_split.choice(len(train_pids), size=n_val_pids, replace=False))
+    val_pids = [train_pids[i] for i in val_indices]
+    train_pids_final = [p for p in train_pids if p not in set(val_pids)]
 
     print(
         f"Participants — train: {len(train_pids_final)}  "
@@ -198,8 +225,43 @@ def main() -> None:
     train_dataset = MwlDataset(dataset_path, participant_ids=train_pids_final)
     val_dataset = MwlDataset(dataset_path, participant_ids=val_pids)
 
-    class_weights = train_dataset.class_weights().to(device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    # Remap sparse labels to dense [0, n_classes-1].
+    # Needed when the dataset encodes only a subset of the canonical 3-class
+    # label space (e.g. VR-TSST export: LOW=0, HIGH=2 → remap to 0, 1).
+    unique_labels = sorted(set(train_dataset._labels.tolist()))
+    if unique_labels != list(range(n_classes)):
+        lmap = {old: new for new, old in enumerate(unique_labels)}
+        for ds in (train_dataset, val_dataset):
+            ds._labels = np.array([lmap[lb] for lb in ds._labels], dtype=np.int64)
+        print(f"Label remap applied: {lmap}")
+
+    # Dataset is balanced (equal LOW / HIGH windows per participant), so
+    # unweighted CrossEntropyLoss is appropriate.  Class weighting on a
+    # balanced dataset adds noise rather than correcting imbalance.
+    criterion = nn.CrossEntropyLoss()
+
+    # Compute per-channel normalisation statistics from training epochs only.
+    # shape: (N, C, T) → mean/std over N and T, one value per channel.
+    # Preserves sustained amplitude differences across workload conditions
+    # (e.g. alpha suppression during HIGH load) while removing
+    # between-participant baseline offsets.
+    ch_mean = train_dataset._epochs.mean(axis=(0, 2)).astype(np.float32)  # (C,)
+    ch_std  = train_dataset._epochs.std(axis=(0, 2)).astype(np.float32)   # (C,)
+    ch_std  = np.where(ch_std > 1e-10, ch_std, 1.0)                       # flat-channel guard
+    train_dataset._channel_mean = ch_mean
+    train_dataset._channel_std  = ch_std
+    val_dataset._channel_mean   = ch_mean
+    val_dataset._channel_std    = ch_std
+    print(
+        f"Per-channel train stats computed (C={len(ch_mean)}): "
+        f"mean|abs|={np.abs(ch_mean).mean():.3e}, mean std={ch_std.mean():.3e}"
+    )
+
+    # Save stats alongside the model so they are available at fine-tune
+    # and inference time without re-loading the full training dataset.
+    channel_stats_path = out_dir / "channel_stats.npz"
+    np.savez(channel_stats_path, mean=ch_mean, std=ch_std)
+    print(f"Channel stats: {channel_stats_path}")
 
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
@@ -211,15 +273,7 @@ def main() -> None:
     )
 
     # ---- model ----
-    # Read n_channels from dataset metadata
-    import h5py
-    with h5py.File(dataset_path, "r") as f:
-        n_channels = int(f.attrs["n_channels"])  # type: ignore[arg-type]
-        window_s = float(f.attrs["window_s"])    # type: ignore[arg-type]
-        srate = float(f.attrs["srate"])           # type: ignore[arg-type]
-    n_times = int(window_s * srate)
-
-    model = EEGNet(n_channels=n_channels, n_times=n_times).to(device)
+    model = EEGNet(n_channels=n_channels, n_times=n_times, n_classes=n_classes, F1=args.f1).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=args.patience // 2, factor=0.5
@@ -238,21 +292,21 @@ def main() -> None:
 
     for epoch in range(1, args.epochs + 1):
         train_loss = _train_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_bal_acc = _eval_epoch(model, val_loader, criterion, device)
+        val_loss, val_auc = _eval_epoch(model, val_loader, criterion, device, n_classes=n_classes)
         scheduler.step(val_loss)
 
         history.append({
             "epoch": epoch,
             "train_loss": round(train_loss, 5),
             "val_loss": round(val_loss, 5),
-            "val_bal_acc": round(val_bal_acc, 4),
+            "val_auc": round(val_auc, 4),
         })
 
         print(
             f"Epoch {epoch:3d} | "
             f"train_loss={train_loss:.4f}  "
             f"val_loss={val_loss:.4f}  "
-            f"val_bal_acc={val_bal_acc:.3f}"
+            f"val_auc={val_auc:.3f}"
         )
 
         if val_loss < best_val_loss:
@@ -277,13 +331,17 @@ def main() -> None:
         "train_participants": train_pids_final,
         "val_participants": val_pids,
         "hold_out_participants": list(hold_out_set),
+        "excluded_participants": sorted(exclude_set),
         "n_channels": n_channels,
         "n_times": n_times,
+        "n_classes": n_classes,
         "epochs_run": len(history),
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "lr": args.lr,
         "batch_size": args.batch_size,
+        "val_split": "seeded_random",
+        "channel_stats_path": str(channel_stats_path),
         "history": history,
     }
     log_path = out_dir / "eegnet_pretrained_log.json"

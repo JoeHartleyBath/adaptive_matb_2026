@@ -127,34 +127,59 @@ class TestAdaptiveEmaSmoother:
         s = AdaptiveEmaSmoother()
         assert s.update(0.7) == pytest.approx(0.7)
 
-    def test_alpha_low_on_stable_signal(self):
-        """After many identical inputs, current_alpha should be near alpha_min."""
-        s = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.30, var_ceiling=0.04)
-        for _ in range(30):
-            s.update(0.5)
-        assert s.current_alpha == pytest.approx(s.alpha_min, abs=1e-6)
+    def test_alpha_high_on_confident_input(self):
+        """When p is near 0 or 1 (high confidence), alpha should be near alpha_max."""
+        s = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.30)
+        s.update(0.95)  # confidence = 2*|0.95-0.5| = 0.9
+        assert s.current_alpha == pytest.approx(0.05 + 0.25 * 0.9)
 
-    def test_alpha_high_on_volatile_signal(self):
-        """Alternating 0/1 signal should push alpha toward alpha_max."""
-        s = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.30, var_ceiling=0.04)
-        for i in range(30):
-            s.update(float(i % 2))
-        assert s.current_alpha > s.alpha_min
+    def test_alpha_low_on_uncertain_input(self):
+        """When p is near 0.5 (low confidence), alpha should be near alpha_min."""
+        s = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.30)
+        s.update(0.5)  # confidence = 0
+        assert s.current_alpha == pytest.approx(0.05)
+
+    def test_alpha_at_extreme_probability(self):
+        """p = 1.0 gives confidence = 1.0, so alpha = alpha_max."""
+        s = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.30)
+        s.update(1.0)
+        assert s.current_alpha == pytest.approx(0.30)
+
+    def test_alpha_symmetric_around_half(self):
+        """p = 0.2 and p = 0.8 should produce the same alpha."""
+        s1 = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.30)
+        s2 = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.30)
+        s1.update(0.2)
+        s2.update(0.8)
+        assert s1.current_alpha == pytest.approx(s2.current_alpha)
+
+    def test_smoothes_uncertain_inputs_more(self):
+        """Uncertain inputs (p≈0.5) should be smoothed more heavily than
+        confident ones, so the output should move less per step."""
+        s_certain = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.50)
+        s_uncertain = AdaptiveEmaSmoother(alpha_min=0.05, alpha_max=0.50)
+        # Initialise both at 0.3
+        s_certain.update(0.3)
+        s_uncertain.update(0.3)
+        # Step to a new value: one confident, one uncertain
+        out_certain = s_certain.update(0.95)   # high confidence
+        out_uncertain = s_uncertain.update(0.55)  # low confidence
+        # Confident input should have moved output further from 0.3
+        assert abs(out_certain - 0.3) > abs(out_uncertain - 0.3)
 
     def test_reset_clears_state(self):
         s = AdaptiveEmaSmoother()
         s.update(0.8)
         s.reset()
+        # After reset, first sample re-initialises to that value
         assert s.update(0.2) == pytest.approx(0.2)
-        assert s.current_alpha == pytest.approx(s.alpha_min)
+        # alpha reflects the confidence of the new input (|0.2-0.5|*2 = 0.6)
+        expected_alpha = s.alpha_min + (s.alpha_max - s.alpha_min) * 0.6
+        assert s.current_alpha == pytest.approx(expected_alpha)
 
     def test_invalid_alpha_range_raises(self):
         with pytest.raises(ValueError):
             AdaptiveEmaSmoother(alpha_min=0.5, alpha_max=0.3)
-
-    def test_invalid_variance_window_raises(self):
-        with pytest.raises(ValueError):
-            AdaptiveEmaSmoother(variance_window_n=1)
 
     def test_output_stays_bounded(self):
         """Smoothed output must remain in [0, 1] when inputs are in [0, 1]."""
@@ -171,58 +196,91 @@ class TestAdaptiveEmaSmoother:
 # ---------------------------------------------------------------------------
 
 class TestFixedLagSmoother:
-    def test_output_before_buffer_fills(self):
-        """Before lag depth is reached, returns mean of all available samples."""
-        s = FixedLagSmoother(window_n=9, lag_n=4)
-        # Only 2 samples — centre would be at index -3 (negative), so mean all
-        out = s.update(0.4)
-        assert out == pytest.approx(0.4)
+    def test_first_sample_returns_that_value(self):
+        s = FixedLagSmoother(lag_n=4, process_noise=0.005, measurement_noise=0.1)
         out = s.update(0.6)
-        assert out == pytest.approx(0.5)
+        assert out == pytest.approx(0.6, abs=0.01)
 
-    def test_lag_provides_delayed_smoothing(self):
-        """The lag means output stays near 0 for the first few HIGH inputs."""
-        s = FixedLagSmoother(window_n=9, lag_n=4)
-        # Feed a step: 0 for first 5 samples, then 1 forever.
-        # On the 6th sample (index 5, first 1 pushed):
-        #   buf = [0,0,0,0,0,1], n=6, centre = 6-1-4 = 1
-        #   window = buf[0:6] = [0,0,0,0,0,1]  → mean = 1/6 ≈ 0.167
-        # So output should be well below 0.5 immediately after the step.
-        outs = []
-        for _ in range(5):
-            outs.append(s.update(0.0))
+    def test_lag_delays_step_response(self):
+        """After a step from 0 to 1, the lagged output should stay near 0
+        for at least lag_n steps because it estimates x_{t-lag_n}."""
+        s = FixedLagSmoother(lag_n=4, process_noise=0.005, measurement_noise=0.1)
+        # Feed 10 zeros, then switch to 1
         for _ in range(10):
-            outs.append(s.update(1.0))
-        # First sample after step — lag centre still deep in the 0 region
-        assert outs[5] < 0.5
-        # Many samples later — output should have caught up to ~1.0
-        assert outs[-1] > 0.9
+            s.update(0.0)
+        # First step after switch — lagged output should still be near 0
+        out = s.update(1.0)
+        assert out < 0.3
 
-    def test_reset_clears_buffer(self):
-        s = FixedLagSmoother(window_n=9, lag_n=4)
-        for _ in range(9):
+    def test_converges_toward_constant(self):
+        """After many constant inputs, output converges to that value."""
+        s = FixedLagSmoother(lag_n=4, process_noise=0.005, measurement_noise=0.1)
+        for _ in range(200):
+            out = s.update(0.7)
+        assert out == pytest.approx(0.7, abs=0.05)
+
+    def test_output_clamped_to_unit_interval(self):
+        """Output stays in [0, 1] even with extreme inputs."""
+        s = FixedLagSmoother(lag_n=2, process_noise=0.01, measurement_noise=0.05)
+        for v in [2.0, -1.0, 3.0, -0.5, 1.5]:
+            out = s.update(v)
+            assert 0.0 <= out <= 1.0
+
+    def test_higher_measurement_noise_smooths_more(self):
+        """With higher R, output should react less to a sudden step."""
+        s_low_r = FixedLagSmoother(lag_n=4, process_noise=0.005, measurement_noise=0.05)
+        s_high_r = FixedLagSmoother(lag_n=4, process_noise=0.005, measurement_noise=0.5)
+        for _ in range(10):
+            s_low_r.update(0.0)
+            s_high_r.update(0.0)
+        # Push a step to 1
+        for _ in range(3):
+            out_low = s_low_r.update(1.0)
+            out_high = s_high_r.update(1.0)
+        # Low R should have tracked faster
+        assert out_low > out_high
+
+    def test_reset_clears_state(self):
+        s = FixedLagSmoother(lag_n=4, process_noise=0.005, measurement_noise=0.1)
+        for _ in range(10):
             s.update(0.9)
         s.reset()
         out = s.update(0.1)
-        assert out == pytest.approx(0.1)
-
-    def test_invalid_window_raises(self):
-        with pytest.raises(ValueError):
-            FixedLagSmoother(window_n=8, lag_n=4)  # needs window_n > 2*lag_n
+        assert out == pytest.approx(0.1, abs=0.01)
 
     def test_negative_lag_raises(self):
         with pytest.raises(ValueError):
-            FixedLagSmoother(window_n=9, lag_n=-1)
+            FixedLagSmoother(lag_n=-1)
 
-    def test_zero_lag_is_identity(self):
-        """lag_n=0 centres the window on the newest sample with ±0 radius.
+    def test_zero_process_noise_raises(self):
+        with pytest.raises(ValueError):
+            FixedLagSmoother(process_noise=0.0)
 
-        window_slice = buf[centre:centre+1] = [newest] → returns newest.
-        This is the degenerate case: no lag, no smoothing.
-        """
-        s = FixedLagSmoother(window_n=3, lag_n=0)
-        for v in [0.2, 0.5, 0.8, 0.3, 0.6]:
-            assert s.update(v) == pytest.approx(v)
+    def test_zero_measurement_noise_raises(self):
+        with pytest.raises(ValueError):
+            FixedLagSmoother(measurement_noise=0.0)
+
+    def test_zero_lag_returns_filtered_estimate(self):
+        """With lag_n=0, the smoother reduces to a Kalman filter (no RTS pass)."""
+        s = FixedLagSmoother(lag_n=0, process_noise=0.005, measurement_noise=0.1)
+        out = s.update(0.5)
+        assert out == pytest.approx(0.5, abs=0.01)
+        # Should still smooth
+        s.update(0.5)
+        out = s.update(1.0)
+        assert out < 0.9  # filtered, not raw
+
+    def test_smoother_reduces_variance(self):
+        """Smoothed output should have lower variance than raw input for
+        noisy signal around a constant mean."""
+        import random
+        rng = random.Random(42)
+        s = FixedLagSmoother(lag_n=4, process_noise=0.005, measurement_noise=0.1)
+        raw_vals = [0.5 + 0.2 * (rng.random() - 0.5) for _ in range(100)]
+        smoothed_vals = [s.update(v) for v in raw_vals]
+        raw_var = sum((v - 0.5) ** 2 for v in raw_vals) / len(raw_vals)
+        sm_var = sum((v - 0.5) ** 2 for v in smoothed_vals[20:]) / len(smoothed_vals[20:])
+        assert sm_var < raw_var
 
 
 # ---------------------------------------------------------------------------
@@ -250,10 +308,13 @@ class TestMakeSmooother:
         assert s.alpha_max == 0.25
 
     def test_fixed_lag(self):
-        cfg = MwlSmootherConfig(method="fixed_lag", window_n=9, lag_n=4)
+        cfg = MwlSmootherConfig(method="fixed_lag", lag_n=4,
+                                process_noise=0.01, measurement_noise=0.2)
         s = make_smoother(cfg)
         assert isinstance(s, FixedLagSmoother)
         assert s.lag_n == 4
+        assert s.process_noise == 0.01
+        assert s.measurement_noise == 0.2
 
     def test_unknown_method_raises(self):
         cfg = MwlSmootherConfig(method="unknown")  # type: ignore[arg-type]

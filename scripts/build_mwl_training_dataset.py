@@ -75,10 +75,10 @@ PREPROCESSING_CONFIG = EegPreprocessingConfig(
     notch_freq=50.0,
     notch_quality=30.0,
     apply_car=True,
-    srate=500.0,
+    srate=128.0,
 )
 
-WINDOW_CONFIG = WindowConfig(window_s=2.0, step_s=0.25, srate=500.0)
+WINDOW_CONFIG = WindowConfig(window_s=2.0, step_s=0.25, srate=128.0)
 
 
 def _config_hash(cfg: EegPreprocessingConfig) -> str:
