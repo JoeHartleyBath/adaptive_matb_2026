@@ -215,3 +215,6 @@ scenarios/full_calibration_*.txt
 
 # Local-only ethics templates (do not track binary docs here)
 docs/ethics/
+
+# Derived feature cache (large; auto-regenerated from dataset.h5)
+results/test_pretrain/feature_cache.npz

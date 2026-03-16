@@ -4,7 +4,7 @@ Solo PhD research repository for the 2026 adaptive MATB study: experiment code, 
 
 ## Repository structure
 
-- `config/` — participant assignments, path configuration (local `paths.yaml` is gitignored)
+- `config/` — participant assignments, QC exclusions, path configuration (local `paths.yaml` is gitignored)
 - `experiment/` — locked experiment asset files
   - `experiment/scenarios/` — OpenMATB scenario `.txt` files (source of truth for Pilot 1; do not regenerate casually)
   - `experiment/instructions/` — participant-facing task instruction screen text files (copied into OpenMATB at runtime)
@@ -14,18 +14,19 @@ Solo PhD research repository for the 2026 adaptive MATB study: experiment code, 
   - `docs/contracts/` — scenario and interface contracts
   - `docs/lab-notes/` — dated exploratory notes (not commitments)
   - `docs/openmatb/` — OpenMATB integration documentation
+  - `docs/pretraining/` — MWL pretraining pipeline docs (LOSO-CV methodology, normalisation strategy, smoother sweeps)
 - `scripts/` — standalone operational and data-pipeline scripts
 - `src/` — production source code (installed as editable package via `pip install -e .`)
   - `src/run_openmatb.py` — main session runner (entrypoint)
   - `src/adaptation/` — online staircase calibration logic
-  - `src/eeg/` — real-time EEG preprocessing pipeline
+  - `src/eeg/` — real-time EEG preprocessing pipeline and feature extraction
   - `src/ml/` — MWL model definition (EEGNet) and dataset loader
   - `src/performance/` — session performance summary and export scripts
   - `src/vendor/openmatb/` — OpenMATB git submodule
 - `tests/` — test and verification scripts
   - `tests/verification/` — post-run session verification scripts
-- `analysis/` — notebooks and analysis reports (currently unpopulated; used post-Pilot 1)
-- `results/` — derived outputs (figures, metrics, tables; currently unpopulated)
+- `analysis/` — notebooks and analysis reports
+- `results/` — derived outputs (figures, metrics, model validation results)
 
 ## Running a session
 

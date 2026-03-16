@@ -1,0 +1,231 @@
+# Post-Initial LOO-CV Plan
+
+**Date:** March 2026  
+**Status:** Initial LOO-CV run completing — do not modify pipeline until finished.
+
+---
+
+## Context
+
+The initial LOO-CV run used VR-TSST EEG data (44 participants, `dataset.h5`) as a
+proxy pretraining dataset. Several methodological issues were identified **during**
+the run. This document records the planned corrective steps before drawing any
+conclusions.
+
+Known issues with the initial run — results should be treated as a baseline only:
+
+| Issue | Severity | Detail |
+|---|---|---|
+| Condition ordering in dataset export | **Critical** | `sorted(task_events.items())` sorts alphabetically by name, not by recording onset — counterbalancing is ignored; all participants appear as HIGH→LOW regardless of actual order |
+| Participant exclusions incomplete | **Critical** | P34 (RMS outlier), P37 (likely reversed labels), P21 (elevated RMS), P16 (missing LOW block) identified by sanity check — not excluded from initial run |
+| Per-epoch z-score + InstanceNorm2d double normalisation | Minor | Redundant; removes amplitude signal useful for MWL decoding |
+| Temporal fine-tune test split | Major | End-of-block epochs are systematically different (fatigue, drift) |
+| Overlapping windows in fine-tune split | Major | 87.5% overlap → adjacent windows share 224/256 samples; random split causes data leakage |
+| Alphabetical val-participant split during pretraining | Minor | P40–P44 may be systematically different from earlier participants |
+
+---
+
+## Step 1 — Run sanity check (immediately after LOO finishes)
+
+**Do not modify any pipeline file before this step.**
+
+Run `scripts/check_mwl_dataset.py` against the current `dataset.h5` and the
+completed fold results:
+
+```powershell
+C:\vr_tsst_2025\.venv\Scripts\python.exe scripts/check_mwl_dataset.py
+```
+
+**What to look for:**
+
+- Class balance per participant (expected ~50/50)
+- Label ordering (expected: block-structured — 4 × 3-minute conditions)
+- Amplitude outliers (high RMS participants may explain low-AUC folds)
+- Logistic regression AUC per participant (θ+α features) — this is the
+  signal-existence baseline independent of EEGNet
+- Correlation between logistic AUC and EEGNet AUC — if uncorrelated, the
+  issue is the pipeline not the data
+
+**Decision gate:** if logistic regression gives mean AUC < 0.55, the
+VR-TSST→MATB transfer signal is genuinely weak and the ceiling for any
+EEGNet improvement is low. Adjust expectations accordingly before proceeding.
+
+---
+
+## Step 2 — Rebuild dataset (four changes in one pass)
+
+All four changes below require a dataset rebuild.  Do them together — do not
+rebuild more than once.
+
+### 2x — Fix condition ordering bug (Critical)
+
+**File:** `pipelines/14_matb_pretraining_export/export_matb_pretrain_dataset.py`  
+**Change:** one line — sort by onset timestamp, not condition name string:
+
+```python
+# Before (wrong — alphabetical sort ignores counterbalancing)
+for condition, onset_ts in sorted(task_events.items()):
+
+# After — sort by actual recording onset time
+for condition, onset_ts in sorted(task_events.items(), key=lambda x: x[1]):
+```
+
+**Why critical:** `sorted()` on a dict of `{condition_name: onset_ts}` sorts
+alphabetically.  HIGH sorts before LOW, so every participant's epochs are stored
+as HIGH, HIGH, LOW, LOW regardless of actual counterbalancing.  The label
+ordering plot in the sanity check showed all participants with identical
+HIGH→LOW structure — this is the artefact.
+
+**Verify:** after rebuild, label ordering plot (`02_label_ordering.png`) should
+show participant-specific orderings reflecting their actual counterbalancing.
+
+### 2y — Update participant exclusions
+
+**File:** `config/tsst_qc.yaml` (already updated)  
+Exclusions now managed in config — not hardcoded in scripts.
+
+New exclusions added (reason in config):
+- **P34** — amplitude outlier (RMS 0.645 µV, ~16× cohort median)
+- **P37** — likely reversed labels (none-AUC = 0.183, far below chance)
+- **P21** — elevated RMS (0.150 µV), borderline below-chance AUC
+- **P16** — missing LOW condition block (593 LOW vs 1186 HIGH)
+
+Total exclusions: P02, P08, P16, P21, P34, P37, P46 → **40 participants** in rebuild.
+
+**Verify P37 specifically:** manually inspect raw XDF and Unity metadata for P37
+before the rebuild to confirm whether labels are reversed or signal is corrupted.
+If labels are reversed, fix in metadata and re-include; if signal is corrupted,
+confirm exclusion.
+
+### 2z — Change step_s, normalisation, and overlap
+
+**File:** `pipelines/14_matb_pretraining_export/export_matb_pretrain_dataset.py`  
+**File:** `src/ml/dataset.py`, `scripts/train_mwl_model.py`
+
+#### step_s: 0.25s → 0.5s
+
+**Effect on window counts:**
+
+| step_s | Overlap | Windows/participant | Total (44p) |
+|---|---|---|---|
+| 0.25s (current) | 87.5% | ~2372 | ~104k |
+| 0.5s (new) | 75% | ~1188 | ~52k |
+
+Still ample for pretraining. Gap buffer for fine-tune split shrinks from
+8 windows → 4 windows, reducing data discarded per test window.
+
+#### Per-channel train-stats z-score
+
+**Rationale:** per-epoch z-score discards sustained amplitude shifts across
+condition blocks (e.g. alpha suppression during HIGH workload) — a genuine
+MWL signal. Per-channel normalisation using training participant statistics
+preserves between-condition amplitude differences while still removing
+between-participant baseline offsets.
+
+**What changes:**
+- Remove `zscore_epoch()` call from `MwlDataset` (or disable via flag)
+- Compute per-channel mean and std across all training participant epochs
+  at the start of each LOO fold in `train_mwl_model.py`
+- Pass those statistics to `MwlDataset` as fixed transforms
+- Store channel stats in the fold output directory alongside
+  `eegnet_pretrained.pt` so they are available at fine-tune and
+  inference time
+
+**Verify:** after rebuild, confirm `dataset.h5` `step_s` attribute = 0.5
+and that a single epoch loaded via `MwlDataset` is no longer unit-normalised
+per window.
+
+---
+
+## Step 3 — Select representative participants for rapid iteration
+
+Select **3 participants** spanning the performance distribution from the
+initial run — do not cherry-pick high-AUC participants:
+
+| Type | Criterion | Purpose |
+|---|---|---|
+| High AUC | Top quartile (e.g. P07) | Confirm changes don't break good cases |
+| Mid AUC | Median fold | The typical case |
+| Low AUC | Bottom quartile (e.g. P20) | Most diagnostic for pipeline issues |
+
+Use this 3-participant subset for all subsequent single-change tests
+(Steps 4–5). Each subset LOO run takes ~5–10 minutes vs ~2 hours for
+the full 44-fold run.
+
+**Important:** subset AUC numbers are for directional comparison only
+(did it go up or down?). Do not report absolute AUC from 3 participants.
+
+---
+
+## Step 4 — Validate corrected pipeline on subset
+
+Run the 3-participant subset LOO with:
+- New `dataset.h5` (step_s=0.5, per-channel z-score)
+- Gap-buffered stratified random fine-tune split (gap_windows=4)
+- Random seeded val-participant split during pretraining
+
+Compare directionally to initial run results for the same 3 participants.
+If mean AUC is flat or lower, investigate before proceeding to Step 5.
+
+---
+
+## Step 5 — Set ceiling goal and systematic improvement plan
+
+### Ceiling estimate
+
+Use sanity check logistic regression AUC (Step 1) as the upper bound
+for what EEGNet can achieve on this data.
+
+| Logistic AUC (mean) | Interpretation | EEGNet ceiling target |
+|---|---|---|
+| > 0.65 | Strong signal — EEGNet underperforming | 0.62–0.68 |
+| 0.55–0.65 | Moderate signal — some room to improve | 0.58–0.63 |
+| < 0.55 | Weak signal — limited by data not model | ~0.55 (accept and move on) |
+
+### Systematic tweak order
+
+Test **one change at a time** on the 3-participant subset.
+Do not stack multiple changes before evaluating each individually.
+
+| Priority | Tweak | Rationale | Risk |
+|---|---|---|---|
+| 1 | Random seeded val-participant split | Removes alphabetical bias in pretraining early stopping | Low |
+| 2 | `F1=16` in EEGNet (currently F1=8) | Doubles temporal filter capacity | Low–Medium |
+| 3 | Longer pretraining patience (30 → 40) | May be stopping before optimal generalisation | Low |
+
+Stop when mean subset AUC plateaus or reaches the ceiling estimate.
+Do not chase marginal gains beyond the ceiling.
+
+---
+
+## Step 6 — Overnight full LOO with best improvements
+
+Once the subset results identify a stable improvement (AUC lift > 0.02
+on all 3 subset participants), run the full 44-fold LOO overnight.
+
+**Before running:**
+- Save initial run results as `output/matb_pretrain/loo_cv_results_v1/`
+- Save corrected run results as `output/matb_pretrain/loo_cv_results_v2/`
+- Update `docs/loso_cv_methodology.md` with the changes made
+
+**Success criterion for moving to real MATB data collection:**
+- Mean LOO AUC (full mode) > 0.58 across 44 folds, OR
+- Decision made that VR-TSST signal ceiling is ~0.55 and the pipeline
+  is validated as working correctly at that level
+
+Either outcome is acceptable — the goal of this experiment is pipeline
+validation, not maximising AUC on VR-TSST data.
+
+---
+
+## Files to change (summary)
+
+| File | Change | Step |
+|---|---|---|
+| `pipelines/14_matb_pretraining_export/export_matb_pretrain_dataset.py` | Sort by onset timestamp, not name | 2x |
+| `config/tsst_qc.yaml` | Add P16, P21, P34, P37 exclusions | 2y — **done** |
+| `scripts/run_loo_cv.py` | Read exclusions from `config/tsst_qc.yaml` | 2y — **done** |
+| `pipelines/14_matb_pretraining_export/export_matb_pretrain_dataset.py` | `step_s=0.25` → `step_s=0.5` | 2z |
+| `src/ml/dataset.py` or `MwlDataset` | Disable per-epoch z-score; accept fixed channel stats | 2z |
+| `scripts/train_mwl_model.py` | Compute + pass per-channel train stats; random val split | 2z, 5.1 |
+| `scripts/test_pretrain_pipeline.py` | Gap-buffered split (gap_windows=4) | 4 |
