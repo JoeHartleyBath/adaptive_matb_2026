@@ -7,7 +7,7 @@ Model contract
 --------------
 Input  : (batch, 1, C, T)  float32
            C = n_channels (128 for NA-271 cap)
-           T = window_samples (1000 for 2 s at 500 Hz)
+           T = window_samples (256 for 2 s at 128 Hz)
 Output : (batch, 3)  raw logits  [LOW, MODERATE, HIGH]
 
 Training loss : nn.CrossEntropyLoss (expects raw logits)
@@ -20,12 +20,12 @@ Fine-tuning freeze modes
   "late_layers" – freeze temporal + depthwise blocks; unfreeze separable + classifier
   "full"        – unfreeze all parameters
 
-Hyperparameters (EEGNet defaults for 500 Hz, 128ch)
+Hyperparameters (EEGNet defaults for 128 Hz, 128ch)
 ---------------------------------------------------
   F1             = 8    temporal filters
   D              = 2    depth multiplier for depthwise conv
   F2             = 16   (= F1 * D) separable filters
-  kernel_temporal = 250  (= srate // 2, per paper recommendation)
+  kernel_temporal = 64   (= srate // 2, per paper recommendation)
   dropout_rate   = 0.5
 """
 
@@ -70,7 +70,7 @@ class EEGNet(nn.Module):
     n_channels : int
         Number of EEG channels (C).  Default 128 for NA-271 cap.
     n_times : int
-        Samples per window (T).  Default 1000 (2 s × 500 Hz).
+        Samples per window (T).  Default 256 (2 s × 128 Hz).
     n_classes : int
         Number of output classes.  Default 3 (LOW / MODERATE / HIGH).
     F1 : int
@@ -86,12 +86,12 @@ class EEGNet(nn.Module):
     def __init__(
         self,
         n_channels: int = 128,
-        n_times: int = 1000,
+        n_times: int = 256,
         n_classes: int = 3,
         F1: int = 8,
         D: int = 2,
         dropout_rate: float = 0.5,
-        srate: float = 500.0,
+        srate: float = 128.0,
     ) -> None:
         super().__init__()
 
@@ -102,6 +102,11 @@ class EEGNet(nn.Module):
         # Block 1 – Temporal convolution
         # Conv across time only (spatial kernel height = 1).
         # 'same' padding preserves T.
+        # No normalisation here: the input is already per-epoch z-scored
+        # (removing cross-subject amplitude differences), so adding
+        # InstanceNorm2d over the same (C, T) dims would be redundant and
+        # its affine parameters receive near-zero gradients (normalised
+        # inputs cancel), flattening the loss surface.
         # ------------------------------------------------------------------
         self.temporal_block = nn.Sequential(
             nn.Conv2d(
@@ -110,7 +115,6 @@ class EEGNet(nn.Module):
                 padding=(0, kernel_temporal // 2),
                 bias=False,
             ),
-            nn.BatchNorm2d(F1),
         )
 
         # ------------------------------------------------------------------
@@ -120,7 +124,7 @@ class EEGNet(nn.Module):
         # ------------------------------------------------------------------
         self.spatial_block = nn.Sequential(
             _DepthwiseConv2d(F1, D, kernel_size=(n_channels, 1), bias=False),
-            nn.BatchNorm2d(F2),
+            nn.InstanceNorm2d(F2, affine=True),
             nn.ELU(),
             nn.AvgPool2d(kernel_size=(1, 4)),
             nn.Dropout(p=dropout_rate),
@@ -141,7 +145,7 @@ class EEGNet(nn.Module):
             ),
             # Pointwise
             nn.Conv2d(F2, F2, kernel_size=(1, 1), bias=False),
-            nn.BatchNorm2d(F2),
+            nn.InstanceNorm2d(F2, affine=True),
             nn.ELU(),
             nn.AvgPool2d(kernel_size=(1, 8)),
             nn.Dropout(p=dropout_rate),

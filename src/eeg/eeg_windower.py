@@ -8,9 +8,9 @@ parameter conventions (durations in seconds, srate in Hz).
 
 Usage
 -----
-    cfg = WindowConfig(window_s=2.0, step_s=0.25, srate=500.0)
+    cfg = WindowConfig(window_s=2.0, step_s=0.25, srate=128.0)
     epochs = extract_windows(preprocessed_data, cfg)
-    # epochs.shape == (n_epochs, n_channels, 1000)
+    # epochs.shape == (n_epochs, n_channels, 256)
 """
 
 from dataclasses import dataclass
@@ -21,9 +21,9 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Constants matching the study design
 # ---------------------------------------------------------------------------
-WINDOW_S: float = 2.0    # EEGNet temporal receptive field (2 s at 500 Hz → T=1000)
+WINDOW_S: float = 2.0    # EEGNet temporal receptive field (2 s at 128 Hz → T=256)
 STEP_S: float = 0.25     # Overlap step (4 Hz update rate, matches ADR-0003)
-SRATE: float = 500.0
+SRATE: float = 128.0
 WARMUP_S: float = 30.0   # Seconds to discard at block start (filter settle + habituation)
 
 
