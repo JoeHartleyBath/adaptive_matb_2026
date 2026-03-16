@@ -20,6 +20,6 @@ Include an explicit practice/familiarisation phase (practice blocks) before any 
 Final
 
 **References**  
-- Internal: `docs/pilot/PILOT_STUDY_SPEC_V0.md`
-- Internal: `docs/pilot/PILOT_BUILD_PLAN_V0.md`
+- Internal: `docs/pilot/pilot_study_spec.md`
+- Internal: `docs/pilot/pilot_build_plan.md`
 - Internal: `docs/contracts/practice_scenario_contract_v0.md`

@@ -23,5 +23,5 @@ Final (foundational)
 
 **References**  
 - Internal: `docs/decisions/2026-01-28_methods_paradigm_and_platform.md`
-- Internal: `docs/pilot/PILOT_STUDY_SPEC_V0.md`
+- Internal: `docs/pilot/pilot_study_spec.md`
 - Pontiggia et al., 2024 — review of MATB(-II)-style paradigms for mental workload assessment

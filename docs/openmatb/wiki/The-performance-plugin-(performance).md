@@ -1,4 +1,4 @@
-ï»¿You should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
+You should read <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">how to write correctly a scenario file</a> first.
 
 ## Presentation of the `performance` plugin.
 
@@ -14,13 +14,13 @@ For now, the functioning of the performance plugin is the following: a performan
 
 For the global performance to be displayed, each task performance must be computed and normalized. Note that the following decisions are arbitrary and based on our expertise with the MATB. If you want to modify the way the various performance scores are computed, please refer to [this page](https://github.com/juliencegarra/OpenMATB/wiki/How-to-modify-automatic-performance-computation%3F).
 
-`sysmon` Ã”Ã‡Ã´ Only considering hits and misses for system monitoring. Compute average of 4 last signal detection events and map it to a 0:1 scale. Hitting the four last events will lead to maximum performance. In consequence, no performance score is available until four `sysmon` events have been triggered.
+`sysmon` ÔÇô Only considering hits and misses for system monitoring. Compute average of 4 last signal detection events and map it to a 0:1 scale. Hitting the four last events will lead to maximum performance. In consequence, no performance score is available until four `sysmon` events have been triggered.
 
-`track` Ã”Ã‡Ã´ Time proportion spent in target for the last 5 seconds. No performance is available until 5 seconds of tracking task have elapsed.
+`track` ÔÇô Time proportion spent in target for the last 5 seconds. No performance is available until 5 seconds of tracking task have elapsed.
 
-`resman` Ã”Ã‡Ã´ Time proportion spent in target for the last 5 seconds. No performance is available until 5 seconds of tracking task have elapsed.
+`resman` ÔÇô Time proportion spent in target for the last 5 seconds. No performance is available until 5 seconds of tracking task have elapsed.
 
-`communications` Ã”Ã‡Ã´ Each response can be considered either correct or incorrect. So communications score is here considered as the correct proportion of the four last responses. In consequence, no performance score is available until four `communications` (own) events have been triggered.
+`communications` ÔÇô Each response can be considered either correct or incorrect. So communications score is here considered as the correct proportion of the four last responses. In consequence, no performance score is available until four `communications` (own) events have been triggered.
 
 **NB:** More parameters will be proposed in the next versions to allow the modification of either the number of events or the duration considered in the performance computation.
 

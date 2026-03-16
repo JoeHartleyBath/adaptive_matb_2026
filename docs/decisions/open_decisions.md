@@ -210,8 +210,8 @@ Lock after first pilot run with ≥N participants once:
 Affects session duration, operator procedure, and availability of auxiliary subjective labels; does not affect workload manipulation, scenario structure, or core contracts.
 
 **References**  
-- Internal: `docs/pilot/PILOT_BUILD_PLAN_V0.md`
-- Internal: `docs/pilot/PILOT_STUDY_SPEC_V0.md`
+- Internal: `docs/pilot/pilot_build_plan.md`
+- Internal: `docs/pilot/pilot_study_spec.md`
 
 ### OD-06: Performance measurement definition for MATB(-II) blocks
 
@@ -267,7 +267,7 @@ Lock after pilot analysis once:
 Affects analysis scripts, reporting, and interpretation; does not affect task design, scenarios, or workload manipulation.
 
 **References**  
-- Internal: `docs/pilot/PILOT_STUDY_SPEC_V0.md`
+- Internal: `docs/pilot/pilot_study_spec.md`
 - Pontiggia et al., 2024 (review of MATB(-II) performance measures and workload sensitivity)
 
 

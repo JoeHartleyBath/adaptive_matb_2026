@@ -1,0 +1,1838 @@
+{
+  "method": "ensemble_stacked_loso",
+  "seed": 42,
+  "n_participants": 28,
+  "excluded": [
+    "P04",
+    "P06",
+    "P09",
+    "P13",
+    "P16",
+    "P20",
+    "P21",
+    "P23",
+    "P27",
+    "P31",
+    "P33",
+    "P34",
+    "P35",
+    "P37",
+    "P39",
+    "P43",
+    "P44",
+    "P45",
+    "P46"
+  ],
+  "base_learners": [
+    "LogReg",
+    "LinSVC",
+    "RBF"
+  ],
+  "feature_names": [
+    "FM_Theta",
+    "FM_Alpha",
+    "FM_Delta",
+    "FM_Beta",
+    "Par_Alpha",
+    "Occ_Alpha",
+    "Cen_Beta",
+    "Cen_Theta",
+    "FAA",
+    "Cen_Engagement",
+    "FM_Theta_Alpha",
+    "FM_Theta_Beta",
+    "Cen_Theta_Beta",
+    "Fro_HjAct",
+    "Fro_HjMob",
+    "Fro_HjComp",
+    "Fro_SpEnt",
+    "Fro_PeEnt",
+    "Fro_Skew",
+    "Fro_Kurt",
+    "Fro_ZCR",
+    "Par_HjAct",
+    "Par_HjMob",
+    "Par_HjComp",
+    "Par_SpEnt",
+    "Par_PeEnt",
+    "Par_Skew",
+    "Par_Kurt",
+    "Par_ZCR",
+    "Cen_HjAct",
+    "Cen_HjMob",
+    "Cen_HjComp",
+    "Cen_SpEnt",
+    "Cen_PeEnt",
+    "Cen_Skew",
+    "Cen_Kurt",
+    "Cen_ZCR",
+    "Occ_HjAct",
+    "Occ_HjMob",
+    "Occ_HjComp",
+    "Occ_SpEnt",
+    "Occ_PeEnt",
+    "Occ_Skew",
+    "Occ_Kurt",
+    "Occ_ZCR"
+  ],
+  "n_features": 45,
+  "k_candidates": [
+    15,
+    20,
+    25,
+    30,
+    45
+  ],
+  "base_grids": {
+    "LogReg": [
+      {
+        "C": 0.001
+      },
+      {
+        "C": 0.003
+      },
+      {
+        "C": 0.01
+      }
+    ],
+    "LinSVC": [
+      {
+        "C": 0.001
+      },
+      {
+        "C": 0.003
+      },
+      {
+        "C": 0.01
+      }
+    ],
+    "RBF": [
+      {
+        "gamma": 0.01,
+        "C": 0.1
+      },
+      {
+        "gamma": 0.05,
+        "C": 0.1
+      },
+      {
+        "gamma": 0.1,
+        "C": 0.1
+      },
+      {
+        "gamma": 0.01,
+        "C": 1.0
+      },
+      {
+        "gamma": 0.05,
+        "C": 1.0
+      },
+      {
+        "gamma": 0.1,
+        "C": 1.0
+      }
+    ]
+  },
+  "nystroem_components": 300,
+  "meta": {
+    "model": "LogReg",
+    "C": 1.0
+  },
+  "inner_folds": 5,
+  "participants": {
+    "P01": {
+      "n_epochs": 1188,
+      "auc": 0.6886910632701878,
+      "auc_vote": 0.6591901053180513,
+      "bal_acc": 0.6456228956228955,
+      "f1": 0.6455925108930338,
+      "base_aucs": {
+        "LogReg": 0.613205568592774,
+        "LinSVC": 0.5997829019714542,
+        "RBF": 0.7080258250291921
+      },
+      "best_k": 25,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.01
+        },
+        "LinSVC": {
+          "C": 0.01
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 1.0
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6675,
+        "LinSVC": 0.6727,
+        "RBF": 0.6779
+      },
+      "time_s": 19.4
+    },
+    "P02": {
+      "n_epochs": 1188,
+      "auc": 0.7630202133569137,
+      "auc_vote": 0.7047410128218209,
+      "bal_acc": 0.6952861952861953,
+      "f1": 0.6933664549507026,
+      "base_aucs": {
+        "LogReg": 0.6737521114625491,
+        "LinSVC": 0.6326622000022674,
+        "RBF": 0.760990941967373
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjMob",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_HjMob",
+        "Occ_HjComp",
+        "Occ_Kurt",
+        "Occ_ZCR"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.003
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6582,
+        "LinSVC": 0.66,
+        "RBF": 0.6695
+      },
+      "time_s": 19.0
+    },
+    "P03": {
+      "n_epochs": 1188,
+      "auc": 0.6058225351154645,
+      "auc_vote": 0.5860172998220137,
+      "bal_acc": 0.5580808080808081,
+      "f1": 0.5565850006718409,
+      "base_aucs": {
+        "LogReg": 0.5713079164257616,
+        "LinSVC": 0.5749895135417021,
+        "RBF": 0.6022486367604213
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_HjComp",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.003
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6599,
+        "LinSVC": 0.6617,
+        "RBF": 0.6743
+      },
+      "time_s": 19.1
+    },
+    "P05": {
+      "n_epochs": 1188,
+      "auc": 0.8297622691562085,
+      "auc_vote": 0.8338179777573718,
+      "bal_acc": 0.7542087542087542,
+      "f1": 0.7536998696418986,
+      "base_aucs": {
+        "LogReg": 0.8296744096407396,
+        "LinSVC": 0.8344216576539808,
+        "RBF": 0.8277046559874843
+      },
+      "best_k": 20,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.01
+        },
+        "LinSVC": {
+          "C": 0.01
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6503,
+        "LinSVC": 0.6569,
+        "RBF": 0.666
+      },
+      "time_s": 18.4
+    },
+    "P07": {
+      "n_epochs": 1188,
+      "auc": 0.6715159450849686,
+      "auc_vote": 0.6577758505367933,
+      "bal_acc": 0.6287878787878788,
+      "f1": 0.6284274543874891,
+      "base_aucs": {
+        "LogReg": 0.6482246709519437,
+        "LinSVC": 0.6500187055742611,
+        "RBF": 0.6695008445850197
+      },
+      "best_k": 15,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Cen_Beta",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.01
+        },
+        "LinSVC": {
+          "C": 0.01
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6603,
+        "LinSVC": 0.6617,
+        "RBF": 0.6677
+      },
+      "time_s": 18.3
+    },
+    "P08": {
+      "n_epochs": 1188,
+      "auc": 0.8051445997573943,
+      "auc_vote": 0.7908376696255485,
+      "bal_acc": 0.7382154882154882,
+      "f1": 0.7380995081231627,
+      "base_aucs": {
+        "LogReg": 0.783239238626444,
+        "LinSVC": 0.7507793989275471,
+        "RBF": 0.8043226881610719
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Skew",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.01
+        },
+        "LinSVC": {
+          "C": 0.01
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6551,
+        "LinSVC": 0.658,
+        "RBF": 0.6679
+      },
+      "time_s": 19.4
+    },
+    "P10": {
+      "n_epochs": 1188,
+      "auc": 0.3400049881531363,
+      "auc_vote": 0.3164869797866431,
+      "bal_acc": 0.36784511784511786,
+      "f1": 0.3600639227418495,
+      "base_aucs": {
+        "LogReg": 0.3041101248171955,
+        "LinSVC": 0.2927819156775386,
+        "RBF": 0.34501014635694766
+      },
+      "best_k": 15,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Fro_HjAct",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.003
+        },
+        "LinSVC": {
+          "C": 0.003
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6847,
+        "LinSVC": 0.6866,
+        "RBF": 0.6904
+      },
+      "time_s": 17.6
+    },
+    "P11": {
+      "n_epochs": 1188,
+      "auc": 0.8186324524708363,
+      "auc_vote": 0.8317773696561576,
+      "bal_acc": 0.75,
+      "f1": 0.7495739714097731,
+      "base_aucs": {
+        "LogReg": 0.8293201374009453,
+        "LinSVC": 0.8235327460916686,
+        "RBF": 0.8248393021120294
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Skew",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.01
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6513,
+        "LinSVC": 0.6563,
+        "RBF": 0.6641
+      },
+      "time_s": 19.2
+    },
+    "P12": {
+      "n_epochs": 1188,
+      "auc": 0.8541276967202893,
+      "auc_vote": 0.8376441179471483,
+      "bal_acc": 0.771043771043771,
+      "f1": 0.7709652268828942,
+      "base_aucs": {
+        "LogReg": 0.8126948497318867,
+        "LinSVC": 0.8199475110249521,
+        "RBF": 0.8533511319706606
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Skew",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.652,
+        "LinSVC": 0.656,
+        "RBF": 0.6633
+      },
+      "time_s": 19.1
+    },
+    "P15": {
+      "n_epochs": 1188,
+      "auc": 0.815996667006768,
+      "auc_vote": 0.8221043204208187,
+      "bal_acc": 0.765993265993266,
+      "f1": 0.7647021943573669,
+      "base_aucs": {
+        "LogReg": 0.8191369361403031,
+        "LinSVC": 0.8171076647507624,
+        "RBF": 0.8174704395243115
+      },
+      "best_k": 15,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Fro_HjAct",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.01
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6596,
+        "LinSVC": 0.6609,
+        "RBF": 0.6646
+      },
+      "time_s": 18.3
+    },
+    "P17": {
+      "n_epochs": 1188,
+      "auc": 0.6516030110306205,
+      "auc_vote": 0.6901705041435682,
+      "bal_acc": 0.6043771043771043,
+      "f1": 0.6043726192635589,
+      "base_aucs": {
+        "LogReg": 0.6908903853348297,
+        "LinSVC": 0.7112369486106861,
+        "RBF": 0.6709632803908899
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.659,
+        "LinSVC": 0.66,
+        "RBF": 0.6762
+      },
+      "time_s": 19.3
+    },
+    "P18": {
+      "n_epochs": 1188,
+      "auc": 0.6781620923035065,
+      "auc_vote": 0.6890169937307985,
+      "bal_acc": 0.6271043771043772,
+      "f1": 0.6265198153477134,
+      "base_aucs": {
+        "LogReg": 0.6810161094672879,
+        "LinSVC": 0.6917859855570294,
+        "RBF": 0.6871861147955425
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_HjComp",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6577,
+        "LinSVC": 0.656,
+        "RBF": 0.671
+      },
+      "time_s": 18.8
+    },
+    "P19": {
+      "n_epochs": 1188,
+      "auc": 0.3685905066376447,
+      "auc_vote": 0.3705432552233899,
+      "bal_acc": 0.3846801346801347,
+      "f1": 0.38436213991769547,
+      "base_aucs": {
+        "LogReg": 0.3660057363761068,
+        "LinSVC": 0.395007879014613,
+        "RBF": 0.3683864458275232
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_HjComp",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Skew",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6711,
+        "LinSVC": 0.6721,
+        "RBF": 0.6832
+      },
+      "time_s": 19.1
+    },
+    "P22": {
+      "n_epochs": 1188,
+      "auc": 0.6277505696697616,
+      "auc_vote": 0.6395265789205182,
+      "bal_acc": 0.5833333333333334,
+      "f1": 0.5832267291668292,
+      "base_aucs": {
+        "LogReg": 0.6398355043136188,
+        "LinSVC": 0.6464164654400344,
+        "RBF": 0.6308653312020315
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6612,
+        "LinSVC": 0.66,
+        "RBF": 0.6739
+      },
+      "time_s": 19.2
+    },
+    "P24": {
+      "n_epochs": 1188,
+      "auc": 0.816999965989865,
+      "auc_vote": 0.7847158453219059,
+      "bal_acc": 0.771043771043771,
+      "f1": 0.7680034002274476,
+      "base_aucs": {
+        "LogReg": 0.7703550658096112,
+        "LinSVC": 0.7553480937319321,
+        "RBF": 0.8104728542438979
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjMob",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Par_ZCR",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6538,
+        "LinSVC": 0.6519,
+        "RBF": 0.6644
+      },
+      "time_s": 19.1
+    },
+    "P25": {
+      "n_epochs": 1188,
+      "auc": 0.667199492115317,
+      "auc_vote": 0.6572288541985511,
+      "bal_acc": 0.6085858585858586,
+      "f1": 0.6071828048436219,
+      "base_aucs": {
+        "LogReg": 0.6232640660250088,
+        "LinSVC": 0.6582860025620968,
+        "RBF": 0.6774195376888978
+      },
+      "best_k": 25,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6615,
+        "LinSVC": 0.6594,
+        "RBF": 0.6691
+      },
+      "time_s": 18.5
+    },
+    "P26": {
+      "n_epochs": 1188,
+      "auc": 0.7115288689362763,
+      "auc_vote": 0.6887534151843916,
+      "bal_acc": 0.648989898989899,
+      "f1": 0.6465352828989193,
+      "base_aucs": {
+        "LogReg": 0.6806193245587184,
+        "LinSVC": 0.6523087213322903,
+        "RBF": 0.7054920699701845
+      },
+      "best_k": 25,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6623,
+        "LinSVC": 0.6609,
+        "RBF": 0.6692
+      },
+      "time_s": 18.7
+    },
+    "P28": {
+      "n_epochs": 1188,
+      "auc": 0.46856896688546523,
+      "auc_vote": 0.4778820755251732,
+      "bal_acc": 0.4654882154882155,
+      "f1": 0.4626061868889245,
+      "base_aucs": {
+        "LogReg": 0.4907719166978427,
+        "LinSVC": 0.4894653606774819,
+        "RBF": 0.4660380460043759
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.003
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6696,
+        "LinSVC": 0.6693,
+        "RBF": 0.6793
+      },
+      "time_s": 19.0
+    },
+    "P29": {
+      "n_epochs": 1188,
+      "auc": 0.5950186488907028,
+      "auc_vote": 0.5906965275652144,
+      "bal_acc": 0.5614478114478114,
+      "f1": 0.5614475007138591,
+      "base_aucs": {
+        "LogReg": 0.5729404029067329,
+        "LinSVC": 0.5791840968608645,
+        "RBF": 0.5990148397555806
+      },
+      "best_k": 25,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.003
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6613,
+        "LinSVC": 0.66,
+        "RBF": 0.669
+      },
+      "time_s": 18.4
+    },
+    "P30": {
+      "n_epochs": 1188,
+      "auc": 0.3453984287317621,
+      "auc_vote": 0.3982048317065152,
+      "bal_acc": 0.4107744107744108,
+      "f1": 0.4107142857142857,
+      "base_aucs": {
+        "LogReg": 0.4198976294935891,
+        "LinSVC": 0.4517934677867338,
+        "RBF": 0.3502108628371255
+      },
+      "best_k": 45,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "FM_Theta_Beta",
+        "Cen_Theta_Beta",
+        "Fro_HjAct",
+        "Fro_HjMob",
+        "Fro_HjComp",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjMob",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Par_Skew",
+        "Par_Kurt",
+        "Par_ZCR",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_HjComp",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Skew",
+        "Cen_Kurt",
+        "Cen_ZCR",
+        "Occ_HjAct",
+        "Occ_HjMob",
+        "Occ_HjComp",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Skew",
+        "Occ_Kurt",
+        "Occ_ZCR"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6697,
+        "LinSVC": 0.6672,
+        "RBF": 0.6849
+      },
+      "time_s": 21.5
+    },
+    "P32": {
+      "n_epochs": 1188,
+      "auc": 0.5021086283712546,
+      "auc_vote": 0.5148029112675577,
+      "bal_acc": 0.5033670033670034,
+      "f1": 0.5025549310168625,
+      "base_aucs": {
+        "LogReg": 0.520071648017776,
+        "LinSVC": 0.5266185990091714,
+        "RBF": 0.5055408178303802
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Skew",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6604,
+        "LinSVC": 0.6546,
+        "RBF": 0.6728
+      },
+      "time_s": 19.2
+    },
+    "P36": {
+      "n_epochs": 1188,
+      "auc": 0.5688365132809577,
+      "auc_vote": 0.596489587230328,
+      "bal_acc": 0.5378787878787878,
+      "f1": 0.5368125019973795,
+      "base_aucs": {
+        "LogReg": 0.5751794034622317,
+        "LinSVC": 0.6186783661531137,
+        "RBF": 0.5962940289539616
+      },
+      "best_k": 25,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6613,
+        "LinSVC": 0.6566,
+        "RBF": 0.6715
+      },
+      "time_s": 18.7
+    },
+    "P38": {
+      "n_epochs": 1188,
+      "auc": 0.7741897085331428,
+      "auc_vote": 0.7483250008502533,
+      "bal_acc": 0.702020202020202,
+      "f1": 0.7019990873300436,
+      "base_aucs": {
+        "LogReg": 0.7355485267943179,
+        "LinSVC": 0.7204310217778231,
+        "RBF": 0.7659507533244907
+      },
+      "best_k": 25,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_HjComp",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6544,
+        "LinSVC": 0.6471,
+        "RBF": 0.6644
+      },
+      "time_s": 18.9
+    },
+    "P40": {
+      "n_epochs": 1188,
+      "auc": 0.6699089662052626,
+      "auc_vote": 0.7032672403042775,
+      "bal_acc": 0.6304713804713804,
+      "f1": 0.6304690240091828,
+      "base_aucs": {
+        "LogReg": 0.6996905077713158,
+        "LinSVC": 0.7042053531952522,
+        "RBF": 0.6818408552415286
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_SpEnt",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6547,
+        "LinSVC": 0.6458,
+        "RBF": 0.6692
+      },
+      "time_s": 19.3
+    },
+    "P41": {
+      "n_epochs": 1188,
+      "auc": 0.6415898604450794,
+      "auc_vote": 0.6233887698534164,
+      "bal_acc": 0.5993265993265993,
+      "f1": 0.5972158512993359,
+      "base_aucs": {
+        "LogReg": 0.613928283961954,
+        "LinSVC": 0.6124885215794307,
+        "RBF": 0.6392488294845198
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_PeEnt",
+        "Par_Kurt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_SpEnt",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6624,
+        "LinSVC": 0.6577,
+        "RBF": 0.6725
+      },
+      "time_s": 18.9
+    },
+    "P42": {
+      "n_epochs": 1188,
+      "auc": 0.8347419197587547,
+      "auc_vote": 0.8450583273815597,
+      "bal_acc": 0.7693602693602694,
+      "f1": 0.768412485201712,
+      "base_aucs": {
+        "LogReg": 0.8308647643664478,
+        "LinSVC": 0.8473795190966907,
+        "RBF": 0.8471102721944472
+      },
+      "best_k": 30,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Par_Alpha",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Theta",
+        "FAA",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_SpEnt",
+        "Fro_PeEnt",
+        "Fro_Skew",
+        "Fro_Kurt",
+        "Fro_ZCR",
+        "Par_HjAct",
+        "Par_HjComp",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_HjComp",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Cen_ZCR",
+        "Occ_HjAct",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.649,
+        "LinSVC": 0.6401,
+        "RBF": 0.6624
+      },
+      "time_s": 18.9
+    },
+    "P47": {
+      "n_epochs": 1188,
+      "auc": 0.7056167737985919,
+      "auc_vote": 0.7292821594168396,
+      "bal_acc": 0.6523569023569024,
+      "f1": 0.6513764988009592,
+      "base_aucs": {
+        "LogReg": 0.7318527587887858,
+        "LinSVC": 0.7377903615277353,
+        "RBF": 0.7152416420093186
+      },
+      "best_k": 15,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Cen_Beta",
+        "Fro_HjAct",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_SpEnt",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6526,
+        "LinSVC": 0.6513,
+        "RBF": 0.6612
+      },
+      "time_s": 18.2
+    },
+    "P48": {
+      "n_epochs": 1188,
+      "auc": 0.5829989003389676,
+      "auc_vote": 0.5765908240655715,
+      "bal_acc": 0.569023569023569,
+      "f1": 0.5689930302626619,
+      "base_aucs": {
+        "LogReg": 0.5628308902719676,
+        "LinSVC": 0.5900815109569317,
+        "RBF": 0.5922156469294517
+      },
+      "best_k": 20,
+      "selected_features": [
+        "FM_Theta",
+        "FM_Alpha",
+        "FM_Delta",
+        "FM_Beta",
+        "Occ_Alpha",
+        "Cen_Beta",
+        "Cen_Engagement",
+        "FM_Theta_Alpha",
+        "Fro_HjAct",
+        "Fro_PeEnt",
+        "Fro_Kurt",
+        "Par_HjAct",
+        "Par_PeEnt",
+        "Cen_HjAct",
+        "Cen_HjMob",
+        "Cen_PeEnt",
+        "Cen_Kurt",
+        "Occ_HjAct",
+        "Occ_PeEnt",
+        "Occ_Kurt"
+      ],
+      "best_configs": {
+        "LogReg": {
+          "C": 0.001
+        },
+        "LinSVC": {
+          "C": 0.001
+        },
+        "RBF": {
+          "gamma": 0.01,
+          "C": 0.1
+        }
+      },
+      "inner_aucs": {
+        "LogReg": 0.6601,
+        "LinSVC": 0.6558,
+        "RBF": 0.6714
+      },
+      "time_s": 17.5
+    }
+  },
+  "population_auc": {
+    "mean": 0.6573,
+    "std": 0.1455,
+    "median": 0.6707,
+    "n": 28
+  },
+  "population_vote": {
+    "mean": 0.6559,
+    "std": 0.1402,
+    "median": 0.674,
+    "n": 28
+  },
+  "population_bal": {
+    "mean": 0.618,
+    "std": 0.1153,
+    "median": 0.6279,
+    "n": 28
+  },
+  "population_f1": {
+    "mean": 0.6169,
+    "std": 0.1158,
+    "median": 0.6275,
+    "n": 28
+  },
+  "total_time_min": 8.8
+}

@@ -1,4 +1,4 @@
-﻿First of all, notice that all the different plugins inherit from a common class, which gives access to the following three parameters:
+First of all, notice that all the different plugins inherit from a common class, which gives access to the following three parameters:
 
 | Variable name | Description | Values |
 |---------------|-------------|--------|
@@ -74,7 +74,7 @@ Feedbacks parameters are accessed through a variable hierarchy. Each feedback ty
 | Variable name          | Description                                                                                                                                       | Values                                                        | 
 |------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------| 
 | title                  | Characters displayed above the task                                                                                                               | Tracking                                                      | 
-| taskplacement          | Task location in a 3├ù2 canvas                                                                                                                     | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
+| taskplacement          | Task location in a 3+�2 canvas                                                                                                                     | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
 | taskupdatetime         | Delay between task updates in milliseconds.                                                                                                       | 50                                                            | 
 | cursorcolor            | Hexadecimal value that defines the cursor color.                                                                                                  | #0000FF                                                       | 
 | cursorcoloroutside     | Hexadecimal value that defines the cursor color when it is outside the target area.                                                               | #0000FF                                                       | 
@@ -91,7 +91,7 @@ Feedbacks parameters are accessed through a variable hierarchy. Each feedback ty
 | Variable name  | Description                                 | Values                                                        | 
 |----------------|---------------------------------------------|---------------------------------------------------------------| 
 | title          | Characters displayed above the task         | Scheduling                                                    | 
-| taskplacement  | Task location in a 3├ù2 canvas               | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
+| taskplacement  | Task location in a 3+�2 canvas               | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
 | taskupdatetime | Delay between task updates in milliseconds. | 1000                                                          | 
 
 ### Communications (`communications`)
@@ -99,7 +99,7 @@ Feedbacks parameters are accessed through a variable hierarchy. Each feedback ty
 | Variable name          | Description                                                                                                                                                                                                                                                                     | Values                                                        | 
 |------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------| 
 | title                  | Characters displayed above the task                                                                                                                                                                                                                                             | Communications                                                | 
-| taskplacement          | Task location in a 3├ù2 canvas                                                                                                                                                                                                                                                   | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
+| taskplacement          | Task location in a 3+�2 canvas                                                                                                                                                                                                                                                   | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
 | taskupdatetime         | Delay between task updates in milliseconds.                                                                                                                                                                                                                                     | 50                                                            | 
 | callsignregex          | Regular expression pattern for callsign generation.                                                                                                                                                                                                                             | [A-Z][A-Z][A-Z]\d\d\d                                         | 
 | owncallsign            | Callsign of the subject. If empty, automatically generated according to callsignregex.                                                                                                                                                                                          | (empty)                                                       | 
@@ -121,7 +121,7 @@ Feedbacks parameters are accessed through a variable hierarchy. Each feedback ty
 | Variable name                                                                                                                                  | Description                                                                                           | Values                                                        | 
 |------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|---------------------------------------------------------------| 
 | title                                                                                                                                          | Characters displayed above the task                                                                   | Resources manager                                             | 
-| taskplacement                                                                                                                                  | Task location in a 3├ù2 canvas                                                                         | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
+| taskplacement                                                                                                                                  | Task location in a 3+�2 canvas                                                                         | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
 | taskupdatetime                                                                                                                                 | Delay between task updates in milliseconds.                                                           | 2000                                                          | 
 | heuristicsolver                                                                                                                                | If True, the task is managed by an automatism which relies on the three following heuristics : (1) systematically activate pumps draining non-depletable tanks; (2) activate/deactivate pump whose target tank is too low/high (""Too"" means level is out of a tolerance zone around the target level, see below); (3) equilibrate between the two A/B tanks if one tank is full enough to feed the other                                                           | True/False                                                                                            |                                                               | 
 | assistedsolver                                                                                                                                 | If True, the task is managed by an the heuristic solver (see above) but does not block manual inputs. | True/False                                                    | 
@@ -133,7 +133,7 @@ Feedbacks parameters are accessed through a variable hierarchy. Each feedback ty
 | pumpcolorfailure                                                                                                                               | Hexadecimal value coding the pump color when on failure                                               | #FF0000                                                       | 
 
 #### Pump dictionary
-Each pump (1, 2, ÔÇª, 8) admits the parameters presented in the table below. As an example, if one wishes to change flow for the fifth pump, one should call the variable as pump-5-flow. Be careful, modifying fromtank or totank variables wonÔÇÖt affect the graphical representation which is static for the moment.
+Each pump (1, 2, �Ǫ, 8) admits the parameters presented in the table below. As an example, if one wishes to change flow for the fifth pump, one should call the variable as pump-5-flow. Be careful, modifying fromtank or totank variables won���t affect the graphical representation which is static for the moment.
 
 | Variable name | Description                             | pump-1          | pump-2          | pump-3          | pump-4          | pump-5          | pump-6          | pump-7          | pump-8          | 
 |---------------|-----------------------------------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------| 
@@ -142,7 +142,7 @@ Each pump (1, 2, ÔÇª, 8) admits the parameters presented in the table below. 
 | keys          | Response key associated with each pump  | QtCore.Qt.Key_1 | QtCore.Qt.Key_2 | QtCore.Qt.Key_3 | QtCore.Qt.Key_4 | QtCore.Qt.Key_5 | QtCore.Qt.Key_6 | QtCore.Qt.Key_7 | QtCore.Qt.Key_8 | 
 | hide          | Is this pump hidden ?                   | 0/1             | 0/1             | 0/1             | 0/1             | 0/1             | 0/1             | 0/1             | 0/1             | 
 
-####┬áTank dictionary
+####-�Tank dictionary
 Each tank (a, b, c, d, e, f) admits the parameters presented in the table below. As an example, if one wishes to change the maximum level for the d tank, one should call the variable as tank-d-max.
 
 | Variable name | Description                                              | tank-a | tank-b | tank-c | tank-d | tank-e | tank-f | 
@@ -160,5 +160,5 @@ Each tank (a, b, c, d, e, f) admits the parameters presented in the table below.
 | Variable name  | Description                                 | Values                                                        | 
 |----------------|---------------------------------------------|---------------------------------------------------------------| 
 | title          | Characters displayed above the task         | Pumps                                                         | 
-| taskplacement  | Task location in a 3├ù2 canvas               | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
+| taskplacement  | Task location in a 3+�2 canvas               | topleft, topmid, topright, bottomleft, bottommid, bottomright | 
 | taskupdatetime | Delay between task updates in milliseconds. | 1000                                                          | 

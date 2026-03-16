@@ -1,4 +1,4 @@
-﻿In order to easily create Executable version of OpenMATB from source. Use the following helper (batch file) and the following python script. They will create a Zip file containing the current version. This zip file contains all necessary file to deploy OpenMATB on Windows systems.
+In order to easily create Executable version of OpenMATB from source. Use the following helper (batch file) and the following python script. They will create a Zip file containing the current version. This zip file contains all necessary file to deploy OpenMATB on Windows systems.
 Cx-freeze package is necessary for a successful compilation
 
 

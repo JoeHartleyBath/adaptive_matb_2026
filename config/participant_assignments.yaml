@@ -1,47 +1,58 @@
 participants:
   DEV:
+    adaptation_first: true
     last_run: '2026-03-03T10:32:14.770084'
     sequence: SEQ1
     sessions_completed:
     - S001
   PSELF:
+    adaptation_first: true
     last_run: null
     sequence: SEQ1
     sessions_completed: []
   P001:
+    adaptation_first: true
     last_run: '2026-03-03T10:43:59.834105'
     sequence: SEQ1
     sessions_completed:
     - S999
   P002:
+    adaptation_first: false
     last_run: null
     sequence: SEQ2
     sessions_completed: []
   P003:
+    adaptation_first: true
     last_run: null
     sequence: SEQ3
     sessions_completed: []
   P004:
+    adaptation_first: false
     last_run: null
     sequence: SEQ1
     sessions_completed: []
   P005:
+    adaptation_first: true
     last_run: null
     sequence: SEQ2
     sessions_completed: []
   P006:
+    adaptation_first: false
     last_run: null
     sequence: SEQ3
     sessions_completed: []
   P007:
+    adaptation_first: true
     last_run: null
     sequence: SEQ1
     sessions_completed: []
   P008:
+    adaptation_first: false
     last_run: null
     sequence: SEQ2
     sessions_completed: []
   P009:
+    adaptation_first: true
     last_run: null
     sequence: SEQ3
     sessions_completed: []

@@ -21,5 +21,5 @@ Workload levels are defined relative to demand intensity within a stable task se
 Final (foundational)
 
 **References**  
-- Internal: `docs/pilot/PILOT_STUDY_SPEC_V0.md`
+- Internal: `docs/pilot/pilot_study_spec.md`
 - Internal: `docs/decisions/2026-01-28_methods_workload_levels_and_operationalisation.md`

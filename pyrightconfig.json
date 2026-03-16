@@ -3,6 +3,6 @@
   "venvPath": ".",
   "venv": ".venv",
   "extraPaths": [
-    "src/python"
+    "src"
   ]
 }

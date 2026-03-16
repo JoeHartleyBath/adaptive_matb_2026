@@ -1,4 +1,4 @@
-﻿One of the most critical aspects of portability is translation. OpenMATB users should be able to use the software in their native language or, if necessary, easily create the translated version.
+One of the most critical aspects of portability is translation. OpenMATB users should be able to use the software in their native language or, if necessary, easily create the translated version.
 
 ### Table of contents
 - [Translate visuals](#how-to-translate-visuals-)

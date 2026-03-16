@@ -1,4 +1,4 @@
-﻿## Installation, introduction
+## Installation, introduction
 
 * <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-install-OpenMATB%3F">How to install OpenMATB?</a>
 * <a href="https://github.com/juliencegarra/OpenMATB/wiki/How-to-build-a-scenario-file">How to write correctly a scenario file</a>

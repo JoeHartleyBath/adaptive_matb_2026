@@ -1,4 +1,4 @@
-﻿OpenMATB comes with a simple text-based configuration file, located at the root of the repository (`config.ini`), that allows you to change the following parameters:
+OpenMATB comes with a simple text-based configuration file, located at the root of the repository (`config.ini`), that allows you to change the following parameters:
 
 - `language`: locale to use (must be defined in the `locales` folder`), see the <a href="https://github.com/juliencegarra/OpenMATB/wiki/Internationalization">internationalization page</a>.
 - `screen_index`: if multiple screens are used, index of the screen where to display OpenMATB (default=0)

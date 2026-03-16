@@ -50,13 +50,13 @@ import pyxdf
 import yaml
 
 # ---------------------------------------------------------------------------
-# Repo root on sys.path so we can import src.python.*
+# src/ on sys.path so we can import package modules
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
+sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from eeg import EegPreprocessingConfig, EegPreprocessor, WindowConfig, extract_windows, slice_block  # noqa: E402
-from training.dataset import LABEL_MAP  # noqa: E402
+from ml.dataset import LABEL_MAP  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Marker patterns
@@ -75,10 +75,10 @@ PREPROCESSING_CONFIG = EegPreprocessingConfig(
     notch_freq=50.0,
     notch_quality=30.0,
     apply_car=True,
-    srate=500.0,
+    srate=128.0,
 )
 
-WINDOW_CONFIG = WindowConfig(window_s=2.0, step_s=0.25, srate=500.0)
+WINDOW_CONFIG = WindowConfig(window_s=2.0, step_s=0.25, srate=128.0)
 
 
 def _config_hash(cfg: EegPreprocessingConfig) -> str:
