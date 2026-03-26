@@ -14,10 +14,20 @@ class EegPreprocessor:
         self.bp_filter: Optional[RealTimeFilter] = None
         self.notch_filter: Optional[RealTimeFilter] = None
         
-    def initialize_filters(self, n_channels: int):
+    def initialize_filters(
+        self, n_channels: int, prewarm: "np.ndarray | None" = None
+    ):
         """
         Initialize the filter states for N channels.
         Must be called before processing if not initialized in constructor.
+
+        Parameters
+        ----------
+        n_channels : number of EEG channels.
+        prewarm : optional (n_channels,) array of first-sample values used to
+            pre-warm filter initial conditions (see RealTimeFilter for details).
+            Pass ``window_raw[:, 0]`` when processing a short, isolated window
+            to suppress onset transients.
         """
         self.n_channels = n_channels
         
@@ -28,7 +38,7 @@ class EegPreprocessor:
             self.config.srate, 
             self.config.bp_order
         )
-        self.bp_filter = RealTimeFilter(bp_sos, n_channels)
+        self.bp_filter = RealTimeFilter(bp_sos, n_channels, prewarm=prewarm)
         
         # Design & Init Notch
         notch_sos = design_notch(
@@ -36,7 +46,7 @@ class EegPreprocessor:
             self.config.notch_quality, 
             self.config.srate
         )
-        self.notch_filter = RealTimeFilter(notch_sos, n_channels)
+        self.notch_filter = RealTimeFilter(notch_sos, n_channels, prewarm=prewarm)
         
     def process(self, chunk: np.ndarray) -> np.ndarray:
         """

@@ -5,13 +5,35 @@ class RealTimeFilter:
     """
     A stateful wrapper for scipy.signal filters (SOS) to support streaming.
     """
-    def __init__(self, sos: np.ndarray, n_channels: int):
+    def __init__(
+        self,
+        sos: np.ndarray,
+        n_channels: int,
+        prewarm: np.ndarray | None = None,
+    ):
+        """
+        Parameters
+        ----------
+        sos : (n_sections, 6) SOS filter coefficients.
+        n_channels : number of channels to filter in parallel.
+        prewarm : optional (n_channels,) array.  When provided, the initial
+            filter state is scaled by each channel's first sample value so
+            that the filter starts in the steady-state for that DC level.
+            This eliminates the onset transient when processing short windows
+            with a freshly constructed filter.
+        """
         self.sos = sos
         # Initialize state: (n_sections, n_channels, 2)
         # scipy.signal.sosfilt_zi() generates state for 1 channel. We broadcast.
         zi_1ch = scipy.signal.sosfilt_zi(self.sos)
         # Repeat for each channel: resulting shape (n_sections, n_channels, 2)
         self.zi = np.repeat(zi_1ch[:, np.newaxis, :], n_channels, axis=1)
+        if prewarm is not None:
+            # Scale each channel's initial state by its first-sample value.
+            # sosfilt_zi gives steady-state for unit input; multiplying by x0
+            # gives steady-state for constant input x0, minimising the transient
+            # at the start of a freshly processed window.
+            self.zi = self.zi * np.asarray(prewarm, dtype=np.float64)[np.newaxis, :, np.newaxis]
 
     def process(self, chunk: np.ndarray) -> np.ndarray:
         """

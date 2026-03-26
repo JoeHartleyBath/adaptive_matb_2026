@@ -124,6 +124,156 @@ def _decimate(data: np.ndarray, factor: int) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
+# Dual-stream inlet (real-time stream merge for dual-amp setup)
+# ---------------------------------------------------------------------------
+
+def _get_ref_channel_indices(info: pylsl.StreamInfo) -> list[int]:
+    """Return indices of 'ref'-type channels from an LSL StreamInfo descriptor.
+
+    The ANT eego amplifier labels electrode channels with type='ref' in the
+    stream XML.  Falls back to all channels if no typed descriptor is found.
+    """
+    try:
+        ch_elem = info.desc().child("channels").first_child()
+        ref_idx: list[int] = []
+        i = 0
+        while ch_elem.name() == "channel":
+            if ch_elem.child_value("type").strip().lower() == "ref":
+                ref_idx.append(i)
+            ch_elem = ch_elem.next_sibling()
+            i += 1
+        if ref_idx:
+            return ref_idx
+    except Exception:
+        pass
+    return list(range(info.channel_count()))
+
+
+class _DualEegInlet:
+    """Real-time inlet for a dual-amplifier EEG setup.
+
+    Resolves two LSL EEG streams whose names *contain* ``stream_name_substr``,
+    pulls from both, extracts 'ref'-type channels from each, and concatenates
+    along the channel axis.  Streams are sorted by name (alphabetical) so the
+    channel ordering matches the offline ``_merge_eeg_streams()`` used during
+    training (amp-A channels precede amp-B channels).
+
+    Exposes ``pull_chunk()`` and ``get_window()`` with the same shapes
+    as ``EegInlet`` so the inference loop is unchanged.
+    """
+
+    def __init__(
+        self,
+        stream_name_substr: str,
+        stream_srate: float,
+        buffer_s: float,
+    ) -> None:
+        self.substr = stream_name_substr
+        self.stream_srate = stream_srate
+        self.n_channels = 0
+        self._inlets: list[pylsl.StreamInlet] = []
+        self._ref_idx: list[list[int]] = []
+        self._buf_n = int(buffer_s * stream_srate)
+        self._buffer = np.zeros((0, self._buf_n), dtype=np.float32)
+        self._timestamps = np.zeros(self._buf_n, dtype=np.float64)
+        self._write_ptr = 0
+        self.is_connected = False
+
+    def connect(self, timeout: float = 5.0) -> bool:
+        """Resolve two EEG streams matching the substring and open inlets."""
+        log.info("Dual-inlet: resolving EEG streams containing '%s' ...", self.substr)
+        # minimum=2 waits until at least 2 EEG streams are visible on the network,
+        # preventing premature return after only one amp is discovered.
+        all_streams = pylsl.resolve_stream("type", "EEG", 2, timeout)
+        matched = sorted(
+            [s for s in all_streams if self.substr in s.name()],
+            key=lambda s: s.name(),
+        )
+        if len(matched) < 2:
+            log.error(
+                "Dual-inlet: need ≥2 EEG streams matching '%s', found %d. "
+                "Are both amplifiers streaming?",
+                self.substr, len(matched),
+            )
+            return False
+        if len(matched) > 2:
+            log.warning(
+                "Found %d EEG streams matching '%s'; using first 2 (sorted by name).",
+                len(matched), self.substr,
+            )
+            matched = matched[:2]
+
+        total_ch = 0
+        for s in matched:
+            inlet = pylsl.StreamInlet(s)
+            info = inlet.info()
+            ref_idx = _get_ref_channel_indices(info)
+            log.info(
+                "  [A/B] %s — %d total ch, using %d ref ch",
+                s.name(), info.channel_count(), len(ref_idx),
+            )
+            self._inlets.append(inlet)
+            self._ref_idx.append(ref_idx)
+            total_ch += len(ref_idx)
+
+        self.n_channels = total_ch
+        self._buffer = np.zeros((self.n_channels, self._buf_n), dtype=np.float32)
+        self.is_connected = True
+        log.info("Dual inlet ready: %d channels total.", self.n_channels)
+        return True
+
+    def pull_chunk(self, max_samples: int = 1024) -> tuple[np.ndarray, np.ndarray]:
+        """Pull from both inlets, merge ref channels, update ring buffer.
+
+        Returns ``(merged, timestamps)``; both empty if either inlet is dry.
+        """
+        parts: list[np.ndarray | None] = []
+        ts_arrs: list[np.ndarray | None] = []
+
+        for inlet, ref_idx in zip(self._inlets, self._ref_idx):
+            data, ts = inlet.pull_chunk(timeout=0.0, max_samples=max_samples)
+            if not ts:
+                parts.append(None)
+                ts_arrs.append(None)
+            else:
+                arr = np.asarray(data, dtype=np.float32).T  # (n_ch, n_samp)
+                parts.append(arr[ref_idx, :])
+                ts_arrs.append(np.asarray(ts, dtype=np.float64))
+
+        if parts[0] is None or parts[1] is None:
+            return np.array([]), np.array([])
+
+        n_samp = min(parts[0].shape[1], parts[1].shape[1])
+        if n_samp == 0:
+            return np.array([]), np.array([])
+
+        merged = np.concatenate([p[:, :n_samp] for p in parts], axis=0)
+        ts_out = ts_arrs[0][:n_samp]
+
+        # Vectorised ring-buffer update
+        end = self._write_ptr + n_samp
+        if end <= self._buf_n:
+            self._buffer[:, self._write_ptr:end] = merged
+            self._timestamps[self._write_ptr:end] = ts_out
+        else:
+            first = self._buf_n - self._write_ptr
+            self._buffer[:, self._write_ptr:] = merged[:, :first]
+            self._timestamps[self._write_ptr:] = ts_out[:first]
+            rem = n_samp - first
+            self._buffer[:, :rem] = merged[:, first:]
+            self._timestamps[:rem] = ts_out[first:]
+        self._write_ptr = (self._write_ptr + n_samp) % self._buf_n
+
+        return merged, ts_out
+
+    def get_window(self, window_s: float) -> tuple[np.ndarray, np.ndarray]:
+        """Return the most recent *window_s* seconds from the ring buffer."""
+        n_samp = int(window_s * self.stream_srate)
+        idx = np.arange(self._write_ptr - n_samp, self._write_ptr) % self._buf_n
+        return self._buffer[:, idx].copy(), self._timestamps[idx].copy()
+
+
+# ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 
@@ -140,15 +290,17 @@ def run(args: argparse.Namespace) -> None:
     # ---- model artefacts ----
     model = load_model_artefacts(Path(args.model_dir))
 
-    # ---- EEG inlet + preprocessor ----
-    stream_cfg = EegStreamConfig(
-        stream_name=args.stream_name,
-        expected_srate=args.stream_srate,
-        expected_channels=ch_names,
-        buffer_duration_s=max(10.0, _WINDOW_S + 2.0),
+    # ---- EEG inlet (dual-amp merge) + preprocessor ----
+    # _DualEegInlet resolves both ANT eego streams by substring match, extracts
+    # ref channels from each, and concatenates to 128 ch — mirroring offline
+    # _merge_eeg_streams() so the model receives the same channel layout it was
+    # trained on.
+    inlet = _DualEegInlet(
+        stream_name_substr=args.stream_name,
+        stream_srate=args.stream_srate,
+        buffer_s=max(10.0, _WINDOW_S + 2.0),
     )
     preproc_cfg = EegPreprocessingConfig(srate=_ANALYSIS_SRATE)
-    preprocessor = EegPreprocessor(preproc_cfg)
 
     # Decimation factor (stream srate → analysis srate)
     decim_factor = int(round(args.stream_srate / _ANALYSIS_SRATE))
@@ -159,8 +311,6 @@ def run(args: argparse.Namespace) -> None:
         "Stream @ %.0f Hz → analysis @ %.0f Hz  (decimate ×%d)",
         args.stream_srate, _ANALYSIS_SRATE, decim_factor,
     )
-
-    inlet = EegInlet(stream_cfg)  # preprocessor applied *after* decimation
 
     # ---- feature extractor ----
     extractor = OnlineFeatureExtractor(
@@ -174,13 +324,9 @@ def run(args: argparse.Namespace) -> None:
     )
 
     # ---- connect to EEG ----
-    log.info("Resolving EEG stream '%s' ...", args.stream_name)
     if not inlet.connect(timeout=args.timeout):
-        log.error("Could not connect to EEG stream — aborting.")
+        log.error("Could not connect to EEG streams — aborting.")
         sys.exit(1)
-
-    # Initialise preprocessor for the channel count from the stream
-    preprocessor.initialize_filters(n_channels)
 
     # ---- warmup: fill buffer before first inference ----
     window_samples = int(_WINDOW_S * _ANALYSIS_SRATE)
@@ -235,16 +381,30 @@ def run(args: argparse.Namespace) -> None:
         if need_decimate:
             window_raw = _decimate(window_raw, decim_factor)
 
+        # ---- signal quality check (on raw decimated data) ----
+        # Checked BEFORE filtering: the raw window amplitude reflects electrode
+        # contact quality and amplifier health without filter-transient artefacts.
+        # The ANT eego streams in V (not µV).  Clean DC-coupled EEG has RMS
+        # ~1e-3 – 0.1 V.  Thresholds:  > 1e-4 V (1 alive channel), < 100 V.
+        rms = float(np.sqrt(np.mean(window_raw ** 2)))
+        quality = 1.0 if 1e-4 < rms < 100.0 else 0.0
+
         # ---- preprocess (BP → notch → CAR) ----
-        # Use a stateless call to avoid filter state issues with overlapping
-        # windows — create a fresh preprocessor per window.
+        # Per-window fresh preprocessor, but pre-warmed from the first sample
+        # of each channel so the IIR filter starts in steady-state for that
+        # DC level — this eliminates the large onset transient that would
+        # otherwise push post-filter RMS far above the quality threshold.
         win_preprocessor = EegPreprocessor(preproc_cfg)
-        win_preprocessor.initialize_filters(n_channels)
+        win_preprocessor.initialize_filters(n_channels, prewarm=window_raw[:, 0])
         window = win_preprocessor.process(window_raw)
 
-        # ---- signal quality check ----
-        rms = float(np.sqrt(np.mean(window ** 2)))
-        quality = 1.0 if 0.5 < rms < 200.0 else 0.0
+        # Temporary diagnostic — remove once RMS values are confirmed
+        if n_inferences < 5:
+            rms_filtered = float(np.sqrt(np.mean(window ** 2)))
+            log.info(
+                "[DIAG #%d] raw_rms=%.2f  filtered_rms=%.2f  quality=%.1f",
+                n_inferences, rms, rms_filtered, quality,
+            )
 
         if quality < 0.5:
             outlet.push_sample([0.5, 0.0, quality])
@@ -304,13 +464,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--outlet-name", default=_OUTLET_NAME,
         help=f"Name for the MWL LSL outlet (default: {_OUTLET_NAME})",
     )
+    _repo_root = Path(__file__).resolve().parent.parent
     p.add_argument(
-        "--eeg-config", default="config/eeg_metadata.yaml",
+        "--eeg-config",
+        default=str(_repo_root / "config" / "eeg_metadata.yaml"),
         help="Path to EEG metadata YAML (channel names)",
     )
     p.add_argument(
         "--region-config",
-        default="C:/vr_tsst_2025/config/eeg_feature_extraction.yaml",
+        default=str(_repo_root / "config" / "eeg_feature_extraction.yaml"),
         help="Path to region-definition YAML",
     )
     p.add_argument(
