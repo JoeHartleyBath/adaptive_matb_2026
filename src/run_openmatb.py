@@ -88,10 +88,15 @@ def _ensure_openmatb_runtime_dependencies(openmatb_dir: Path) -> None:
             f"Install pinned dependencies with:\n  {sys.executable} -m pip install -r {requirements_path}"
         ) from exc
 
-    if installed_pyglet != pinned_pyglet:
+    # Allow any patch release within the same minor series (e.g. 1.5.31 when pinned is 1.5.26).
+    # Newer patch versions have Python 3.13 compatibility fixes; exact pinning breaks on newer Pythons.
+    # We do the real capability check below (OrderedGroup) rather than relying on the version number.
+    pinned_major_minor = ".".join(pinned_pyglet.split(".")[:2])
+    installed_major_minor = ".".join(installed_pyglet.split(".")[:2])
+    if installed_major_minor != pinned_major_minor:
         raise RuntimeError(
             "OpenMATB dependency check failed: incompatible pyglet version.\n"
-            f"  Required: {pinned_pyglet}\n"
+            f"  Required: {pinned_major_minor}.x (pinned: {pinned_pyglet})\n"
             f"  Installed: {installed_pyglet}\n"
             f"Install pinned dependencies with:\n  {sys.executable} -m pip install -r {requirements_path}"
         )
@@ -101,7 +106,9 @@ def _ensure_openmatb_runtime_dependencies(openmatb_dir: Path) -> None:
     except Exception as exc:
         raise RuntimeError(
             "OpenMATB dependency check failed: pyglet does not expose OrderedGroup, which this OpenMATB build requires.\n"
-            f"Reinstall pinned dependencies with:\n  {sys.executable} -m pip install -r {requirements_path}"
+            f"  Installed pyglet: {installed_pyglet}\n"
+            f"  Try: {sys.executable} -m pip install 'pyglet>=1.5.26,<2.0'\n"
+            f"  Or reinstall pinned deps: {sys.executable} -m pip install -r {requirements_path}"
         ) from exc
 
 
@@ -215,6 +222,43 @@ atexit.register(_cleanup_lsl_recorder_subprocess)
 atexit.register(_cleanup_labrecorder_rcs_recording)
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
+
+
+def _wait_for_mwl_outlet(timeout_s: float = 60.0, poll_interval_s: float = 1.0) -> bool:
+    """Block until the MWL LSL outlet is visible on the network, or timeout.
+
+    The MWL estimator creates its outlet only after successfully connecting to
+    both EEG streams and loading the model.  Polling here gives a hard gate
+    before OpenMATB starts: the scenario will not begin until the estimator is
+    live and ready to push samples.
+
+    Returns True if found, False on timeout (subprocess may have crashed).
+    """
+    print(
+        f"[MWL] Waiting for MWL estimator outlet (type=MWL, timeout={timeout_s:.0f}s)...",
+        flush=True,
+    )
+    import pylsl
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        # Check subprocess is still alive first
+        if _mwl_subprocess is not None and _mwl_subprocess.poll() is not None:
+            rc = _mwl_subprocess.poll()
+            print(
+                f"[MWL] ERROR: MWL estimator exited prematurely (code={rc}). "
+                "Check EEG streams are live.",
+                flush=True,
+            )
+            return False
+        streams = pylsl.resolve_stream("type", "MWL", 1, poll_interval_s)
+        if streams:
+            print(f"[MWL] MWL outlet found: '{streams[0].name()}' — proceeding.", flush=True)
+            return True
+    print(
+        f"[MWL] ERROR: MWL outlet not found within {timeout_s:.0f}s — aborting scenario.",
+        flush=True,
+    )
+    return False
 
 
 def _labrecorder_send_rcs(host: str, port: int, lines: list[str], timeout_s: float = 3.0) -> None:
@@ -380,10 +424,11 @@ def _stop_labrecorder_xdf_recording_rcs(*, host: str, port: int, timeout_s: floa
 
 def _start_eda_streamer(
     repo_root: Path,
-    eda_port: str,
+    eda_port: Optional[str],
     eda_stream_name: str = "ShimmerEDA",
     health_check_timeout: float = 15.0,
     min_battery_pct: Optional[float] = None,
+    auto_port: bool = False,
 ) -> dict:
     """Start EDA streamer subprocess and verify LSL stream appears.
 
@@ -420,8 +465,12 @@ def _start_eda_streamer(
 
     # --- Battery pre-check ---
     if min_battery_pct is not None:
-        print(f"Probing Shimmer battery (port {eda_port})...")
-        probe_cmd = [sys.executable, str(streamer_script), "--port", eda_port, "--probe-json"]
+        if auto_port:
+            print("Probing Shimmer battery (auto-detecting port)...")
+            probe_cmd = [sys.executable, str(streamer_script), "--auto-port", "--probe-json"]
+        else:
+            print(f"Probing Shimmer battery (port {eda_port})...")
+            probe_cmd = [sys.executable, str(streamer_script), "--port", eda_port, "--probe-json"]
         batt_info = _probe_device_battery(probe_cmd, timeout=45.0)
         result["battery_pct"] = batt_info["battery_pct"]
 
@@ -451,12 +500,20 @@ def _start_eda_streamer(
                 file=sys.stderr,
             )
 
-    cmd = [
-        sys.executable,
-        str(streamer_script),
-        "--port", eda_port,
-        "--name", eda_stream_name,
-    ]
+    if auto_port:
+        cmd = [
+            sys.executable,
+            str(streamer_script),
+            "--auto-port",
+            "--name", eda_stream_name,
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            str(streamer_script),
+            "--port", eda_port,
+            "--name", eda_stream_name,
+        ]
 
     print(f"Starting EDA streamer: {' '.join(cmd)}")
 
@@ -971,8 +1028,10 @@ def _preflight_stream_check(
 
             n_samples = len(samples)
             stats["samples_received"] = n_samples
-            
-            if n_samples > 1:
+
+            # For low-rate streams (HR ~1 Hz) a single sample in the window is
+            # sufficient to confirm the stream is live.
+            if n_samples >= 1:
                 stats["streaming"] = True
                 
                 # Calculate actual sample rate.
@@ -1057,10 +1116,9 @@ def _preflight_stream_check(
                         )
 
                 # EEG-specific checks
-                if stream_info.type() == "EEG":
-                    # Check for clipping or saturation
-                    if stats["signal_range"] < 1:
-                        stats["warnings"].append("EEG range very small - check impedances")
+                # EEG: the flat-signal check (std < 1e-9 above) is sufficient to detect
+                # a dead amp. An absolute range threshold is unreliable because units vary
+                # across amps (V vs µV), so no additional range check is applied here.
                     
             elif n_samples == 0:
                 stats["warnings"].append("NO SAMPLES RECEIVED - stream may be stalled")
@@ -1216,6 +1274,7 @@ def _run_preflight_checks(
     check_eeg: bool = True,
     check_eda: bool = True,
     check_hr: bool = True,
+    check_joystick: bool = True,
     eeg_stream_type: str = "EEG",
     eeg_stream_count: int = 1,
     eda_stream_name: str = "ShimmerEDA",
@@ -1337,6 +1396,25 @@ def _run_preflight_checks(
         print("=" * 60)
         
         return all_ok, has_warnings, result
+
+    # Joystick check (once, before the retry loop — hardware doesn't change between retries)
+    if check_joystick:
+        print("\n" + "=" * 60)
+        print("JOYSTICK CHECK")
+        print("=" * 60)
+        try:
+            import pyglet
+            joysticks = pyglet.input.get_joysticks()
+            if joysticks:
+                print(f"  [OK] Joystick detected: {joysticks[0].device.name}")
+            else:
+                print("  [!!] No joystick detected — tracking task requires a joystick.")
+                print("       Connect the joystick now, then press Enter to continue, or 'n' to cancel.")
+                resp = input("  Continue without joystick? (y/n): ").strip().lower()
+                if resp in ("n", "no"):
+                    return False
+        except Exception as exc:
+            print(f"  [?] Joystick check skipped: {exc}")
 
     # EEG amplifier battery (manual — no LSL battery stream exists for the amp).
     # This is the only battery that cannot be checked automatically.
@@ -1580,6 +1658,21 @@ def _block_dialog_lines(
     """
     is_intro = "pilot_practice_intro" in scenario_filename
     is_practice = "pilot_practice" in scenario_filename and not is_intro
+    is_rest = "rest_baseline" in scenario_filename
+
+    if is_rest:
+        # Rest baseline: just show IDs, no instructional body text.
+        body = [
+            "Rest baseline",
+            "",
+            "Fixation cross — 2 minutes.",
+            "Press OK when the participant is ready.",
+        ]
+        body.append("")
+        body.append(f"Participant: {participant}")
+        body.append(f"Session: {session}")
+        body.append(f"Sequence: {seq_id}")
+        return body
 
     if is_intro:
         # Familiarisation phase — IDs only, no instructional body text.
@@ -1642,6 +1735,7 @@ def _stage_pilot_instruction_files(openmatb_dir: Path, repo_root: Path) -> None:
         "4_comm.txt",
         "5_resman.txt",
         "6_all_tasks.txt",
+        "rest_fixation.txt",
     ]
 
     missing = [name for name in required_names if not (source_dir / name).exists()]
@@ -1915,9 +2009,12 @@ def _run_single_scenario(
         )
         time.sleep(1.0)  # let LSL outlet register
     elif mwl_adaptation_mode and mwl_model_dir:
+        _repo_root = Path(__file__).resolve().parent.parent
         mwl_cmd = [
             sys.executable, "-m", "mwl_estimator",
             "--model-dir", mwl_model_dir,
+            "--eeg-config", str(_repo_root / "config" / "eeg_metadata.yaml"),
+            "--region-config", str(_repo_root / "config" / "eeg_feature_extraction.yaml"),
         ]
         print(f"[MWL] Starting real estimator: {' '.join(mwl_cmd)}", flush=True)
         _mwl_subprocess = subprocess.Popen(
@@ -1925,7 +2022,38 @@ def _run_single_scenario(
             cwd=str(Path(__file__).resolve().parent),
             env=env,
         )
-        time.sleep(2.0)  # let EEG connection + warmup begin
+        # Block until the MWL outlet is visible — ensures both EEG streams are
+        # connected and the estimator is ready before the scenario begins.
+        if not _wait_for_mwl_outlet(timeout_s=90.0):
+            _cleanup_mwl_subprocess()
+            return 1, None
+
+        # Restart LabRecorder recording now that the MWL outlet is on the network.
+        # The session-level "select all" fired before the MWL estimator started,
+        # so MWL was not included.  Stop + re-select + start ensures the XDF
+        # captures the MWL stream for the full scenario.
+        if getattr(args, "labrecorder_rcs", False) and _labrecorder_rcs_recording_started:
+            lr_host = str(getattr(args, "labrecorder_host", "127.0.0.1"))
+            lr_port = int(getattr(args, "labrecorder_port", 22345))
+            print("[MWL] Restarting LabRecorder to include MWL outlet in XDF...", flush=True)
+            try:
+                _stop_labrecorder_xdf_recording_rcs(host=lr_host, port=lr_port)
+                time.sleep(0.5)
+                _start_labrecorder_xdf_recording_rcs(
+                    host=lr_host,
+                    port=lr_port,
+                    root=Path(str(args.labrecorder_root)).resolve() if getattr(args, "labrecorder_root", None) else (output_root_path / "physiology"),
+                    template=str(args.labrecorder_template),
+                    participant=participant,
+                    session=session,
+                    task=str(args.labrecorder_task),
+                    acquisition=str(args.labrecorder_acq),
+                    modality=str(args.labrecorder_modality),
+                    run=str(args.labrecorder_run) if getattr(args, "labrecorder_run", None) else None,
+                )
+                print("[MWL] LabRecorder restarted — MWL outlet will be recorded.", flush=True)
+            except Exception as _lr_exc:
+                print(f"[MWL] WARNING: LabRecorder restart failed: {_lr_exc}", flush=True)
 
     try:
         # Pass the modified environment
@@ -2131,6 +2259,10 @@ def _auto_export_pilot_results(
 
     # Export per-run results summary table
     try:
+        import sys as _sys
+        _perf_dir = str(Path(__file__).resolve().parent / "performance")
+        if _perf_dir not in _sys.path:
+            _sys.path.insert(0, _perf_dir)
         import export_pilot_performance_table as exporter
 
         session_root = output_root_path / "openmatb" / participant / session
@@ -2147,6 +2279,10 @@ def _auto_export_pilot_results(
 
     # Update cohort-level status tables (Option A: always attempt)
     try:
+        import sys as _sys
+        _perf_dir = str(Path(__file__).resolve().parent / "performance")
+        if _perf_dir not in _sys.path:
+            _sys.path.insert(0, _perf_dir)
         import summarise_pilot_cohort_status as cohort
 
         blocks_path, status_path = cohort.summarise(output_root_path)
@@ -2332,7 +2468,12 @@ def main() -> int:
     parser.add_argument(
         "--eda-port",
         default=None,
-        help="Shimmer Bluetooth COM port (e.g., COM5). Required for attended sessions.",
+        help="Shimmer Bluetooth COM port (e.g., COM5). Use --eda-auto-port to detect automatically.",
+    )
+    parser.add_argument(
+        "--eda-auto-port",
+        action="store_true",
+        help="Auto-detect the Shimmer COM port by scanning available serial ports. Overrides --eda-port.",
     )
     parser.add_argument(
         "--eda-stream-name",
@@ -2383,9 +2524,9 @@ def main() -> int:
         help="Minimum Polar H10 battery %% required to start a session (default: 20). Set 0 to disable.",
     )
     parser.add_argument(
-        "--hr-no-ecg",
+        "--hr-ecg",
         action="store_true",
-        help="Disable ECG stream from the Polar H10 streamer (HR and RR only).",
+        help="Enable raw ECG stream from the Polar H10 (HR+RR only by default; ECG causes BLE disconnect on some firmware).",
     )
     parser.add_argument(
         "--skip-stream-check",
@@ -2554,8 +2695,9 @@ def main() -> int:
     run_preflight = not args.verification and not args.skip_stream_check
 
     # Start EDA streamer before preflight so the stream check can verify it is live.
-    # --eda-port is optional: if omitted, EDA is skipped with a warning.
-    if run_preflight and args.eda_port:
+    # If neither --eda-port nor --eda-auto-port is given, default to auto-detect.
+    _eda_auto_port = getattr(args, "eda_auto_port", False) or not args.eda_port
+    if run_preflight and (args.eda_port or _eda_auto_port):
         print("\n" + "=" * 60)
         print("Starting EDA streamer before preflight checks...")
         print("=" * 60)
@@ -2566,6 +2708,7 @@ def main() -> int:
             eda_stream_name=args.eda_stream_name,
             health_check_timeout=args.eda_health_timeout,
             min_battery_pct=args.eda_min_battery if args.eda_min_battery > 0 else None,
+            auto_port=_eda_auto_port,
         )
 
         if not eda_info["health_check_passed"]:
@@ -2588,7 +2731,7 @@ def main() -> int:
             hr_device=args.hr_device,
             hr_name_prefix=args.hr_name_prefix,
             health_check_timeout=args.hr_health_timeout,
-            enable_ecg=not args.hr_no_ecg,
+            enable_ecg=getattr(args, 'hr_ecg', False),
             min_battery_pct=args.hr_min_battery if args.hr_min_battery > 0 else None,
         )
 
@@ -2619,6 +2762,7 @@ def main() -> int:
             check_eeg=True,
             check_eda=eda_info is not None,
             check_hr=hr_info is not None,
+            check_joystick=not getattr(args, "skip_joystick_check", False),
             eeg_stream_type=args.eeg_stream_type,
             eeg_stream_count=args.eeg_stream_count,
             eda_stream_name=args.eda_stream_name,
