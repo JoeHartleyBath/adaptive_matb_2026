@@ -68,6 +68,13 @@ excluded_participants:
       condRatio 2.84×, drift. AUC 0.716±0.053 may be inflated by
       amplitude asymmetry between conditions.
 
+  P16:
+    reason: CLASS_IMBALANCE
+    detail: >
+      Only 891 task/forest windows vs 1188 for all other participants, and
+      0 fixation blocks (vs 114). Incomplete session — missing condition
+      data makes calibration normalisation (ADR-0004) unreliable.
+
 # --- Notes on participants NOT excluded ---
 #
 # Previously excluded, now retained (corrected AUC above chance):

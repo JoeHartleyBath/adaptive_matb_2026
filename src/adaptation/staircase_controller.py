@@ -125,6 +125,7 @@ class StaircaseController:
         self._schedule_idx: int = 0                  # current position in schedule
         self._stable_ticks_at_final_step: int = 0    # consecutive no-step ticks at finest step
         self._converged: bool = False
+        self._boundary_ticks: int = 0                # consecutive ticks clamped at d_min/d_max
 
         self._buffer: Deque[_Sample] = deque()
         self._last_step_t: float = -999.0
@@ -145,6 +146,19 @@ class StaircaseController:
         if self._first_sample_t is None:
             self._first_sample_t = float(t)
         self._buffer.append(_Sample(t=float(t), score=float(score)))
+
+    def notify_boundary(self) -> None:
+        """Signal that the last requested step was clamped at d_min or d_max.
+
+        Called by the scheduler when it tries to apply a delta but d doesn't
+        move (ceiling or floor hit).  After *stable_ticks_required* consecutive
+        boundary ticks, declares convergence so the session ends cleanly.
+        """
+        if self._converged:
+            return
+        self._boundary_ticks += 1
+        if self._boundary_ticks >= self.stable_ticks_required:
+            self._converged = True
 
     def tick(self, t: float) -> Optional[float]:
         """Evaluate the current window and return a difficulty delta or None.
@@ -216,6 +230,9 @@ class StaircaseController:
         self._last_direction = direction
         self._last_step_t = t
 
+        # A non-clamped step is about to fire — reset boundary counter.
+        self._boundary_ticks = 0
+
         current_step = self._step_schedule[self._schedule_idx]
         return current_step if direction == +1 else -current_step
 
@@ -272,6 +289,7 @@ class StaircaseController:
             "reversal_count": self._reversal_count,
             "stable_ticks_required": self.stable_ticks_required,
             "stable_ticks_at_final_step": self._stable_ticks_at_final_step,
+            "boundary_ticks": self._boundary_ticks,
             "converged": self._converged,
             "n_samples": len(self._buffer),
             "window_mean": (

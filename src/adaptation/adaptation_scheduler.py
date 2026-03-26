@@ -65,7 +65,7 @@ class AdaptationConfig:
     """
 
     # Difficulty
-    d_init: float = 1.0
+    d_init: float = 0.5   # start at midpoint so staircase can go up or down
     d_min: float = 0.0
     d_max: float = 1.0
     seed: int = 0
@@ -338,6 +338,36 @@ class AdaptationScheduler(Scheduler):
         if delta is not None:
             d_old = self.state.d
             self.state.update(self.state.d + delta)
+
+            if abs(self.state.d - d_old) < 1e-9:
+                # d didn't move — clamped at ceiling or floor.
+                boundary_label = "CEILING" if delta > 0 else "FLOOR"
+                self.controller.notify_boundary()
+                print(
+                    f"[ADAPTATION t={t:6.1f}s] {boundary_label} (clamped)  "
+                    f"d={self.state.d:.3f}  score={score:.3f}  "
+                    f"boundary_ticks={self.controller._boundary_ticks}/{self.controller.stable_ticks_required}",
+                    flush=True,
+                )
+                # Check immediately: boundary ticks may have just triggered convergence.
+                if self.controller.converged:
+                    print(
+                        f"[ADAPTATION t={t:6.1f}s] CONVERGED (boundary)  "
+                        f"d={self.state.d:.3f}  Ending block.",
+                        flush=True,
+                    )
+                    self._log_adaptation(t, delta=None, score=score)
+                    logger.log_manual_entry(
+                        json.dumps({"event": "adaptation_converged", "t": round(t, 3), "d": self.state.d}),
+                        key="adaptation",
+                    )
+                    try:
+                        import pyglet
+                        pyglet.app.exit()
+                    except Exception:
+                        pass
+                return
+
             self._actuate()
             self._log_adaptation(t, delta=delta, score=score)
             direction = "UP  " if delta > 0 else "DOWN"

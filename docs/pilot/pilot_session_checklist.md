@@ -8,6 +8,8 @@ Physical setup steps before launching the runner. All software, stream, battery,
 
 ### 1. EEG
 
+- [ ] **Plug ethernet cable into PC** — without ethernet the EEG signal is very noisy (confirmed 2026-03-26)
+- [ ] Unplug EEG amplifier chargers and laptop charger before recording starts (noise increases significantly when plugged in)
 - [ ] Fit EEG cap on participant
 - [ ] Open eego software and check impedances (target: < 30 kΩ for all channels)
 - [ ] Confirm EEG is streaming to LSL in eego (two amplifiers → two EEG streams)

@@ -1,5 +1,9 @@
 """Personalisation vs from-scratch comparison for MWL classification.
 
+NOTE: Uses the original hardcoded _EXCLUDE set (19 participants) — this is
+a historical analysis on the original 28-participant dataset.  The current
+pipeline uses 40 participants (see config/pretrain_qc.yaml).
+
 For each of the 28 included participants (LOSO), this script:
   1. Trains a group RBF model on the other 27 participants.
   2. Splits the held-out participant's data into calibration and test sets
@@ -24,7 +28,7 @@ Reuses the 54-feature cache from personalised_logreg.py (same _EXCLUDE,
 _FIXED, feat_v="v2_1f_wpli") and per-participant z-scoring.
 
 Usage:
-    # Full run (28 participants × 5 durations × 6 strategies)
+    # Full run (28 participants × 5 durations × 6 strategies, original dataset)
     python scripts/personalisation_comparison.py
 
     # Quick dry-run on one participant

@@ -1,6 +1,6 @@
 # Build spec: `scripts/sweep_mwl_smoothers.py`
 
-Create a new script that sweeps smoother hyperparameters, calibration durations, and hysteresis across all 28 participants using LOSO. Reuse existing infrastructure from `simulate_mwl_adaptation.py`.
+Create a new script that sweeps smoother hyperparameters, calibration durations, and hysteresis across all 40 participants using LOSO. Reuse existing infrastructure from `simulate_mwl_adaptation.py`.
 
 ---
 

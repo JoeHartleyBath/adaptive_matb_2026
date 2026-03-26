@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -72,22 +74,32 @@ from build_mwl_training_dataset import (  # noqa: E402
     PREPROCESSING_CONFIG,
     WINDOW_CONFIG,
     _detect_level,
+    _extract_all_blocks,
     _find_block_bounds,
     _find_stream,
     _load_eeg_metadata,
+    _merge_eeg_streams,
     _parse_markers,
 )
+
+# Seconds from LabRecorder-start to MATB scenario t=0.
+# LabRecorder begins recording before the MATB process starts, so the XDF
+# contains a short lead-in before the first scenario event.  Override via
+# the MATB_SCENARIO_OFFSET_S environment variable if needed.
+_MATB_SCENARIO_OFFSET_S = 12.0
 
 # ---------------------------------------------------------------------------
 # Frozen model config (from dc_logreg_hyperparameter_plateau)
 # ---------------------------------------------------------------------------
 _LOGREG_K = 30             # SelectKBest k (f_classif)
-_LOGREG_C = 0.001          # L2 regularisation strength
+_LOGREG_C = 0.003          # ElasticNet regularisation strength (joint sweep winner)
+_LOGREG_PENALTY = "elasticnet"  # penalty (joint sweep winner)
+_LOGREG_L1_RATIO = 0.5     # ElasticNet mixing (requires solver=saga)
 _WARM_C = 0.1              # weak warm-start C (WS-weak winner)
 SEED = 42
 
 # Region config — shared ANT Neuro NA-271 cap layout
-_DEFAULT_REGION_CFG = Path("C:/vr_tsst_2025/config/eeg_feature_extraction.yaml")
+_DEFAULT_REGION_CFG = Path(__file__).resolve().parent.parent / "config" / "eeg_feature_extraction.yaml"
 _QC_CONFIG = _REPO_ROOT / "config" / "pretrain_qc.yaml"
 _ANALYSIS_SRATE = 128.0
 
@@ -145,7 +157,7 @@ def train_group(
         return
 
     print(f"Training group LogReg on {len(all_pids)} participants")
-    print(f"  Config: K={_LOGREG_K}, C={_LOGREG_C}, L2, StandardScaler")
+    print(f"  Config: K={_LOGREG_K}, C={_LOGREG_C}, {_LOGREG_PENALTY}(l1_ratio={_LOGREG_L1_RATIO}), StandardScaler")
     print(f"  Data:   {data_dir}")
     print()
 
@@ -179,7 +191,8 @@ def train_group(
     pipe = Pipeline([
         ("sc", StandardScaler()),
         ("clf", LogisticRegression(
-            C=_LOGREG_C, max_iter=2000,
+            C=_LOGREG_C, solver="saga",
+            l1_ratio=_LOGREG_L1_RATIO, max_iter=2000,
             class_weight="balanced", random_state=SEED)),
     ])
     pipe.fit(X_sel, y_all)
@@ -198,7 +211,8 @@ def train_group(
         "config": {
             "K": _LOGREG_K,
             "C": _LOGREG_C,
-            "penalty": "l2",
+            "penalty": _LOGREG_PENALTY,
+            "l1_ratio": _LOGREG_L1_RATIO,
             "scaler": "standard",
             "seed": SEED,
         },
@@ -214,11 +228,56 @@ def train_group(
 # calibrate subcommand — helpers
 # ===================================================================
 
+def _find_calibration_scenario(xdf_path: Path, scenarios_dir: Path) -> Path | None:
+    """Return the scenario .txt for a calibration XDF, or None if not found.
+
+    Derives the filename from the XDF stem, e.g.:
+        sub-PSELF_ses-S001_task-matb_acq-cal_c1_physio.xdf
+        → full_calibration_pself_c1.txt
+    """
+    stem = xdf_path.stem
+    m_pid = re.search(r"sub-(\w+)_", stem)
+    m_cond = re.search(r"acq-cal_(c\d+)", stem)
+    if not m_pid or not m_cond:
+        return None
+    candidate = scenarios_dir / f"full_calibration_{m_pid.group(1).lower()}_{m_cond.group(1)}.txt"
+    return candidate if candidate.exists() else None
+
+
+def _parse_scenario_blocks(scenario_path: Path) -> list[tuple[float, float, str]]:
+    """Parse a calibration scenario .txt and return (start_s, end_s, level) per block."""
+    _SBLOCK_RE = re.compile(
+        r"(?P<time>\d+:\d{2}:\d{2});labstreaminglayer;marker;"
+        r"STUDY/V0/calibration_condition/\d+/block_\d+/(?P<level>LOW|MODERATE|HIGH)/(?P<event>START|END)"
+    )
+    open_starts: dict[str, float] = {}
+    blocks: list[tuple[float, float, str]] = []
+    for line in scenario_path.read_text(encoding="utf-8").splitlines():
+        m = _SBLOCK_RE.match(line.strip().split("|")[0])
+        if not m:
+            continue
+        parts = m.group("time").split(":")
+        t_s = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        level = m.group("level")
+        if m.group("event") == "START":
+            open_starts[level] = float(t_s)
+        elif m.group("event") == "END" and level in open_starts:
+            blocks.append((open_starts.pop(level), float(t_s), level))
+    return blocks
+
+
 def _load_xdf_block(
     xdf_path: Path,
     expected_channels: list[str],
-) -> tuple[np.ndarray, str] | None:
-    """Load and preprocess one calibration XDF.  Returns (epochs, level) or None."""
+) -> list[tuple[np.ndarray, str]] | None:
+    """Load and preprocess one calibration XDF.
+
+    Returns a list of ``(epochs, level)`` pairs — one per block — or None on
+    failure so the caller can skip gracefully.
+
+    Falls back to scenario-file timing when no MATB marker stream was recorded
+    (e.g. if LabRecorder started before the OpenMATB LSL outlet existed).
+    """
     import pyxdf
 
     print(f"  {xdf_path.name} ...", end=" ", flush=True)
@@ -228,7 +287,7 @@ def _load_xdf_block(
         print(f"FAILED ({exc})")
         return None
 
-    eeg_stream = _find_stream(streams, "EEG")
+    eeg_stream = _merge_eeg_streams(streams)
     marker_stream = _find_stream(streams, "Markers")
 
     if eeg_stream is None:
@@ -245,18 +304,117 @@ def _load_xdf_block(
     eeg_data = np.array(eeg_stream["time_series"], dtype=np.float32).T
     eeg_ts = np.array(eeg_stream["time_stamps"])
 
+    # Preprocess once — all blocks share the same filtered signal.
+    preprocessor = EegPreprocessor(PREPROCESSING_CONFIG)
+    preprocessor.initialize_filters(eeg_data.shape[0])
+    preprocessed = preprocessor.process(eeg_data)
+
+    # --- Primary: extract every labelled block from the marker stream ---
     markers = _parse_markers(marker_stream)
-    level = _detect_level(markers)
-    if level is None:
-        print("SKIPPED (no START marker)")
+    block_specs: list[tuple[float, float, str]] = _extract_all_blocks(markers)
+
+    # --- Fallback: reconstruct from scenario timing when markers not recorded ---
+    if not block_specs:
+        _SCENARIOS_DIR = _REPO_ROOT / "experiment" / "scenarios"
+        scenario_path = _find_calibration_scenario(xdf_path, _SCENARIOS_DIR)
+        if scenario_path is None:
+            print("SKIPPED (no START marker)")
+            return None
+        scenario_blocks = _parse_scenario_blocks(scenario_path)
+        if not scenario_blocks:
+            print("SKIPPED (no START marker)")
+            return None
+        offset_s = float(os.environ.get("MATB_SCENARIO_OFFSET_S", str(_MATB_SCENARIO_OFFSET_S)))
+        matb_t0 = eeg_ts[0] + offset_s
+        block_specs = [(matb_t0 + s, matb_t0 + e, lvl) for s, e, lvl in scenario_blocks]
+        print(f"(scenario fallback: offset={offset_s:.0f}s) ", end="", flush=True)
+
+    # --- Extract epochs for each block ---
+    results: list[tuple[np.ndarray, str]] = []
+    for start_ts, end_ts, level in block_specs:
+        start_idx = int(np.searchsorted(eeg_ts, start_ts))
+        end_idx = int(np.searchsorted(eeg_ts, end_ts))
+        block = slice_block(preprocessed, start_idx, end_idx, WINDOW_CONFIG)
+        epochs = extract_windows(block, WINDOW_CONFIG)
+        if epochs.shape[0] > 0:
+            results.append((epochs, level))
+
+    if not results:
+        print("SKIPPED (no windows)")
         return None
 
-    bounds = _find_block_bounds(markers, level)
-    if bounds is None:
-        print(f"SKIPPED (missing bounds for {level})")
+    summary = ", ".join(f"{lvl}:{e.shape[0]}" for e, lvl in results)
+    print(f"OK  {len(results)} blocks [{summary}]")
+    return results
+
+
+def _load_rest_xdf_block(
+    xdf_path: Path,
+    expected_channels: list[str],
+    settle_s: float = 5.0,
+) -> np.ndarray | None:
+    """Load a resting-baseline XDF and return windowed EEG epochs.
+
+    Searches the Markers stream for ``STUDY/V0/rest/START`` and
+    ``STUDY/V0/rest/END`` (emitted by ``rest_baseline.txt``), trims the
+    first *settle_s* seconds after START to let the EEG settle, then
+    windows the remainder.
+
+    Returns
+    -------
+    epochs : np.ndarray, shape (n_windows, n_channels, n_samples), or None
+        None is returned on any loading or parsing failure.
+    """
+    import pyxdf
+
+    _REST_START = "STUDY/V0/rest/START"
+    _REST_END = "STUDY/V0/rest/END"
+
+    print(f"  {xdf_path.name} (rest) ...", end=" ", flush=True)
+    try:
+        streams, _ = pyxdf.load_xdf(str(xdf_path))
+    except Exception as exc:
+        print(f"FAILED ({exc})")
         return None
-    start_ts, end_ts = bounds
-    start_idx = int(np.searchsorted(eeg_ts, start_ts))
+
+    eeg_stream = _merge_eeg_streams(streams)
+    marker_stream = _find_stream(streams, "Markers")
+
+    if eeg_stream is None:
+        print("SKIPPED (no EEG stream)")
+        return None
+
+    n_ch = int(eeg_stream["info"]["channel_count"][0])
+    if n_ch != len(expected_channels):
+        print(f"SKIPPED (channel count {n_ch} != {len(expected_channels)})")
+        return None
+
+    markers = _parse_markers(marker_stream)
+    start_ts = end_ts = None
+    for ts, text in markers:
+        label = text.split("|")[0]
+        if label == _REST_START:
+            start_ts = ts
+        elif label == _REST_END:
+            end_ts = ts
+
+    eeg_data = np.array(eeg_stream["time_series"], dtype=np.float32).T
+    eeg_ts = np.array(eeg_stream["time_stamps"])
+
+    if start_ts is None or end_ts is None:
+        # Fallback: markers not recorded — use full XDF duration minus settle.
+        # The rest recording is the entire XDF (no other task mixed in).
+        start_ts = eeg_ts[0]
+        end_ts = eeg_ts[-1]
+        print("(no REST markers — using full XDF) ", end="", flush=True)
+
+    from eeg import EegPreprocessor, extract_windows, slice_block
+    analysis_start_ts = start_ts + settle_s
+    if analysis_start_ts >= end_ts:
+        print("SKIPPED (rest block too short after settling)")
+        return None
+
+    start_idx = int(np.searchsorted(eeg_ts, analysis_start_ts))
     end_idx = int(np.searchsorted(eeg_ts, end_ts))
 
     preprocessor = EegPreprocessor(PREPROCESSING_CONFIG)
@@ -269,8 +427,8 @@ def _load_xdf_block(
         print("SKIPPED (no windows)")
         return None
 
-    print(f"OK  level={level}  epochs={epochs.shape[0]}")
-    return epochs, level
+    print(f"OK  epochs={epochs.shape[0]}")
+    return epochs
 
 
 def _compute_resting_norm(
@@ -339,13 +497,13 @@ def calibrate(
     all_labels: list[np.ndarray] = []
 
     for xdf_path in xdf_files:
-        result = _load_xdf_block(xdf_path, expected_channels)
-        if result is None:
+        results = _load_xdf_block(xdf_path, expected_channels)
+        if results is None:
             continue
-        epochs, level = result
-        label = LABEL_MAP[level]
-        all_epochs.append(epochs)
-        all_labels.append(np.full(epochs.shape[0], label, dtype=np.int64))
+        for epochs, level in results:
+            label = LABEL_MAP[level]
+            all_epochs.append(epochs)
+            all_labels.append(np.full(epochs.shape[0], label, dtype=np.int64))
 
     if not all_epochs:
         sys.exit("ERROR: No valid calibration blocks loaded.")
@@ -370,9 +528,8 @@ def calibrate(
     # --- 4. Resting-baseline norm stats ---
     if resting_xdf is not None and resting_xdf.exists():
         print(f"\n  Resting baseline from: {resting_xdf.name}")
-        result = _load_xdf_block(resting_xdf, expected_channels)
-        if result is not None:
-            rest_epochs, _ = result
+        rest_epochs = _load_rest_xdf_block(resting_xdf, expected_channels)
+        if rest_epochs is not None:
             norm_mean, norm_std = _compute_resting_norm(
                 rest_epochs, _ANALYSIS_SRATE, region_map)
         else:

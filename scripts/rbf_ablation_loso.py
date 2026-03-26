@@ -18,6 +18,9 @@ Experiments
   I   combined_mi  — H + mutual_info_classif
 
 Each experiment is a full 28-fold LOSO with inner StratifiedGroupKFold(5).
+NOTE: Uses the original hardcoded _EXCLUDE set (19 participants) — this is
+a historical analysis on the original 28-participant dataset.  The current
+pipeline uses 40 participants (see config/pretrain_qc.yaml).
 Incremental save after every experiment completes.
 
 Usage:
@@ -460,7 +463,7 @@ def _run_fold(
 
 
 # ---------------------------------------------------------------------------
-# Run one full experiment (28 LOSO folds)
+# Run one full experiment (28 LOSO folds, original dataset)
 # ---------------------------------------------------------------------------
 
 def run_experiment(

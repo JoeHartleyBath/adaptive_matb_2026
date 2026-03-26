@@ -23,8 +23,9 @@ expanding     Z-score each task block using all data from session start
 
 Evaluation
 ----------
-28-fold LOSO LogisticRegression (C=0.001, balanced, StandardScaler in
+40-fold LOSO LogisticRegression (C=0.001, balanced, StandardScaler in
 pipeline).  Primary metric: mean AUC across held-out participants.
+(Exclusions loaded dynamically from config/pretrain_qc.yaml.)
 
 Usage
 -----

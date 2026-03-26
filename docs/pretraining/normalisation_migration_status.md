@@ -1,7 +1,7 @@
 # Normalisation migration status
 
-**Date:** 2026-03-12  
-**Status:** In progress
+**Date:** 2026-03-17  
+**Status:** Done
 
 ---
 
@@ -38,7 +38,7 @@ Audited the preprocessing and feature extraction pipeline. Found that:
 
 ### 2. Ablation: removed pp z-scoring entirely
 
-Added `--no-pp-zscore` flag to `scripts/rbf_ablation_loso.py` and re-ran the full 28-fold LOSO. Results above. Documented in `docs/decisions/design_choices/modelling/dc_rbf_hyperparameter_ceiling.md`.
+Added `--no-pp-zscore` flag to `scripts/rbf_ablation_loso.py` and re-ran the full 28-fold LOSO (original 28-participant dataset, old QC exclusion set). Results above. Documented in `docs/decisions/design_choices/modelling/dc_rbf_hyperparameter_ceiling.md`.
 
 ### 3. Redesigned the dataset export format
 
@@ -67,11 +67,13 @@ Synchronised `config/pretrain_qc.yaml` with the 19-element exclusion set used ac
 
 - 9 × EEG_QUALITY failures
 - 10 × NO_SIGNAL failures
-- Effective included: 28 participants (P14 also fails at load → 28 files written)
+- Effective included: 28 participants at this stage (P14 also fails at load → 28 files written)
 
-### 5. Built all 28 continuous files
+> **Note:** QC exclusion list was subsequently revised (2026-03-13). Under the updated criteria, **40 participants** are included. See `config/pretrain_qc.yaml` for the current set.
 
-Full rebuild completed. 28 participant files written, P14 skipped (load failure), manifest generated at `output/matb_pretrain/continuous/manifest.json`.
+### 5. Built all continuous files
+
+Full rebuild completed. P14 skipped (load failure). Manifest generated at `output/matb_pretrain/continuous/manifest.json`. Current count: 40 included participants.
 
 ### 6. Created shared windowing utility
 
@@ -87,55 +89,20 @@ This is the single adapter layer between the new format and all downstream scrip
 
 ---
 
-## What is left to do
+## Completed (steps 7–11)
 
-### 7. Update `personalised_logreg.py` to use new loader
+All remaining steps were completed. The final decision is documented in
+`docs/decisions/ADR/ADR-0004-causal-normalisation-strategy.md`:
 
-The primary feature cache builder. Currently reads old monolithic HDF5 via `f["participants"][pid]["epochs"][:]`. Needs to:
-
-- Point `_DATASET` at the continuous directory
-- Replace the HDF5 epoch reader with `PretrainDataDir.load_task_epochs()`
-- Update `_cache_key()` to hash the manifest mtime instead of a single file's mtime
-- Rebuild the feature cache (`results/test_pretrain/feature_cache.npz`)
-
-### 8. Update cache-only consumer scripts
-
-Three scripts read only from the pre-computed feature cache and need their `_DATASET` path and `_cache_key()` updated so cache-staleness detection works:
-
-- `scripts/rbf_ablation_loso.py`
-- `scripts/ensemble_loso.py`
-- `scripts/personalisation_comparison.py`
-
-### 9. Update direct-read scripts
-
-Scripts that open the HDF5 directly (not via cache) need more substantial changes:
-
-- `scripts/bandpower_svm_p07.py`
-- `scripts/_qc_audit_all_participants.py`
-- `scripts/check_mwl_dataset.py`
-- `src/ml/dataset.py` (MwlDataset class — used by EEGNet training)
-- `scripts/train_mwl_model.py`
-- `scripts/test_pretrain_pipeline.py`
-- `scripts/run_loo_cv.py`
-
-### 10. Design and run causal normalisation experiments
-
-Once the pipeline reads from the new continuous format, run a systematic comparison of normalisation strategies that are all online-compatible:
-
-| Strategy | Baseline data | Online-compatible |
-|----------|---------------|-------------------|
-| **No normalisation** (already done) | None | ✓ |
-| **Forest-only baseline** | 180 s preceding forest per block | ✓ |
-| **Cumulative baseline** | All forest + fixation data seen so far | ✓ |
-| **Short Calibration block** | Fixation scenes only | ✓ |
-| **Calibration block** | First 390 s (movement + fixation + Forest1) | ✓ |
-| **Expanding window** | All data from session start up to current epoch | ✓ |
-
-Each strategy computes per-participant z-score statistics from only causally-available data, then applies those to normalise task epochs. Results compared against the current (non-causal) pp z-score AUC of 0.6725 to quantify the online performance gap.
-
-### 11. Select final normalisation strategy and freeze pipeline
-
-Pick the strategy with the best AUC that is fully online-compatible. Update `personalised_logreg.py` and the RBF pipeline to use it by default. Document the decision.
+- Pipeline updated to read from the continuous per-participant HDF5 format.
+- QC exclusion list revised: current set has 6 excluded participants
+  (see `config/pretrain_qc.yaml`) plus P14 (load failure) → **40 included**.
+- Seven causal normalisation strategies compared via 40-fold LOSO
+  (`scripts/causal_norm_comparison.py`). Results in
+  `results/test_pretrain/causal_norm_comparison.json`.
+- **Decision: calibration-based normalisation** (fixation + Forest0, ~300 s).
+  Lowest cross-participant AUC variance (std 0.1236) among online-compatible
+  strategies; clean resting-state baseline with no task contamination.
 
 ---
 
@@ -151,4 +118,4 @@ Pick the strategy with the best AUC that is fully online-compatible. Update `per
 | `config/pretrain_qc.yaml` | QC exclusion list (single source of truth) |
 | `docs/decisions/design_choices/modelling/dc_rbf_hyperparameter_ceiling.md` | Full ablation results + pp z-score section |
 | `results/test_pretrain/rbf_ablation_no_pp_zscore.json` | Per-fold results without pp z-scoring |
-| `output/matb_pretrain/continuous/manifest.json` | Build manifest (28 participants) |
+| `output/matb_pretrain/continuous/manifest.json` | Build manifest (40 included participants) |

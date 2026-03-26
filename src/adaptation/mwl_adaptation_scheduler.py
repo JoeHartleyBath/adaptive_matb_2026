@@ -309,7 +309,11 @@ class MwlAdaptationScheduler(Scheduler):
         t = self.scenario_time
 
         if not self.get_active_plugins():
-            if self._audit_logger is not None:
+            # No active plugins yet (scenario just starting) or scenario ended.
+            # Only close the audit logger if we are well past t=0 (i.e. scenario
+            # has been running for a while and plugins have genuinely all stopped).
+            # Never close it in the first 5s — plugins may not have started yet.
+            if t > 5.0 and self._audit_logger is not None:
                 self._audit_logger.close()
                 self._audit_logger = None
             return

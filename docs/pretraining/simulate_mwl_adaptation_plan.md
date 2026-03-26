@@ -8,7 +8,7 @@
 
 ## Goal
 
-Test the existing `StaircaseController` with real EEG-derived MWL estimates rather than synthetic score patterns. For each of the 28 included participants, replay their 4 MATB condition blocks through a personalised FT-head classifier, feed `1 − P(high_MWL)` into the controller, and record the resulting `d(t)` trajectory.
+Test the existing `StaircaseController` with real EEG-derived MWL estimates rather than synthetic score patterns. For each of the 40 included participants, replay their 4 MATB condition blocks through a personalised FT-head classifier, feed `1 − P(high_MWL)` into the controller, and record the resulting `d(t)` trajectory.
 
 This answers: *would the adaptation logic have increased difficulty in LOW-load blocks and decreased it in HIGH-load blocks?*
 
@@ -89,7 +89,7 @@ In `main()`, add:
 - Mixed norm (`load_baseline_from_cache` + `prepare_mixed_norm`)
 - Print: `Loaded N participants, F features [key=...]`
 
-Verify: running the script exits cleanly and prints the correct participant/feature counts (28, 54).
+Verify: running the script exits cleanly and prints the correct participant/feature counts (40, 54).
 
 ---
 
@@ -179,7 +179,7 @@ After the loop:
 
 ---
 
-### Step 11 — Run full 28 participants
+### Step 11 — Run full 40 participants
 
 ```
 python scripts/simulate_mwl_adaptation.py
@@ -208,7 +208,7 @@ This step is human review — no code changes.
 | File | Description |
 |------|-------------|
 | `results/test_pretrain/simulate_mwl_adaptation.json` | Full per-participant simulation results |
-| `results/figures/mwl_adaptation/{pid}.png` | Per-participant timeline plot (28 files) |
+| `results/figures/mwl_adaptation/{pid}.png` | Per-participant timeline plot (40 files) |
 
 ---
 

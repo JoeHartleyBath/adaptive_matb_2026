@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "adaptive_matb"
 version = "0.1.0"
 description = "Adaptive MATB 2026 — PhD research experiment and analysis package"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "numpy",
     "torch",

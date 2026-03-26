@@ -61,8 +61,10 @@ from ml.dataset import LABEL_MAP  # noqa: E402
 # ---------------------------------------------------------------------------
 # Marker patterns
 # ---------------------------------------------------------------------------
+# Matches both old STUDY/V0/calibration/LEVEL/EVENT and the actual format
+# STUDY/V0/calibration_condition/N/block_NN/LEVEL/EVENT emitted by the scenario files.
 _MARKER_RE = re.compile(
-    r"STUDY/V0/calibration/(?P<level>LOW|MODERATE|HIGH)/(?P<event>START|END)"
+    r"STUDY/V0/calibration(?:_condition/\d+/block_\d+)?/(?P<level>LOW|MODERATE|HIGH)/(?P<event>START|END)"
 )
 
 # ---------------------------------------------------------------------------
@@ -121,6 +123,51 @@ def _find_stream(streams: list, stream_type: str):
     return None
 
 
+def _merge_eeg_streams(streams: list):
+    """Return a single EEG stream dict, merging dual-amp setups if needed.
+
+    The ANT eego dual-amp setup streams two 66-channel EEG streams, each
+    containing 64 electrode ('ref') channels plus 1 trigger and 1 counter.
+    This function extracts only the electrode channels from each stream and
+    concatenates them (sorted by stream name for reproducibility) to produce
+    a single 128-channel EEG stream dict.  For single-amp recordings the
+    original stream is returned unchanged.
+    """
+    eeg_streams = [s for s in streams if s["info"]["type"][0] == "EEG"]
+    if not eeg_streams:
+        return None
+    if len(eeg_streams) == 1:
+        return eeg_streams[0]
+
+    # Sort by stream name so ordering is deterministic across recordings.
+    eeg_streams = sorted(eeg_streams, key=lambda s: s["info"]["name"][0])
+
+    parts = []
+    for s in eeg_streams:
+        ts = np.array(s["time_series"])  # (n_samples, n_ch)
+        try:
+            ch_desc = s["info"]["desc"][0]["channels"][0]["channel"]
+            ref_idx = [i for i, ch in enumerate(ch_desc) if ch["type"][0] == "ref"]
+        except (KeyError, IndexError):
+            # No channel descriptor — take all channels
+            ref_idx = list(range(ts.shape[1]))
+        parts.append(ts[:, ref_idx])
+
+    # Align sample counts (streams may differ by ±1 sample at boundaries).
+    min_samples = min(p.shape[0] for p in parts)
+    merged_ts = np.concatenate([p[:min_samples] for p in parts], axis=1)
+
+    reference = eeg_streams[0]
+    merged = {
+        "info": dict(reference["info"]),
+        "time_series": merged_ts,
+        "time_stamps": np.array(reference["time_stamps"])[:min_samples],
+    }
+    merged["info"] = dict(reference["info"])  # shallow copy
+    merged["info"]["channel_count"] = [str(merged_ts.shape[1])]
+    return merged
+
+
 def _parse_markers(marker_stream) -> list[tuple[float, str]]:
     """Return list of (timestamp, marker_string) from a marker stream."""
     if marker_stream is None:
@@ -137,14 +184,19 @@ def _find_block_bounds(
     markers: list[tuple[float, str]],
     level: str,
 ) -> tuple[float, float] | None:
-    """Return (start_ts, end_ts) for the given block level, or None."""
+    """Return (start_ts, end_ts) for the given block level, or None.
+
+    When multiple blocks share the same level (multi-block calibration
+    scenarios) this returns the bounds of the *first* matching block.
+    Use :func:`_extract_all_blocks` to retrieve every block.
+    """
     start_ts = end_ts = None
     for ts, text in markers:
         m = _MARKER_RE.match(text.split("|")[0])
         if m and m.group("level") == level:
-            if m.group("event") == "START":
+            if m.group("event") == "START" and start_ts is None:
                 start_ts = ts
-            elif m.group("event") == "END":
+            elif m.group("event") == "END" and start_ts is not None and end_ts is None:
                 end_ts = ts
     if start_ts is None or end_ts is None:
         return None
@@ -152,12 +204,34 @@ def _find_block_bounds(
 
 
 def _detect_level(markers: list[tuple[float, str]]) -> str | None:
-    """Detect workload level from START marker."""
+    """Detect workload level from the first START marker."""
     for _, text in markers:
         m = _MARKER_RE.match(text.split("|")[0])
         if m and m.group("event") == "START":
             return m.group("level")
     return None
+
+
+def _extract_all_blocks(
+    markers: list[tuple[float, str]],
+) -> list[tuple[float, float, str]]:
+    """Extract every labelled block from markers.
+
+    Returns a list of ``(start_ts, end_ts, level)`` tuples in chronological
+    order, covering all levels and all repeated blocks within each level.
+    """
+    open_starts: dict[str, float] = {}
+    result: list[tuple[float, float, str]] = []
+    for ts, text in markers:
+        m = _MARKER_RE.match(text.split("|")[0])
+        if not m:
+            continue
+        level = m.group("level")
+        if m.group("event") == "START":
+            open_starts[level] = ts
+        elif m.group("event") == "END" and level in open_starts:
+            result.append((open_starts.pop(level), ts, level))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +257,7 @@ def process_xdf(
         print(f"FAILED (load error: {exc})")
         return None
 
-    eeg_stream = _find_stream(streams, "EEG")
+    eeg_stream = _merge_eeg_streams(streams)
     marker_stream = _find_stream(streams, "Markers")
 
     if eeg_stream is None:

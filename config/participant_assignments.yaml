@@ -1,4 +1,56 @@
 participants:
+  # --- Pilot participants (not included in study analysis) ---
+  PPILOT01:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  PPILOT02:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  PPILOT03:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  PPILOT04:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  PPILOT05:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  PPILOT06:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  PPILOT07:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  PPILOT08:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  PPILOT09:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  PPILOT10:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  # --- Development / self-test ---
   DEV:
     adaptation_first: true
     last_run: '2026-03-03T10:32:14.770084'
@@ -53,6 +105,111 @@ participants:
     sessions_completed: []
   P009:
     adaptation_first: true
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P010:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P011:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P012:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P013:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P014:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P015:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P016:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P017:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P018:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P019:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P020:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P021:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P022:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P023:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P024:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P025:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P026:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P027:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ3
+    sessions_completed: []
+  P028:
+    adaptation_first: false
+    last_run: null
+    sequence: SEQ1
+    sessions_completed: []
+  P029:
+    adaptation_first: true
+    last_run: null
+    sequence: SEQ2
+    sessions_completed: []
+  P030:
+    adaptation_first: false
     last_run: null
     sequence: SEQ3
     sessions_completed: []
