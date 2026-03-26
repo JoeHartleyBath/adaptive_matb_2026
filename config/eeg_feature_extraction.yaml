@@ -1,0 +1,25 @@
+# EEG region definitions for feature extraction (ANT Neuro NA-271, 128-channel)
+# Derived from the VR-TSST region map.
+# Channel names match config/eeg_metadata.yaml exactly.
+# Note: Z7 not present in the 128-ch cap and is omitted from Parietal.
+# Note: MATLAB 'LM' -> 'Lm' (matches cap label exactly).
+
+regions:
+  FrontalLeft:    [L1, L2, L3, L4, LL1, LL2, LL3, LB1, LC1, LD1, LD2, LC2, LD3, LE1]
+  FrontalRight:   [R1, R2, R3, R4, RR1, RR2, RR3, RB1, RC1, RD1, RD2, RC2, RD3, RE1]
+  OverallFrontal: [L1, L2, L3, L4, LL1, LL2, LL3, LB1, LC1, LD1, LD2, LC2, LD3, LE1,
+                   R1, R2, R3, R4, RR1, RR2, RR3, RB1, RC1, RD1, RD2, RC2, RD3, RE1,
+                   Z1, Z2, Z3]
+  FrontalMidline: [Z1, Z2, Z3]
+  TemporalLeft:   [LC3, LC4, LC5, LC6, LD4, LD5, LD6, LE2, LE3, Lm]
+  TemporalRight:  [RC3, RC4, RC5, RC6, RD4, RD5, RD6, RE2, RE3, RM]
+  Temporal:       [LC3, LC4, LC5, LC6, LD4, LD5, LD6, LE2, LE3, Lm,
+                   RC3, RC4, RC5, RC6, RD4, RD5, RD6, RE2, RE3, RM]
+  Central:        [Z4, Z5, Z6, L5, L6, L7, LL4, LL5, LL6, LA1, LA2, LA3, LB2, LB3, LB4,
+                   R5, R6, R7, RR4, RR5, RR6, RA1, RA2, RA3, RB2, RB3, RB4]
+  ParietalLeft:   [L8, L9, L10, LL7, LL8, LL9, LL10, LL11, LA4, LA5, LB5, LB6, LC7]
+  ParietalRight:  [R8, R9, R10, RR7, RR8, RR9, RR10, RR11, RA4, RA5, RB5, RB6, RC7]
+  Parietal:       [Z8, Z9, Z10, Z11, L8, L9, L10, LL7, LL8, LL9, LL10, LL11, LA4, LA5, LB5, LB6, LC7,
+                   R8, R9, R10, RR7, RR8, RR9, RR10, RR11, RA4, RA5, RB5, RB6, RC7]
+  Occipital:      [Z12, Z13, L11, L12, L13, L14, LL12, LL13, LL14, LC7, LD7, LE4,
+                   R11, R12, R13, R14, RR12, RR13, RR14, RC7, RD7, RE4]

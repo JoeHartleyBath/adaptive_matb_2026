@@ -1,0 +1,22 @@
+# Rest Baseline Scenario
+# 2-min resting-state EEG recording for participant-specific normalisation.
+# All tasks are hidden. Participant fixates on a central cross.
+# Format: TIME;EVENT;ACTION;ARGUMENTS
+
+# --- Fixation cross only — no tasks, no flash ---
+# Tasks are NOT started; instructions and LSL plugins are standalone.
+# Experimenter confirms participant is ready via console PAUSE before launch.
+0:00:00;labstreaminglayer;start
+0:00:00;instructions;allowkeypress;False
+0:00:00;instructions;filename;../../../../assets/instructions/pilot_en/rest_fixation.txt
+0:00:00;instructions;start
+
+# --- REST_START marker at t=5s (after task initialisation settling) ---
+0:00:05;labstreaminglayer;marker;STUDY/V0/rest/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+
+# --- REST_END marker at t=1:55 (EEG windowed between START and END) ---
+0:01:55;labstreaminglayer;marker;STUDY/V0/rest/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+
+# --- Stop at t=2:00 ---
+0:02:00;instructions;stop
+0:02:00;labstreaminglayer;stop

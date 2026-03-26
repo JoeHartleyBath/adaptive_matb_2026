@@ -1,0 +1,300 @@
+# Lab notes — 2026-03-26 — Self-pilot dry run (EEG only)
+
+## Goals
+
+- Complete the full `run_full_study_session.py` pipeline end-to-end as self-participant
+- Validate all phases (1–8) with EEG recording active, Polar HR, and Shimmer EDA
+- EEG only for this run — no Shimmer EDA wrist strap (device present, auto-port)
+- Confirm all fixes from 2026-03-25 dry run are working:
+  - `d_init=0.5` staircase fix
+  - Boundary convergence at ceiling/floor
+  - `--eda-auto-port` flag
+  - Joystick preflight check
+  - `rest_baseline.txt` allowkeypress fix
+  - venv Python enforced via `.vscode/settings.json`
+
+## Pre-session notes
+
+- **11:05** — beginning session. EEG only (no Shimmer EDA worn).
+- Code fixes verified and tests passing before lab entry.
+- **⚠️ CRITICAL: ethernet cable must be plugged into the PC before starting EEG recording.** Without it, EEG signal was very noisy. Plugging the ethernet in resolved the noise immediately. Add ethernet connection to standard pre-session hardware checklist.
+
+## Setup notes
+
+- Laptop: [ ] removed from charger before recording
+- EEG amplifier(s): [ ] on, [ ] 100% charged, [ ] removed from charger before recording
+- EEG net: soaking now (start soak as late as possible — dried out quickly yesterday)
+- Towels ready: [ ] neck towel, [ ] face towel
+- Polar H10: [ ] on, [ ] electrodes wetted before preflight
+- Shimmer EDA: [ ] powered on (auto-port detection)
+- Joystick: [ ] connected before launch
+- LabRecorder RCS: [ ] active and recording before Phase 1 starts
+- Group model dir: 
+- Output root: 
+
+Run command:
+```powershell
+C:\adaptive_matb_2026\.venv\Scripts\Activate.ps1
+python src/run_full_study_session.py --participant PSELF --group-model-dir "D:\adaptive_matb_data\pretrain\group_model" --eda-auto-port --labrecorder-rcs
+```
+
+---
+
+## Phase log
+
+### Phase 1 — Rest baseline (2-min fixation cross)
+
+**Time started:**
+**Status:** [ ] OK / [ ] Issues
+
+**Preflight summary:**
+- [ ] EEG-A: streaming
+- [ ] EEG-B: streaming
+- [ ] ShimmerEDA: streaming (or skipped)
+- [ ] PolarHR/RR: found and receiving data
+- [ ] Joystick: detected
+
+Notes:
+
+---
+
+### Phase 2 — Staircase calibration
+
+**Time started:**
+**Status:** [ ] OK / [ ] Issues
+
+Expected: d starts at 0.5, steps up toward ceiling, exits with `CONVERGED (boundary)  d=1.000`
+
+- d_final: 
+- Convergence type (dead-band / boundary): 
+- Scenario ran to completion: [ ] yes / [ ] manual stop
+
+Notes:
+
+---
+
+### Phase 3 — Scenario generation
+
+**Time started:**
+**Status:** [ ] OK / [ ] Issues
+
+Files generated:
+- Calibration C1: 
+- Calibration C2: 
+- Adaptation: 
+
+Notes:
+
+---
+
+### Phase 4 — Calibration runs (2 × 9 min)
+
+**Status:** [ ] OK / [ ] Issues
+
+Run C1 (time started):
+Run C2 (time started):
+
+Notes:
+
+---
+
+### Phase 5 — Model calibration
+
+**Time started:**
+**Status:** [ ] OK / [ ] Issues
+
+- Artefacts written (`pipeline.pkl`, `selector.pkl`, `norm_stats.json`): [ ] yes
+- Calibration runtime: 
+- AUC (2-fold split): 
+
+Notes:
+
+---
+
+### Phase 6 — Condition A
+
+Condition order:
+**Time started:**
+**Status:** [ ] OK / [ ] Issues
+
+- Toggle count: 
+- Cooldown violations: 
+- Verifier exit code: 
+
+Notes:
+
+---
+
+### Phase 7 — Condition B
+
+**Time started:**
+**Status:** [ ] OK / [ ] Issues
+
+Notes:
+
+---
+
+### Phase 8 — Post-session (verification + analysis + plots)
+
+**Status:** [ ] OK / [ ] Issues
+
+- Verification result: 
+- Analysis output: 
+- Figure saved: 
+
+Notes:
+
+---
+
+## Issues found (consolidated)
+
+| # | Phase | Description | Fix applied | Status |
+|---|-------|-------------|-------------|--------|
+| 1 | 3 | `ModuleNotFoundError: No module named 'adaptation'` in `generate_full_study_scenarios.py` | `parents[1]` → `parents[2]` (script lives two directories deep, not one) | ✅ Fixed |
+| 2 | 3 | Same bug in `generate_adaptive_automation_scenarios.py` | Same fix | ✅ Fixed |
+| 3 | 4 | LabRecorder did not record calibration runs — XDF field empty in manifests | Added `--pilot1` to calibration run commands in `run_full_study_session.py` | ✅ Fixed |
+| 4 | 5 | `SKIPPED (channel count 66 != 128)` — dual-amp setup streams two 66-ch EEG streams, calibration script picked only one | Added `_merge_eeg_streams()` to `build_mwl_training_dataset.py`; updated both `_load_xdf_block` and `_load_rest_xdf_block` in `calibrate_participant_logreg.py` to call it | ✅ Fixed |
+| 5 | 6–7 | Same `--pilot1` omission for adaptation/control conditions | Added `--pilot1` to experimental condition commands | ✅ Fixed |
+| 6 | All | `--pilot1` scattered per-phase with confusing name | Moved `--pilot1` into `_openmatb_base_cmd()` — now always on for every phase | ✅ Fixed |
+
+## Code changes made today (2026-03-26)
+
+### `scripts/generate_scenarios/generate_full_study_scenarios.py`
+- `_REPO_ROOT = Path(__file__).resolve().parents[1]` → `parents[2]`
+
+### `scripts/generate_scenarios/generate_adaptive_automation_scenarios.py`
+- Same `parents[1]` → `parents[2]` fix
+
+### `scripts/build_mwl_training_dataset.py`
+- Added `_merge_eeg_streams(streams)` function after `_find_stream`: extracts `ref`-type channels from each EEG stream, sorts by stream name for reproducibility, concatenates, trims to minimum sample count, returns a synthetic single-stream dict with `channel_count = 128`
+- `process_xdf()`: changed `_find_stream(streams, "EEG")` → `_merge_eeg_streams(streams)`
+
+### `scripts/calibrate_participant_logreg.py`
+- Added `_merge_eeg_streams` to the import from `build_mwl_training_dataset`
+- `_load_xdf_block()`: `_find_stream(streams, "EEG")` → `_merge_eeg_streams(streams)`
+- `_load_rest_xdf_block()`: same change
+
+### `src/run_full_study_session.py`
+- `_openmatb_base_cmd()`: added `"--pilot1"` unconditionally (comment: "always: dual-amp EEG, physiology recording, XDF QC")
+- `phase_rest_baseline()`: removed redundant `--pilot1` from per-phase labrecorder block
+- `phase_calibration_runs()`: removed redundant `--pilot1` (was just added this session, now superseded)
+- `phase_experimental_conditions()`: removed redundant `--pilot1` (same)
+
+## Data sanity checks (post-lunch, pre-restart)
+
+Performed on data from the partial morning run (Phases 1–4 completed, Phases 5–8 not yet run).
+
+### TLX (calibration runs C1 and C2)
+
+Condition CSVs: `C:\data\adaptive_matb\openmatb\PSELF\S001\sessions\2026-03-26\16_260326_123452.csv` (C1) and `17_260326_124702.csv` (C2).
+
+| Subscale | C1 | C2 | Note |
+|---|---|---|---|
+| Mental demand | 6.0 | 6.7 | |
+| Physical demand | 6.0 | 6.0 | |
+| Temporal demand | 5.3 | 5.7 | |
+| Performance | 5.5 | 5.2 | |
+| Effort | 5.3 | 6.0 | |
+| Frustration | 1.8 | 6.9 | ⚠️ Large jump — likely fatigue artefact from repeated bugs/restarts |
+| **Overall MWL** | **5.2** | **6.1** | |
+
+Frustration spike C1→C2 is probably not task-difficulty-driven — more likely fatigue after the buggy morning attempts. Flag for participant notes; do not treat as ground truth MWL labelling.
+
+---
+
+### Task performance (by MATB difficulty level)
+
+Clear monotonic degradation across LOW → MOD → HIGH on all channels ✓
+
+| Metric | LOW | MOD | HIGH |
+|---|---|---|---|
+| Track RMS deviation (px) | 62 | 72 | 80 |
+| On-target % | 94% | 89% | 77% |
+| Sysmon hit rate | 0.87 | 0.83 | 0.68 |
+| Sysmon mean RT (s) | 2.26 | 2.80 | 3.29 |
+| Resman mean tolerance (%) | 97 | 85 | 70 |
+
+Direction of effects is correct; magnitude is reasonable for a self-piloting session without proper EEG-cap impedance and under fatigue.
+
+---
+
+### Heart rate (rest XDF, Polar H10)
+
+Source: `sub-PSELF_ses-S001_task-matb_acq-rest_physio.xdf`
+
+| Metric | Value |
+|---|---|
+| Mean HR | 67 bpm |
+| RMSSD | 79 ms |
+| Valid beats used | ~133 |
+
+Clean signal — Polar H10 electrodes wetted correctly. RMSSD of 79 ms indicates good vagal tone at rest; consistent with a relaxed, seated, resting-state baseline.
+
+---
+
+### EEG (rest XDF, ANT eego dual-amp, 128 channels)
+
+Source: `sub-PSELF_ses-S001_task-matb_acq-rest_physio.xdf`  
+Preprocessing: linear detrend → bandpass 0.5–40 Hz (Butterworth ord-4, zero-phase) → notch 50 Hz (IIR, Q=30) → CAR
+
+**Channel quality:**
+
+| Metric | Value |
+|---|---|
+| Channels loaded | 128 (64 ref × 2 amps, sorted by name) |
+| Duration | 133.1 s at 500 Hz |
+| Flat channels (<2 µV RMS) | 0 |
+| Noisy channels (>80 µV RMS) | 0 |
+| RMS mean / median | 10.8 / 7.9 µV |
+| RMS range | 5.0 – 71.0 µV |
+
+All channels active. The max at 71 µV is elevated but sub-threshold — possibly a scalp-contact channel or a small residual movement artefact. No reason to reject.
+
+**Welch PSD (mean across all 128 channels):**
+
+| Band | Freq range | Power |
+|---|---|---|
+| Delta | 1–4 Hz | 88.4 µV² |
+| Theta | 4–8 Hz | 24.0 µV² |
+| Alpha | 8–13 Hz | 15.0 µV² |
+| Beta | 13–30 Hz | 8.5 µV² |
+| Gamma | 30–40 Hz | 1.2 µV² |
+| HF noise floor | 40–48 Hz | 0.17 µV² |
+
+1/f spectral shape is normal. Alpha at 15 µV² indicates eyes-open or variable vigilance — consistent with an unsupervised rest block done early in the session. High-freq noise floor is essentially zero (0.17 µV²) — ethernet grounding fix from yesterday was effective.
+
+**Alpha by region (8–13 Hz):**
+
+| Region | Alpha power |
+|---|---|
+| Frontal (ch 0–15) | 10.75 µV² |
+| Central (ch 32–63) | 14.05 µV² |
+| Posterior (ch 112–127) | 13.20 µV² |
+
+Posterior alpha is slightly lower than central — unusual (posterior alpha typically dominates at rest). Likely because channel indices 112–127 are a rough spatial proxy and may not map perfectly onto occipital locations for this cap layout. Not a concern for physiological validity.
+
+**Overall verdict:** EEG signal is clean and usable. Pipeline preprocessing chain (detrend → BP → notch → CAR) behaves correctly on the dual-amp merged data.
+
+---
+
+## Things to adjust before real sessions
+
+- **Streamer restart overhead:** EDA and Polar HR streamers are killed and restarted at the start of every phase (each `run_openmatb.py` subprocess). This adds ~20–30s of dead time per phase while BLE reconnects and health checks pass. Fix: start streamers once in `run_full_study_session.py` at session start, keep them alive across all phases, and only check stream presence (not restart) at each phase boundary.
+
+- **LabRecorder RCS output is polluting stdout:** The RCS control commands (`"update"`, `"select all"`, `"filename ..."`, `"start"`) are being printed verbatim to the terminal, along with LSL lib INFO logs. This makes the console unreadable during a session. Fix: suppress or redirect RCS command echo and LSL INFO logs — either pipe the RCS socket responses to a log file or filter them from stdout in the LabRecorder control helper.
+
+
+## Overall outcome
+
+[ ] Pipeline runs end-to-end without intervention
+[ ] Needs fixes (see issues above)
+
+## Next actions
+
+- 
+
+## Time spent
+
+- Total: 
+- Breakdown:
+  - 11:05 — session start

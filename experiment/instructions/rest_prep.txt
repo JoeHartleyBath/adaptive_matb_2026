@@ -1,0 +1,6 @@
+<center><h2>Resting baseline</h2></center>
+<center><p>A fixation cross will now appear in the centre of the screen.</p></center>
+<center><p>Please sit quietly with your eyes fixed on the cross.</p></center>
+<center><p>Try to remain as still as possible and avoid blinking excessively.</p></center>
+<center><p>This phase will end automatically after 2 minutes.</p></center>
+<center><p><b>Press SPACE when you are ready to begin.</b></p></center>
