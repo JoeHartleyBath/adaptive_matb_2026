@@ -2,7 +2,7 @@
 # Auto-generated Clone (Vendor Logic)
 
 0:00:00;labstreaminglayer;start
-0:00:00;labstreaminglayer;marker;STUDY/V0/TRAINING/T3/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:00:00;labstreaminglayer;marker;STUDY/V0/TRAINING/T3/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}
 0:00:00;scheduling;start
 0:00:00;communications;voiceidiom;english
 0:00:00;communications;voicegender;male
@@ -107,5 +107,5 @@
 0:05:00;communications;stop
 0:05:00;resman;stop
 0:05:00;scheduling;stop
-0:05:00;labstreaminglayer;marker;STUDY/V0/TRAINING/T3/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:05:00;labstreaminglayer;marker;STUDY/V0/TRAINING/T3/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}
 0:05:00;labstreaminglayer;stop

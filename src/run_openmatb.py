@@ -6,13 +6,12 @@ OpenMATB to write session logs outside the git repo.
 Usage (PowerShell):
   cd src/python/vendor/openmatb
         .\.venv\Scripts\Activate.ps1
-    python ..\..\run_openmatb.py --participant P001 --session S001 --seq-id SEQ1
+    python ..\..\run_openmatb.py --participant P001 --session S001
 
 Environment variables (optional):
   OPENMATB_OUTPUT_ROOT   (default: C:\data\adaptive_matb)
   OPENMATB_PARTICIPANT / OPENMATB_PARTICIPANT_ID
   OPENMATB_SESSION / OPENMATB_SESSION_ID
-    OPENMATB_SEQ_ID
 
 OpenMATB uses:
   OPENMATB_OUTPUT_ROOT and OPENMATB_OUTPUT_SUBDIR
@@ -222,6 +221,35 @@ atexit.register(_cleanup_lsl_recorder_subprocess)
 atexit.register(_cleanup_labrecorder_rcs_recording)
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
+
+
+def _wait_for_markers_outlet(timeout_s: float = 15.0, poll_interval_s: float = 0.5) -> bool:
+    """Block until an OpenMATB Markers LSL outlet is visible on the network.
+
+    MATB creates its Markers outlet during initialisation, before the scenario
+    clock starts.  Waiting here gives a reliable gate before restarting
+    LabRecorder: the new recording will begin while MATB is showing the
+    block-start dialog, ensuring all scenario events are captured.
+
+    Returns True if found, False on timeout.
+    """
+    print(
+        f"[REC] Waiting for MATB Markers outlet (type=Markers, timeout={timeout_s:.0f}s)...",
+        flush=True,
+    )
+    import pylsl
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        streams = pylsl.resolve_stream("type", "Markers", 1, poll_interval_s)
+        if streams:
+            print(f"[REC] Markers outlet found: '{streams[0].name()}' — restarting LabRecorder.", flush=True)
+            return True
+    print(
+        f"[REC] WARNING: Markers outlet not found within {timeout_s:.0f}s — "
+        "LabRecorder will not be restarted; block timing will use scenario fallback offset.",
+        flush=True,
+    )
+    return False
 
 
 def _wait_for_mwl_outlet(timeout_s: float = 60.0, poll_interval_s: float = 1.0) -> bool:
@@ -1575,17 +1603,15 @@ def _read_json(path: Path) -> dict:
     return payload
 
 
-def _write_seq_id_into_manifest(
+def _update_manifest_metadata(
     manifest_path: Path,
     *,
-    seq_id: str,
     scenario_filename: str,
     abort_reason: Optional[str] = None,
 ) -> None:
     with open(manifest_path, "r", encoding="utf-8") as f:
         manifest = json.load(f)
 
-    manifest["seq_id"] = seq_id
     manifest["unattended"] = False
     if abort_reason:
         manifest["abort_reason"] = abort_reason
@@ -1596,47 +1622,9 @@ def _write_seq_id_into_manifest(
             openmatb_meta = {}
             manifest["openmatb"] = openmatb_meta
         openmatb_meta["scenario_path"] = scenario_filename
-    identifiers = manifest.get("identifiers")
-    if not isinstance(identifiers, dict):
-        identifiers = {}
-        manifest["identifiers"] = identifiers
-    identifiers["seq_id"] = seq_id
 
     _atomic_write_json(manifest_path, manifest)
 
-
-def _get_playlist(seq_id: str, *, calibration_only: bool = False) -> list[str]:
-    playlist: list[str] = []
-    if not calibration_only:
-        # Fixed training sequence
-        playlist.extend(
-            [
-                "pilot_practice_intro.txt",
-                "pilot_practice_low.txt",
-                "pilot_practice_moderate.txt",
-                "pilot_practice_high.txt",
-            ]
-        )
-
-    # calibration blocks based on counterbalancing sequence
-    # SEQ1: Low -> Moderate -> High
-    # SEQ2: Moderate -> High -> Low
-    # SEQ3: High -> Low -> Moderate
-    calibration_levels = {
-        "SEQ1": ["LOW", "MODERATE", "HIGH"],
-        "SEQ2": ["MODERATE", "HIGH", "LOW"],
-        "SEQ3": ["HIGH", "LOW", "MODERATE"],
-    }
-
-    try:
-        levels = calibration_levels[seq_id]
-    except KeyError as exc:
-        raise ValueError(f"Unknown sequence ID: {seq_id}") from exc
-
-    for level in levels:
-        playlist.append(f"pilot_calibration_{level.lower()}.txt")
-
-    return playlist
 
 
 def _block_dialog_lines(
@@ -1644,7 +1632,6 @@ def _block_dialog_lines(
     block_index: int,
     participant: str,
     session: str,
-    seq_id: str,
 ) -> list[str]:
     """Build participant-friendly modal-dialog lines for a block start.
 
@@ -1671,7 +1658,6 @@ def _block_dialog_lines(
         body.append("")
         body.append(f"Participant: {participant}")
         body.append(f"Session: {session}")
-        body.append(f"Sequence: {seq_id}")
         return body
 
     if is_intro:
@@ -1679,7 +1665,6 @@ def _block_dialog_lines(
         body = [
             f"Participant: {participant}",
             f"Session: {session}",
-            f"Sequence: {seq_id}",
         ]
         return body
 
@@ -1713,9 +1698,8 @@ def _block_dialog_lines(
     if block_index == 0:
         body.append(f"Participant: {participant}")
         body.append(f"Session: {session}")
-        body.append(f"Sequence: {seq_id}")
     else:
-        body.append(f"ID: {participant} \u00b7 {session} \u00b7 {seq_id}")
+        body.append(f"ID: {participant} \u00b7 {session}")
 
     return body
 
@@ -1820,7 +1804,6 @@ def _run_single_scenario(
     output_root_path: Path,
     participant: str,
     session: str,
-    seq_id: str,
     args: argparse.Namespace,
     repo_commit: str,
     submodule_commit: str,
@@ -1832,6 +1815,7 @@ def _run_single_scenario(
     mwl_simulated_mode: Optional[str] = None,
     mwl_model_dir: Optional[str] = None,
     mwl_audit_csv: Optional[str] = None,
+    mwl_threshold: Optional[float] = None,
 ) -> tuple[int, Optional[Path]]:
     repo_root = Path(__file__).resolve().parents[1]
 
@@ -1860,14 +1844,13 @@ def _run_single_scenario(
     env["OPENMATB_OUTPUT_SUBDIR"] = str(Path("openmatb") / participant / session)
     env["OPENMATB_PARTICIPANT"] = participant
     env["OPENMATB_SESSION"] = session
-    env["OPENMATB_SEQ_ID"] = seq_id
     env["OPENMATB_REPO_COMMIT"] = repo_commit
     env["OPENMATB_SUBMODULE_COMMIT"] = submodule_commit
 
     # Block-start dialog metadata
     env["OPENMATB_BLOCK_INDEX"] = str(block_index)
     dialog_lines = _block_dialog_lines(
-        scenario_filename, block_index, participant, session, seq_id,
+        scenario_filename, block_index, participant, session,
     )
     env["OPENMATB_BLOCK_DIALOG_LINES"] = "\n".join(dialog_lines)
     # Suppress interactive dialog for automated / verification runs
@@ -1878,6 +1861,9 @@ def _run_single_scenario(
     scenario_rel_path = scenario_filename
     sessions_dir = output_root_path / Path(env["OPENMATB_OUTPUT_SUBDIR"]) / "sessions"
     manifests_before = _list_manifest_paths(sessions_dir)
+
+    # Precompute threshold kwarg for MwlAdaptationConfig bootstrap injection.
+    _mwl_thr_kwarg = f", threshold={mwl_threshold!r}" if mwl_threshold is not None else ""
 
     # Generate bootstrap script dynamically for the scenario
     bootstrap = (
@@ -1927,7 +1913,7 @@ def _run_single_scenario(
         "    token_map = {\n"
         "        '${OPENMATB_PARTICIPANT}': os.environ.get('OPENMATB_PARTICIPANT', ''),\n"
         "        '${OPENMATB_SESSION}': os.environ.get('OPENMATB_SESSION', ''),\n"
-        "        '${OPENMATB_SEQ_ID}': os.environ.get('OPENMATB_SEQ_ID', ''),\n"
+
         "    }\n"
         "    for key, value in token_map.items():\n"
         "        text = text.replace(key, value)\n"
@@ -1949,8 +1935,7 @@ def _run_single_scenario(
         "        else:\n"
         "            pid = os.environ.get('OPENMATB_PARTICIPANT') or 'UNKNOWN'\n"
         "            sid = os.environ.get('OPENMATB_SESSION') or 'UNKNOWN'\n"
-        "            seq = os.environ.get('OPENMATB_SEQ_ID') or 'UNKNOWN'\n"
-        "            msg = [f'Participant: {pid}', f'Session: {sid}', f'Sequence: {seq}']\n"
+        "            msg = [f'Participant: {pid}', f'Session: {sid}']\n"
         "        self.modal_dialog = ModalDialog(self, msg, 'OpenMATB')\n"
         "Window.display_session_id = _display_session_id\n"
         # -------------------------------------------------------
@@ -1980,7 +1965,7 @@ def _run_single_scenario(
             f"    import sys as _sys; _sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
             "    from adaptation.mwl_adaptation_scheduler import MwlAdaptationScheduler, MwlAdaptationConfig\n"
             f"    _mwl_cfg = MwlAdaptationConfig(seed={adaptation_seed!r}"
-            f", audit_csv_path={mwl_audit_csv!r})\n"
+            f", audit_csv_path={mwl_audit_csv!r}{_mwl_thr_kwarg})\n"
             "    MwlAdaptationScheduler._MWL_CFG = _mwl_cfg\n"
             "    import core as _core_mod, core.scheduler as _sched_mod\n"
             "    _sched_mod.Scheduler = MwlAdaptationScheduler\n"
@@ -2058,6 +2043,36 @@ def _run_single_scenario(
     try:
         # Pass the modified environment
         proc = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=str(openmatb_dir), env=env)
+
+        # Restart LabRecorder now that the MATB Markers LSL outlet is live.
+        # The session-level "select all" fired in main() before MATB launched, so
+        # the Markers stream was absent and not included in the initial recording.
+        # Stopping and restarting here ensures the XDF captures all scenario events.
+        # MATB shows the block-start dialog before t=0, giving enough time for the
+        # restart to complete before any scenario markers are sent.
+        if getattr(args, "labrecorder_rcs", False) and _labrecorder_rcs_recording_started:
+            if _wait_for_markers_outlet(timeout_s=15.0):
+                lr_host = str(getattr(args, "labrecorder_host", "127.0.0.1"))
+                lr_port = int(getattr(args, "labrecorder_port", 22345))
+                try:
+                    _stop_labrecorder_xdf_recording_rcs(host=lr_host, port=lr_port)
+                    time.sleep(0.5)
+                    _start_labrecorder_xdf_recording_rcs(
+                        host=lr_host,
+                        port=lr_port,
+                        root=Path(str(args.labrecorder_root)).resolve() if getattr(args, "labrecorder_root", None) else (output_root_path / "physiology"),
+                        template=str(args.labrecorder_template),
+                        participant=participant,
+                        session=session,
+                        task=str(args.labrecorder_task),
+                        acquisition=str(args.labrecorder_acq),
+                        modality=str(args.labrecorder_modality),
+                        run=str(args.labrecorder_run) if getattr(args, "labrecorder_run", None) else None,
+                    )
+                    print("[REC] LabRecorder restarted — MATB Markers stream will be recorded.", flush=True)
+                except Exception as _lr_exc:
+                    print(f"[REC] WARNING: LabRecorder restart failed: {_lr_exc}", flush=True)
+
         exit_code = proc.wait()
     finally:
         _cleanup_mwl_subprocess()
@@ -2069,9 +2084,8 @@ def _run_single_scenario(
         manifests_after = _list_manifest_paths(sessions_dir)
         new_manifests = sorted(manifests_after - manifests_before)
         if len(new_manifests) == 1:
-            _write_seq_id_into_manifest(
+            _update_manifest_metadata(
                 new_manifests[0],
-                seq_id=seq_id,
                 scenario_filename=scenario_filename,
                 abort_reason=f"exit_code_{exit_code}",
             )
@@ -2088,9 +2102,8 @@ def _run_single_scenario(
         return 2, None
 
     manifest_path = new_manifests[0]
-    _write_seq_id_into_manifest(
+    _update_manifest_metadata(
         manifest_path,
-        seq_id=seq_id,
         scenario_filename=scenario_filename,
         abort_reason=None,
     )
@@ -2134,9 +2147,8 @@ def _run_single_scenario(
                 _atomic_write_json(manifest_path, manifest)
             except Exception:
                 per_run_errors_log = errors_log
-            _write_seq_id_into_manifest(
+            _update_manifest_metadata(
                 manifest_path,
-                seq_id=seq_id,
                 scenario_filename=scenario_filename,
                 abort_reason="scenario_errors",
             )
@@ -2202,9 +2214,8 @@ def _run_single_scenario(
             # Allow some slack (UI pauses, logging granularity), but if we didn't even
             # reach ~90% of intended time, assume the run ended early.
             if expected_end >= 10 and observed_end < (expected_end * 0.9):
-                _write_seq_id_into_manifest(
+                _update_manifest_metadata(
                     manifest_path,
-                    seq_id=seq_id,
                     scenario_filename=scenario_filename,
                     abort_reason=f"early_exit_observed_{observed_end:.3f}_expected_{expected_end}",
                 )
@@ -2313,12 +2324,6 @@ def main() -> int:
         help="Path to OpenMATB directory (default: <repo>/src/vendor/openmatb).",
     )
 
-    parser.add_argument(
-        "--seq-id",
-        required=False,
-        choices=("SEQ1", "SEQ2", "SEQ3"),
-        help="calibration-order sequence ID (SEQ1/SEQ2/SEQ3). Can also be set via OPENMATB_SEQ_ID.",
-    )
     parser.add_argument(
         "--verification",
         action="store_true",
@@ -2601,6 +2606,16 @@ def main() -> int:
             "If omitted, defaults to <output_root>/<participant>/<session>/mwl_audit.csv."
         ),
     )
+    parser.add_argument(
+        "--mwl-threshold",
+        type=float,
+        default=None,
+        metavar="THR",
+        help=(
+            "MWL decision threshold (0-1). Overrides the MwlAdaptationConfig default (0.50). "
+            "Set automatically from the participant's Youden J threshold in model_config.json."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -2638,7 +2653,7 @@ def main() -> int:
             print(
                 f"ERROR: MWL model artefacts missing from {_model_dir}:\n"
                 + "".join(f"  - {f}\n" for f in _missing)
-                + "Run 'python scripts/calibrate_participant_logreg.py calibrate' first.",
+                + "Run 'python scripts/calibrate_participant.py calibrate' first.",
                 file=sys.stderr,
             )
             return 2
@@ -2777,12 +2792,10 @@ def main() -> int:
     # Interactive prompts when arguments not provided
     _participant_arg = args.participant or _get_env_first("OPENMATB_PARTICIPANT", "OPENMATB_PARTICIPANT_ID")
     _session_arg = args.session or _get_env_first("OPENMATB_SESSION", "OPENMATB_SESSION_ID")
-    _seq_id_arg = args.seq_id or _get_env_first("OPENMATB_SEQ_ID")
 
     while True:
         participant_raw = _participant_arg
         session_raw = _session_arg
-        seq_id = _seq_id_arg
 
         # Interactive participant selection
         if participant_raw is None:
@@ -2794,9 +2807,8 @@ def main() -> int:
                 print("\nRecent participants:")
                 for i, pid in enumerate(recent, 1):
                     pdata = participants_data[pid]
-                    seq = pdata.get("sequence", "?")
                     completed = len(pdata.get("sessions_completed", []))
-                    print(f"  {i}. {pid} ({seq}, {completed} sessions)")
+                    print(f"  {i}. {pid} ({completed} sessions)")
                 print(f"  Or enter a participant number/ID")
 
             while not participant_raw:
@@ -2818,23 +2830,16 @@ def main() -> int:
                     else:
                         participant_raw = user_input
 
-        # Look up sequence from assignments
+        # Look up session number from assignments
         if participant_raw in participants_data:
-            assigned_seq = participants_data[participant_raw].get("sequence")
             assigned_sessions = participants_data[participant_raw].get("sessions_completed", [])
-
-            if seq_id is None:
-                seq_id = assigned_seq
-            elif seq_id != assigned_seq and assigned_seq:
-                print(f"\nWARNING: Overriding assigned sequence {assigned_seq} with {seq_id}", file=sys.stderr)
 
             if session_raw is None:
                 next_session_num = len(assigned_sessions) + 1
                 session_raw = f"S{next_session_num:03d}"
         else:
             print(f"\nERROR: {participant_raw} not found in assignments file.", file=sys.stderr)
-            print(f"Add to config/participant_assignments.yaml first, or use:", file=sys.stderr)
-            print(f"  python scripts/generate_participant_assignments.py --participant-ids {participant_raw} --sequences SEQ1", file=sys.stderr)
+            print(f"Add to config/participant_assignments.yaml first.", file=sys.stderr)
             _participant_arg = None  # force re-entry
             continue
 
@@ -2842,7 +2847,6 @@ def main() -> int:
         if not args.verification:
             print(f"\n{'='*50}")
             print(f"  Participant: {participant_raw}")
-            print(f"  Sequence:    {seq_id}")
             print(f"  Session:     {session_raw}")
             print(f"{'='*50}")
             while True:
@@ -2926,8 +2930,6 @@ def main() -> int:
                 assigned_sessions = participants_data[participant].get("sessions_completed", [])
                 next_session_num = len(assigned_sessions) + 1
                 session = f"S{next_session_num:03d}"
-                if seq_id is None:
-                    seq_id = participants_data[participant].get("sequence")
             else:
                 print(f"\nERROR: {participant} not found in assignments file.", file=sys.stderr)
                 print(f"Add them to config/participant_assignments.yaml first.", file=sys.stderr)
@@ -2952,11 +2954,7 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    try:
-        playlist = _get_playlist(seq_id, calibration_only=bool(args.calibration_only))
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
+    playlist: list[str] = []
 
     if args.only_scenario:
         # Allow both bare filenames and paths; we always resolve relative to <repo>/scenarios.
@@ -2979,7 +2977,6 @@ def main() -> int:
             print(f" - {name}", file=sys.stderr)
         return 2
 
-    print(f"Running sequence: {seq_id}")
     print(f"Playlist ({len(playlist)} scenarios):")
     for s in playlist:
         print(f" - {s}")
@@ -3051,7 +3048,7 @@ def main() -> int:
     # Final launch checkpoint (only for real runs, not verification)
     if not args.verification:
         print("\n" + "=" * 60)
-        print(f"  Participant: {participant}  |  Session: {session}  |  Seq: {seq_id}  |  {len(playlist)} scenarios")
+        print(f"  Participant: {participant}  |  Session: {session}  |  {len(playlist)} scenarios")
         print("=" * 60)
 
         while True:
@@ -3079,7 +3076,6 @@ def main() -> int:
             output_root_path=output_root_path,
             participant=participant,
             session=session,
-            seq_id=seq_id,
             args=args,
             repo_commit=repo_commit,
             submodule_commit=submodule_commit,
@@ -3090,6 +3086,7 @@ def main() -> int:
             mwl_simulated_mode=getattr(args, "mwl_simulated", None),
             mwl_model_dir=getattr(args, "mwl_model_dir", None),
             mwl_audit_csv=getattr(args, "mwl_audit_csv", None),
+            mwl_threshold=getattr(args, "mwl_threshold", None),
         )
 
         if exit_code != 0:
@@ -3184,7 +3181,6 @@ def main() -> int:
             "created_at": datetime.now().isoformat(),
             "participant": participant,
             "session": session,
-            "seq_id": seq_id,
             "mode": {
                 "pilot1": bool(args.pilot1),
                 "calibration_only": bool(args.calibration_only),
@@ -3313,7 +3309,6 @@ def main() -> int:
         # Ensure participant is in assignments
         if participant not in participants_data:
             participants_data[participant] = {
-                "sequence": seq_id,
                 "sessions_completed": [],
                 "last_run": None
             }

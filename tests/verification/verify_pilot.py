@@ -8,7 +8,7 @@ and writes one manifest+CSV per scenario.
 
 What it does:
 - Runs the existing static verifier (`verify_pilot_scenarios.py`) for repo artifacts.
-- Optionally launches the OpenMATB runner for a given participant/session/SEQ.
+- Optionally launches the OpenMATB runner for a given participant/session/scenario.
 - Collects the produced manifests/CSVs and verifies:
   - manifests match expected scenario names and identifiers
   - CSV markers match the scenario-defined marker payloads with tokens substituted
@@ -17,7 +17,7 @@ What it does:
   - comms radioprompt timestamps match intended schedule (within tolerance)
 
 Usage:
-    python src/python/verify_pilot.py --participant P001 --session S001 --seq-id SEQ1
+    python tests/verification/verify_pilot.py --participant P001 --session S001 --scenario full_calibration_P001_c1.txt
 
 Notes:
 - This is attended/interactive; OpenMATB will display UI.
@@ -189,7 +189,6 @@ def _expected_marker_payloads_for_scenario(
     scenario_path: Path,
     participant: str,
     session: str,
-    seq_id: str,
 ) -> list[str]:
     events = vps._parse_events(scenario_path)
     payloads: list[str] = []
@@ -198,7 +197,6 @@ def _expected_marker_payloads_for_scenario(
         payloads.append(
             payload.replace(vps.TOKEN_PID, participant)
             .replace(vps.TOKEN_SID, session)
-            .replace(vps.TOKEN_SEQ, seq_id)
         )
     return payloads
 
@@ -209,16 +207,15 @@ def _check_markers_match_scenario(
     csv_path: Path,
     participant: str,
     session: str,
-    seq_id: str,
 ) -> Optional[CheckFailure]:
-    expected = _expected_marker_payloads_for_scenario(scenario_path, participant, session, seq_id)
+    expected = _expected_marker_payloads_for_scenario(scenario_path, participant, session)
     observed = vps._extract_markers_from_csv(csv_path)
 
     missing = [m for m in expected if m not in observed]
-    token_leaks = [m for m in observed if vps.TOKEN_PID in m or vps.TOKEN_SID in m or vps.TOKEN_SEQ in m]
+    token_leaks = [m for m in observed if vps.TOKEN_PID in m or vps.TOKEN_SID in m]
 
     bad_id = []
-    needle = f"|pid={participant}|sid={session}|seq={seq_id}"
+    needle = f"|pid={participant}|sid={session}"
     for m in observed:
         if m.startswith("STUDY/V0/") and "|" in m and needle not in m:
             bad_id.append(m)
@@ -365,7 +362,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run OpenMATB pilot playlist and verify outputs.")
     parser.add_argument("--participant", required=True)
     parser.add_argument("--session", required=True)
-    parser.add_argument("--seq-id", required=True, choices=("SEQ1", "SEQ2", "SEQ3"))
+    parser.add_argument("--scenario", required=True, help="Scenario filename to run/verify (e.g. full_calibration_PSELF_c1.txt).")
     parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--openmatb-dir", type=Path, default=None)
     parser.add_argument("--speed", type=int, default=1)
@@ -394,8 +391,8 @@ def main() -> int:
             args.participant,
             "--session",
             args.session,
-            "--seq-id",
-            args.seq_id,
+            "--only-scenario",
+            args.scenario,
             "--summarise-performance",
             "--verification",
             "--speed",
@@ -420,10 +417,10 @@ def main() -> int:
         print(f"No manifests found in {session_dir}", file=sys.stderr)
         return 2
 
-    # Determine expected playlist using the runner's own mapping.
-    import run_openmatb as runner
+    # Determine expected scenarios to verify.
+    import run_openmatb  # noqa: F401 (ensure import path works)
 
-    playlist = runner._get_playlist(args.seq_id, False)
+    playlist = [args.scenario]
     scenario_dir = repo_root / "scenarios"
 
     print("\nVerifying produced outputs...")
@@ -479,8 +476,6 @@ def main() -> int:
                 continue
 
         # Manifest checks (aligned to current runner contract)
-        if manifest.get("seq_id") != args.seq_id:
-            failures.append(CheckFailure("Manifest seq_id mismatch", [str(manifest_path)]))
         if "dry_run" in manifest and manifest.get("dry_run") is not False:
             failures.append(CheckFailure("Manifest dry_run is not false", [str(manifest_path)]))
         if manifest.get("unattended") is not False:
@@ -515,7 +510,6 @@ def main() -> int:
             csv_path=csv_path,
             participant=args.participant,
             session=args.session,
-            seq_id=args.seq_id,
         )
         if marker_fail:
             failures.append(marker_fail)

@@ -371,7 +371,6 @@ def export_table(*, run_manifest_path: Path, out_csv: Optional[Path]) -> Path:
 
     participant = str(run_manifest.get("participant") or "")
     session = str(run_manifest.get("session") or "")
-    seq_id = str(run_manifest.get("seq_id") or "")
     created_at = str(run_manifest.get("created_at") or "")
     mode = run_manifest.get("mode") if isinstance(run_manifest.get("mode"), dict) else {}
     qc = run_manifest.get("qc") if isinstance(run_manifest.get("qc"), dict) else {}
@@ -513,7 +512,6 @@ def export_table(*, run_manifest_path: Path, out_csv: Optional[Path]) -> Path:
             {
                 "participant": participant,
                 "session": session,
-                "seq_id": seq_id,
                 "created_at": created_at,
                 "mode_verification": bool(mode.get("verification")),
                 "mode_pilot1": bool(mode.get("pilot1")),

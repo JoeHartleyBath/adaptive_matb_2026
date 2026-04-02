@@ -12,10 +12,10 @@
 0:00:00;instructions;start
 
 # --- REST_START marker at t=5s (after task initialisation settling) ---
-0:00:05;labstreaminglayer;marker;STUDY/V0/rest/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:00:05;labstreaminglayer;marker;STUDY/V0/rest/START|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}
 
 # --- REST_END marker at t=1:55 (EEG windowed between START and END) ---
-0:01:55;labstreaminglayer;marker;STUDY/V0/rest/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}|seq=${OPENMATB_SEQ_ID}
+0:01:55;labstreaminglayer;marker;STUDY/V0/rest/END|pid=${OPENMATB_PARTICIPANT}|sid=${OPENMATB_SESSION}
 
 # --- Stop at t=2:00 ---
 0:02:00;instructions;stop

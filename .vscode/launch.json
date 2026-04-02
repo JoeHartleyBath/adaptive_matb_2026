@@ -11,7 +11,6 @@
       "args": [
         "--participant", "DEV",
         "--session", "S001",
-        "--seq-id", "SEQ1",
         "--only-scenario", "adaptation_skeleton.txt",
         "--adaptation",
         "--adaptation-seed", "42",
@@ -126,8 +125,6 @@
         "P001",
         "--session",
         "S001",
-        "--seq-id",
-        "SEQ1",
         "--speed",
         "10"
       ]
@@ -144,8 +141,6 @@
         "P001",
         "--session",
         "S001",
-        "--seq-id",
-        "SEQ1",
         "--skip-run"
       ]
     },
@@ -205,8 +200,7 @@
         "--calibration-trend",
         "--summarise-performance",
         "--eda-port", "COM5",
-        "--participant", "PSELF",
-        "--seq-id", "SEQ1"
+        "--participant", "PSELF"
       ]
     },
     {
@@ -222,8 +216,7 @@
         "--only-scenario", "adaptation_skeleton.txt",
         "--adaptation-seed", "42",
         "--eda-port", "COM5",
-        "--participant", "PSELF",
-        "--seq-id", "SEQ1"
+        "--participant", "PSELF"
       ]
     },
     {

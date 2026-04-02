@@ -97,7 +97,13 @@ class MwlAdaptationConfig:
     """All tunable parameters for an MWL-driven adaptation session.
 
     Defaults match the best sweep configuration (2026-03-16):
-    EMA α=0.05, fixed threshold 0.50, hysteresis 0.02 → 80.3 % BA ± 15.6 %.
+    EMA α=0.05, hysteresis 0.02 → 80.3 % BA ± 15.6 %.
+
+    In live sessions ``threshold`` is set per-participant from the Youden J
+    value derived from their 2 × 9-min calibration runs (stored in
+    ``model_config.json`` by ``calibrate_participant.py``).  The
+    default of 0.50 is a code-level fallback used only for desk testing
+    without calibration data.
 
     ⚠  Adaptation is a BINARY tracking-only toggle.  Only the tracking
     task is affected; all other tasks run at their scenario-set levels.
@@ -114,7 +120,9 @@ class MwlAdaptationConfig:
     # Used to compute baseline and assisted tracking parameters.
     baseline_d: float = 0.50
 
-    # MWL policy (from sweep: α=0.05, threshold 0.50, hysteresis 0.02)
+    # MWL policy (from sweep: α=0.05, hysteresis 0.02)
+    # threshold is set per-participant from Youden J (model_config.json);
+    # 0.50 is a code-level fallback for desk testing only.
     smoother_alpha: float = 0.05
     threshold: float = 0.50
     hysteresis: float = 0.02

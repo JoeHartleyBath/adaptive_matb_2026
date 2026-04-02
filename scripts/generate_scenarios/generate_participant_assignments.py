@@ -1,5 +1,14 @@
 """Generate participant assignments with counterbalanced sequence order.
 
+#
+# RETIRED — 2026-01: The SEQ counterbalancing system was removed when the
+# calibration design changed from 3×5-min blocks (SEQ1/2/3) to 2×9-min
+# continuous blocks ordered by a 6-template rank system baked into the
+# scenario generator.  Assignments are now maintained manually in
+# config/participant_assignments.yaml — see docs/PARTICIPANT_ASSIGNMENTS.md.
+# This script is kept for historical reference only and should not be used.
+#
+
 Usage:
     python scripts/generate_participant_assignments.py --n-per-sequence 10
     python scripts/generate_participant_assignments.py --n-per-sequence 10 --start 1

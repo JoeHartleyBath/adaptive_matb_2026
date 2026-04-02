@@ -284,7 +284,12 @@ def process_xdf(
         print("SKIPPED (too few samples)")
         return None
     actual_srate = (len(eeg_ts) - 1) / (eeg_ts[-1] - eeg_ts[0])
-    if abs(actual_srate - prep_config.srate) > 5.0:
+    if actual_srate > prep_config.srate * 1.1:
+        factor = int(round(actual_srate / prep_config.srate))
+        eeg_data = eeg_data[:, ::factor]
+        eeg_ts = eeg_ts[::factor]
+        print(f"(decimated {actual_srate:.0f}→{prep_config.srate:.0f} Hz, factor={factor}) ", end="", flush=True)
+    elif abs(actual_srate - prep_config.srate) > 5.0:
         print(f"SKIPPED (srate mismatch: {actual_srate:.1f} Hz)")
         return None
 

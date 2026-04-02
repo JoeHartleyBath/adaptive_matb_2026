@@ -77,12 +77,22 @@ def load_model_artefacts(model_dir: Path) -> dict:
     norm_std = np.asarray(ns["std"], dtype=np.float64)
     norm_std[norm_std < 1e-12] = 1.0  # guard against zero-variance
 
-    log.info("Loaded model from %s  (selector k=%d)", model_dir, selector.k)
+    # Auto-detect which probability column corresponds to P(HIGH).
+    # Prefer the saved n_classes field; fall back to inspecting clf.classes_.
+    clf_classes = pipeline.named_steps["clf"].classes_
+    n_classes = int(ns.get("n_classes", len(clf_classes)))
+    p_high_col = n_classes - 1   # column 1 for binary, column 2 for 3-class
+
+    log.info(
+        "Loaded model from %s  (selector k=%d, %d-class, P(HIGH)=col %d)",
+        model_dir, selector.k, n_classes, p_high_col,
+    )
     return {
         "pipeline": pipeline,
         "selector": selector,
         "norm_mean": norm_mean,
         "norm_std": norm_std,
+        "p_high_col": p_high_col,
     }
 
 
@@ -350,6 +360,7 @@ def run(args: argparse.Namespace) -> None:
     norm_std = model["norm_std"]
     selector = model["selector"]
     pipeline = model["pipeline"]
+    p_high_col = model["p_high_col"]
 
     t_last = time.perf_counter()
     n_inferences = 0
@@ -419,7 +430,7 @@ def run(args: argparse.Namespace) -> None:
 
         # ---- feature selection + inference ----
         features_sel = selector.transform(features_normed[np.newaxis, :])
-        p_overload = float(pipeline.predict_proba(features_sel)[0, 1])
+        p_overload = float(pipeline.predict_proba(features_sel)[0, p_high_col])
 
         # Confidence: distance from decision boundary (0.5), scaled to [0, 1]
         confidence = min(1.0, abs(p_overload - 0.5) * 2.0)

@@ -22,7 +22,6 @@ from typing import Iterable, Optional
 
 TOKEN_PID = "${OPENMATB_PARTICIPANT}"
 TOKEN_SID = "${OPENMATB_SESSION}"
-TOKEN_SEQ = "${OPENMATB_SEQ_ID}"
 
 ALLOWED_LEVELS = {"LOW", "MODERATE", "HIGH"}
 
@@ -336,8 +335,8 @@ def _static_check_scenario_file(path: Path) -> list[str]:
         payload = ev.command[-1]
         if "STUDY/V0/" not in payload:
             problems.append(f"Marker missing STUDY/V0 prefix at line {ev.line_no}")
-        if TOKEN_PID not in payload or TOKEN_SID not in payload or TOKEN_SEQ not in payload:
-            problems.append(f"Marker missing pid/sid/seq tokens at line {ev.line_no}")
+        if TOKEN_PID not in payload or TOKEN_SID not in payload:
+            problems.append(f"Marker missing pid/sid tokens at line {ev.line_no}")
 
     # ResMan pump failure recovery sanity: every failure should be followed by off at +10s.
     # This is a solvability constraint (task must recover), not a protocol semantics constraint.

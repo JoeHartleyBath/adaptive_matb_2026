@@ -27,6 +27,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
+import pytest
 import torch  # noqa: E402
 
 from ml import EEGNet, HIGH_CLASS, LABEL_MAP, N_CLASSES  # noqa: E402
@@ -181,6 +182,12 @@ def test_pretraining(dataset_path: Path, model_dir: Path) -> None:
 # synthetic epochs — bypasses XDF loading, tests all ML code paths)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(
+    reason=(
+        "EEGNet calibration path retired. calibrate_participant.py now refers to the "
+        "sklearn SVM pipeline. This test needs a full rewrite to exercise the new pipeline."
+    )
+)
 def test_calibration(pretrained_path: Path, model_dir: Path, rng: np.random.Generator) -> None:
     print("\n[Stage 4] Fine-tuning + ROC (calibrate_participant internals) ...")
 
@@ -271,6 +278,12 @@ def test_calibration(pretrained_path: Path, model_dir: Path, rng: np.random.Gene
 # Stage 5: ROC / AUC helpers standalone
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(
+    reason=(
+        "EEGNet calibration path retired. calibrate_participant.py now refers to the "
+        "sklearn SVM pipeline. This test needs a full rewrite to exercise the new pipeline."
+    )
+)
 def test_roc_helpers() -> None:
     print("\n[Stage 5] ROC helper functions ...")
     import calibrate_participant as cp

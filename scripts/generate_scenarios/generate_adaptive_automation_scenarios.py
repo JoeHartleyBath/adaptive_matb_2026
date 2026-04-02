@@ -228,8 +228,7 @@ def write_scenario(
 
     pid_tok = "${OPENMATB_PARTICIPANT}"
     sid_tok = "${OPENMATB_SESSION}"
-    seq_tok = "${OPENMATB_SEQ_ID}"
-    payload = f"pid={pid_tok}|sid={sid_tok}|seq={seq_tok}"
+    payload = f"pid={pid_tok}|sid={sid_tok}"
 
     cond_marker = f"adaptive_automation/{condition}"
     scene_start_m = f"STUDY/V0/{cond_marker}/START|{payload}"

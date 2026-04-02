@@ -489,10 +489,9 @@ def write_scenario(filename, lines, marker_name, include_tlx=False):
         # Metadata tokens (supported by pilot run_openmatb.py wrapper)
         pid_tok = "${OPENMATB_PARTICIPANT}"
         sid_tok = "${OPENMATB_SESSION}"
-        seq_tok = "${OPENMATB_SEQ_ID}"
         
-        # Start marker: Format STUDY/V0/<MARKER>|pid=...|sid=...|seq=...
-        payload = f"pid={pid_tok}|sid={sid_tok}|seq={seq_tok}"
+        # Start marker: Format STUDY/V0/<MARKER>|pid=...|sid=...
+        payload = f"pid={pid_tok}|sid={sid_tok}"
         # Careful: marker_name comes in without leading STUDY/V0/
         marker_str = f"STUDY/V0/{marker_name}/START|{payload}"
         
