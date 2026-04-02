@@ -2,157 +2,96 @@
 
 ## Overview
 
-The participant assignment system manages sequence assignments and tracks completed sessions to minimize human error during data collection.
+The participant assignment system tracks completed sessions and participant condition
+assignments to minimise human error during data collection.
 
-## Quick Start
+---
 
-### 1. Generate Assignments (Before Data Collection)
+## Participant Namespaces
 
-Generate counterbalanced assignments for your study:
+Three run tiers are kept strictly separate. IDs never overlap.
 
-```bash
-# Generate 10 participants per sequence (30 total)
-python scripts/generate_participant_assignments.py --n-per-sequence 10
+| Namespace | Range | Launcher | Who | Data fate |
+|-----------|-------|----------|-----|-----------|
+| `PDRY01`–`PDRY05` | 5 slots | Direct Python invocation | Lab colleagues/friends; non-target-population; **pre-ethics** | Never analysed. Throwaway. |
+| `PSELF` | 1 slot | Direct Python invocation | Researcher self-test | Never analysed. |
+| `DEV` | 1 slot | Manual | Development / debugging | Never analysed. |
+| `PPILOT01`–`PPILOT10` | 10 slots | `session_start_PILOT.bat` | Target-population participants; formal protocol; **post-ethics** | Excluded from study analysis; used for protocol QA. |
+| `P001`–`P030` | 30 slots | `session_start_STUDY.bat` | Consented target-population participants | **Included in analysis.** |
 
-# Or start from a specific number
-python scripts/generate_participant_assignments.py --n-per-sequence 10 --start 101
+> **Why the dry-run / pilot distinction matters:** a pilot participant requires ethics
+> approval and recruitment from the target population. `PDRY` slots are for informal
+> runs with lab colleagues *before* ethics approval — to verify hardware, software, and
+> protocol flow. Keep these namespaces separate so pilot and study data are never
+> contaminated.
 
-# Or create custom assignments
-python scripts/generate_participant_assignments.py \
-    --participant-ids P001 P002 P003 \
-    --sequences SEQ1 SEQ2 SEQ3
-```
+---
 
-This creates `config/participant_assignments.yaml` with:
-- Counterbalanced sequence assignments
-- Session tracking structure
-- Last-run timestamps
-
-### 2. Run Data Collection
-
-Simply press play in VS Code on `run_openmatb.py` or run:
-
-```bash
-python src/python/run_openmatb.py
-```
-
-**The script will:**
-1. Show recently run participants (if any)
-2. Prompt for participant selection (number or list selection)
-3. **Automatically look up** the assigned sequence
-4. **Auto-increment** session number (S001, S002, etc.)
-5. Show confirmation prompt
-6. Track completion after successful run
-
-**Example interaction:**
-```
-=== OpenMATB Session Setup ===
-
-Recent participants:
-  1. P003 (SEQ3, 1 sessions)
-  2. P001 (SEQ1, 1 sessions)
-
-Enter participant number or selection (1-5): 2
-
-==================================================
-  Participant: P002
-  Sequence:    SEQ2
-  Session:     S001
-==================================================
-
-Proceed with this configuration? (y/n): y
-```
-
-### 3. View Assignment Status
-
-Check `config/participant_assignments.yaml` to see:
-- Which participants have run
-- Completed sessions for each
-- Last run timestamps
+## Fields per participant entry
 
 ```yaml
-participants:
-  P001:
-    last_run: '2026-02-05T14:30:00.123456'
-    sequence: SEQ1
-    sessions_completed: [S001]
-  P002:
-    last_run: null
-    sequence: SEQ2
-    sessions_completed: []
+P012:
+  adaptation_first: true      # determines condition order (adaptation→control or control→adaptation)
+  sessions_completed: []      # auto-populated after each run
+  last_run: null              # auto-populated after each run
 ```
 
-## Features
+There is no `sequence` field. Calibration block order is determined automatically
+by participant rank and condition via the 6-template system in
+`scripts/generate_scenarios/generate_full_study_scenarios.py`.
 
-### High Priority (Implemented)
-- ✅ **Automatic sequence lookup** - No manual sequence entry
-- ✅ **Session tracking** - Knows what sessions are completed
-- ✅ **Confirmation prompt** - Review before running
-- ✅ **Recent participants list** - Quick selection from last 5
-- ✅ **Auto-increment sessions** - S001 → S002 for re-runs
-- ✅ **Assignment generator** - Create counterbalanced assignments
+---
 
-### Error Prevention
-- ❌ **Can't mix up sequences** - Looked up automatically
-- ❌ **Can't duplicate sessions** - Auto-incremented
-- ❌ **Can't forget assignment** - Loaded from file
-- ✅ **Confirmation check** - See exactly what will run
+## Running a session
 
-### Testing Modes
+### Study or pilot participant (using launcher)
 
-**Skip assignment updates:**
-```bash
-python src/python/run_openmatb.py --skip-assignment-update
+```
+Double-click  →  STUDY SESSION  (or PILOT SESSION)
+Enter number  →  e.g.  12   (builds P012 or PPILOT12 automatically)
+Press Enter to confirm  →  session starts
 ```
 
-**Manual override (for special cases):**
-```bash
-python src/python/run_openmatb.py --participant P999 --seq-id SEQ1 --session S001
-```
-
-## Workflow for Pilot Study
-
-1. **Before first session:**
-   ```bash
-   # Generate assignments for your expected N
-   python scripts/generate_participant_assignments.py --n-per-sequence 10
-   ```
-
-2. **For each data collection session:**
-   - Press play in VS Code on `run_openmatb.py`
-   - Enter participant number (or select from recent)
-   - Confirm the displayed configuration
-   - Run the study
-
-3. **After data collection:**
-   - `config/participant_assignments.yaml` serves as audit log
-   - Shows who ran, when, and which sessions completed
-
-## Merge Additional Participants
-
-If you need to add more participants mid-study:
+### Dry-run or self-test participant (direct Python)
 
 ```bash
-# Add 5 more per sequence (preserves existing data)
-python scripts/generate_participant_assignments.py --n-per-sequence 5 --start 11 --merge
+python src/run_full_study_session.py --participant PDRY01
+python src/run_full_study_session.py --participant PSELF
 ```
+
+Session is auto-incremented from `sessions_completed` length (S001, S002, …).
+
+---
+
+## After a session
+
+`config/participant_assignments.yaml` is updated automatically:
+
+```yaml
+P012:
+  adaptation_first: true
+  sessions_completed: [S001]          # appended
+  last_run: '2026-04-02T14:30:45'    # timestamp added
+```
+
+This prevents session number conflicts and serves as the audit log.
+
+---
+
+## Adding participants mid-study
+
+Edit `config/participant_assignments.yaml` directly. Required fields:
+- `adaptation_first` — alternated true/false in sequence with existing participants
+- `sessions_completed: []`
+- `last_run: null`
+
+---
 
 ## Troubleshooting
 
-**"Participant not found in assignments"**
-- Enter sequence manually, or add to assignments file first
+**"Participant not found in assignments file"**
+→ Add the participant entry to `config/participant_assignments.yaml` before running.
 
-**"Overriding assigned sequence"**
-- You're manually specifying a different sequence than assigned
-- Confirm this is intentional
-
-**Want to re-run a failed session?**
-- Use `--session` to specify the session explicitly
-- Or remove it from `sessions_completed` in the yaml file
-
-## File Locations
-
-- Assignments: `config/participant_assignments.yaml`
-- Generator script: `scripts/generate_participant_assignments.py`
-- Runner script: `src/python/run_openmatb.py`
-- Data output: `C:\data\adaptive_matb\openmatb\{participant}\{session}\`
+**Want to re-run a session that was aborted?**
+→ Use `--start-phase N` to resume from the last completed phase.  
+→ Or manually edit `sessions_completed` to roll back if needed.

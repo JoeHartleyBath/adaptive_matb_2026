@@ -35,10 +35,10 @@ cd C:\adaptive_matb_2026
 .\.venv\Scripts\Activate.ps1
 
 # Fixed-block pilot (LOW → MODERATE → HIGH), full physiology:
-python src/run_openmatb.py --pilot1 --calibration-trend --summarise-performance --eda-port COM5 --participant PSELF --seq-id SEQ1
+python src/run_openmatb.py --pilot1 --calibration-trend --summarise-performance --eda-port COM5 --participant PSELF
 
 # Staircase pilot:
-python src/run_openmatb.py --pilot1 --adaptation --only-scenario adaptation_skeleton.txt --eda-port COM5 --participant PSELF --seq-id SEQ1
+python src/run_openmatb.py --pilot1 --adaptation --only-scenario adaptation_skeleton.txt --eda-port COM5 --participant PSELF
 ```
 
 VS Code launch configs for both self-pilot variants are in `.vscode/launch.json` (look for `PSELF:` entries).

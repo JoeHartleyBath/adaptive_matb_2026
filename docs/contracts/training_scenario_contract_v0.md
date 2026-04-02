@@ -1,8 +1,17 @@
 # Training Scenario Contract (v0)
 
-Status: draft (implementation in-progress)
+Status: **SUPERSEDED** — see retirement note below.
 
-Last updated: 2026-01-23
+Last updated: 2026-01-23 (original) / 2026-04-02 (retirement annotation)
+
+> **Retirement note (2026-04-02):** This contract described the original 3×5-minute
+> calibration block design with an explicit `SEQ` counterbalancing variable
+> (SEQ1/SEQ2/SEQ3 controlling LOW→MOD→HIGH order). This design was replaced before
+> any study data were collected. The current design uses 2×9-minute continuous blocks,
+> each containing 9 successive 1-minute sub-blocks whose order is determined by a
+> 6-template rank system keyed on participant position in `config/participant_assignments.yaml`.
+> The `SEQ` field has been removed from all config, code, and scenario files.
+> This document is retained as a historical audit trail only.
 
 Purpose: define the **deterministic, contract-compliant structure** of the OpenMATB v0 pilot session scenarios (training + calibration) used in this repository.
 
