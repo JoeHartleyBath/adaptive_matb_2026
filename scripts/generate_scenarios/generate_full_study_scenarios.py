@@ -29,7 +29,7 @@ Level anchors
 -------------
     d_MODERATE = d_final               (calibrated 70%-performance threshold)
     d_LOW      = max(0.0, d_final - delta)
-    d_HIGH     = min(1.0, d_final + delta)
+    d_HIGH     = d_final + delta   (no ceiling — may exceed 1.0 at ceiling participants)
     default delta = 0.20  (= 4× staircase fine step of 0.05)
 
 Counterbalancing
@@ -68,7 +68,7 @@ from typing import Optional
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-from adaptation.difficulty_state import DifficultyState  # noqa: E402
+from adaptation.difficulty_state import make_task_params  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -78,10 +78,17 @@ BLOCK_DURATION_SEC: int = 60         # duration of each 1-minute block
 N_BLOCKS: int = 9                    # total blocks per 9-minute scenario
 SCENARIO_DURATION_SEC: int = BLOCK_DURATION_SEC * N_BLOCKS  # 540 s
 
+# Seconds of silent pre-task time before block_01 START marker.
+# The LSL plugin starts at t=0, but LabRecorder needs ~5s to discover
+# and subscribe to the OpenMATB marker stream.  By delaying all task
+# content and markers by LSL_SETTLE_SEC, block_01 START is captured
+# reliably, giving it the same labelled duration as every other block.
+LSL_SETTLE_SEC: int = 5
+
 EVENT_EDGE_BUFFER_SEC: int = 3       # guard zone at each edge within a block
 
-DEFAULT_DELTA: float = 0.20          # low/high offset from d_final
-DEFAULT_OUTPUT_DIR: Path = _REPO_ROOT / "scenarios"
+DEFAULT_DELTA: float = 0.80          # low/high offset from d_final
+DEFAULT_OUTPUT_DIR: Path = _REPO_ROOT / "experiment" / "scenarios"
 CONFIG_PATH: Path = _REPO_ROOT / "config" / "participant_assignments.yaml"
 
 # Ported from generate_pilot_scenarios.py / vendor defaults
@@ -137,10 +144,11 @@ _LEVEL_FULL: dict[str, str] = {"L": "LOW", "M": "MODERATE", "H": "HIGH"}
 def extract_d_final(csv_path: Path) -> float:
     """Extract the converged staircase difficulty from an OpenMATB session CSV.
 
-    Looks for the last ``adaptation_converged`` event row (type='adaptation',
-    value JSON contains ``"event": "adaptation_converged"``).  Falls back to
-    the final ``adaptation_step`` d value with a warning if no convergence
-    event is found.
+    Priority order:
+    1. Last ``adaptation_converged`` event  (clean convergence).
+    2. Last ``adaptation_step`` d value with a warning  (timed out mid-staircase).
+    3. d_init from ``adaptation_init`` with a warning  (scenario timed out before
+       any step fired — participant was already on-target at the starting difficulty).
 
     Raises ``ValueError`` if no adaptation rows are present at all, or
     ``FileNotFoundError`` if the path does not exist.
@@ -150,6 +158,7 @@ def extract_d_final(csv_path: Path) -> float:
 
     converged_d: Optional[float] = None
     last_step_d: Optional[float] = None
+    d_init: Optional[float] = None
 
     with csv_path.open(newline="", encoding="utf-8", errors="replace") as fh:
         reader = csv.DictReader(fh)
@@ -168,6 +177,10 @@ def extract_d_final(csv_path: Path) -> float:
                 state = data.get("state", {})
                 if "d" in state:
                     last_step_d = float(state["d"])
+            elif event == "adaptation_init":
+                cfg = data.get("config", {})
+                if "d_init" in cfg:
+                    d_init = float(cfg["d_init"])
 
     if converged_d is not None:
         return converged_d
@@ -181,6 +194,17 @@ def extract_d_final(csv_path: Path) -> float:
             stacklevel=2,
         )
         return last_step_d
+
+    if d_init is not None:
+        warnings.warn(
+            f"No adaptation steps found in {csv_path.name}. "
+            f"The staircase scenario timed out without firing a single step — "
+            f"performance was on-target at d_init from the start. "
+            f"Using d_init={d_init:.4f} as d_final.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return d_init
 
     raise ValueError(
         f"No adaptation events found in {csv_path}. "
@@ -199,26 +223,34 @@ def compute_level_difficulties(
     """Derive per-level difficulty anchors from d_final.
 
     Returns a dict with keys "LOW", "MODERATE", "HIGH".
-    Emits a warning if d_final is near 0.0 or 1.0 and clamping reduces the
-    effective separation below the requested delta.
-    """
-    d_low  = max(0.0, d_final - delta)
-    d_mid  = float(d_final)
-    d_high = min(1.0, d_final + delta)
 
-    if d_mid - d_low < delta - 1e-9:
+    No clamping is applied to either anchor:
+      d_LOW  = d_final - delta  (may be < 0 for easy participants)
+      d_HIGH = d_final + delta  (may be > 1 for ceiling participants)
+
+    Both cases extrapolate linearly via make_task_params(), which applies
+    physical floors/ceilings to keep all task parameters valid.  Warnings are
+    emitted so the researcher is aware of extrapolation on either end.
+    """
+    d_low  = d_final - delta
+    d_mid  = float(d_final)
+    d_high = d_final + delta
+
+    if d_low < 0.0:
         warnings.warn(
-            f"d_final={d_final:.4f} is near 0; LOW clamped to 0.0. "
-            f"Effective LOW–MODERATE separation = {d_mid - d_low:.3f} "
-            f"(requested {delta:.3f}).",
+            f"d_final={d_final:.4f}: LOW anchor d_low={d_low:.4f} is below 0. "
+            "Task parameters extrapolate below the easy end: resman drain = 0, "
+            "slower tracking update, fewer sysmon/comms events. "
+            "This is valid for easy participants.",
             UserWarning,
             stacklevel=2,
         )
-    if d_high - d_mid < delta - 1e-9:
+    if d_high > 1.0:
         warnings.warn(
-            f"d_final={d_final:.4f} is near 1; HIGH clamped to 1.0. "
-            f"Effective MODERATE–HIGH separation = {d_high - d_mid:.3f} "
-            f"(requested {delta:.3f}).",
+            f"d_final={d_final:.4f}: HIGH anchor d_high={d_high:.4f} exceeds 1.0. "
+            "Task parameters extrapolate above the hard end: higher resman drain, "
+            "denser sysmon/comms events, faster tracking. "
+            "This is intentional for ceiling participants.",
             UserWarning,
             stacklevel=2,
         )
@@ -445,7 +477,7 @@ def generate_block_lines(
                        (default: "calibration_condition", override for other
                        study conditions e.g. "adaptive_automation")
     """
-    params = DifficultyState(d_init=d).params
+    params = make_task_params(d)      # call directly so d > 1.0 is not clamped
     lines: list[_Line] = []
     t0 = float(block_start_sec)
 
@@ -477,27 +509,36 @@ def generate_block_lines(
         lines.append(_Line(t0, "resman",         "start"))
 
     # ------------------------------------------------------------------ #
-    # Demand events — all formulae mirror generate_pilot_scenarios.py but  #
-    # are rescaled from BLOCK_DURATION_SEC (60 s) instead of 300 s.        #
+    # Demand events — counts derived from calibrated rates in TaskParams    #
+    # (see difficulty_state.py for anchoring to pilot scenario data).       #
+    #                                                                        #
+    # SysMon alerts on independent channels can coexist, so they are        #
+    # scheduled with SYSMON_REFRACTORY_SEC (1 s) spacing rather than the    #
+    # full alert-timeout slot.  This lifts the previous hard cap of 4 events #
+    # per group and lets event counts scale properly with d.                 #
+    # Comms remains serial (one prompt at a time), so comms_slot is kept.   #
     # ------------------------------------------------------------------ #
 
-    # SysMon: lights + scales (same event count each)
-    sysmon_slot = SYSMON_ALERT_TIMEOUT_SEC + SYSMON_REFRACTORY_SEC  # 11 s
-    n_sysmon = int(d / (sysmon_slot / BLOCK_DURATION_SEC))
-    if n_sysmon > 0:
+    _eff = float(BLOCK_DURATION_SEC - 2 * EVENT_EDGE_BUFFER_SEC)  # 54 s
+
+    # SysMon: lights + scales (independent channels, can overlap).
+    n_lights = round(params.sysmon_light_rate_hz * _eff)
+    n_scales = round(params.sysmon_scale_rate_hz * _eff)
+    if n_lights > 0:
         light_cmds = [f"lights-{l}-failure;True"
-                      for l in _sample(SYSMON_LIGHTS, n_sysmon, rng)]
+                      for l in _sample(SYSMON_LIGHTS, n_lights, rng)]
         lines = _distribute_events(
-            lines, "sysmon", light_cmds, sysmon_slot, t0, rng)
+            lines, "sysmon", light_cmds, SYSMON_REFRACTORY_SEC, t0, rng)
 
+    if n_scales > 0:
         scale_cmds = [f"scales-{s}-failure;True"
-                      for s in _sample(SYSMON_SCALES, n_sysmon, rng)]
+                      for s in _sample(SYSMON_SCALES, n_scales, rng)]
         lines = _distribute_events(
-            lines, "sysmon", scale_cmds, sysmon_slot, t0, rng)
+            lines, "sysmon", scale_cmds, SYSMON_REFRACTORY_SEC, t0, rng)
 
-    # Communications prompts (50 % own / 50 % other)
+    # Communications: one prompt at a time — comms_slot is the scheduling slot.
     comms_slot = AVERAGE_AUDITORY_PROMPT_DURATION_SEC + COMMUNICATIONS_REFRACTORY_SEC  # 19 s
-    n_comms = int(d / (comms_slot / BLOCK_DURATION_SEC))
+    n_comms = round(params.comms_rate_hz * _eff)
     if n_comms > 0:
         n_own   = n_comms // 2
         n_other = n_comms - n_own
@@ -507,9 +548,8 @@ def generate_block_lines(
         lines = _distribute_events(
             lines, "communications", comms_cmds, comms_slot, t0, rng)
 
-    # ResMan pump failures (formula from generate_pilot_scenarios.py ×scale)
-    scale = BLOCK_DURATION_SEC / 300.0  # 0.20
-    n_pump = max(0, int(13.33 * d * scale - 0.66 * scale))
+    # ResMan pump failures: derive count from calibrated rate.
+    n_pump = round(params.resman_pump_rate_hz * _eff)
     if n_pump > 0:
         pump_ids = list(RESMAN_PUMPS.keys())
         pump_weights = [1.0 / float(RESMAN_PUMPS[p]) for p in pump_ids]
@@ -579,7 +619,15 @@ def write_scenario(
     # Stable sort by time (insertion order preserved within same timestamp)
     all_lines.sort(key=lambda ln: ln.time_sec)
 
-    end_t = _fmt_t(SCENARIO_DURATION_SEC)
+    # Shift all task content forward by LSL_SETTLE_SEC.  The preamble lines
+    # (labstreaminglayer;start, scheduling;start, voiceidiom, voicegender)
+    # remain at t=0 to configure plugins before task events fire.  This
+    # gives LabRecorder time to subscribe to the OpenMATB marker stream so
+    # that block_01 START is reliably captured, keeping all block durations equal.
+    all_lines = [_Line(ln.time_sec + LSL_SETTLE_SEC, ln.plugin, ln.command)
+                 for ln in all_lines]
+
+    end_t = _fmt_t(SCENARIO_DURATION_SEC + LSL_SETTLE_SEC)
     level_ds_str = ", ".join(
         f"{lbl}={level_difficulties[lbl]:.4f}"
         for lbl in ("LOW", "MODERATE", "HIGH")
@@ -688,8 +736,8 @@ def main() -> None:
     # Resolve d_final
     if args.d_final is not None:
         d_final = args.d_final
-        if not 0.0 <= d_final <= 1.0:
-            parser.error(f"--d-final must be in [0.0, 1.0], got {d_final}")
+        if not -0.8 <= d_final <= 1.8:
+            parser.error(f"--d-final must be in [-0.8, 1.8], got {d_final}")
         print(f"d_final = {d_final:.4f}  (source: --d-final override)")
     else:
         d_final = extract_d_final(args.calibration_csv)
@@ -707,9 +755,9 @@ def main() -> None:
     block_order_str = " ".join(s[0] for s in level_sequence)
     print(f"Block order (condition {args.condition}): {block_order_str}")
 
-    # Print per-level DifficultyState parameter preview
+    # Print per-level parameter preview
     for label, d in level_difficulties.items():
-        p = DifficultyState(d_init=d).params
+        p = make_task_params(d)
         print(
             f"  {label:8s} d={d:.4f}  track_ms={int(round(p.track_update_ms))}"
             f"  joystick={int(round(p.track_joystick_force))}"

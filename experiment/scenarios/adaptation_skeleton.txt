@@ -6,9 +6,10 @@
 # via Poisson event generators driven by DifficultyState.
 #
 # Parameters at t=0 match DifficultyState(d_init=0.50):
-#   track_update_ms     = 30  (lerp 50→10 at d=0.50)
-#   track_joystick_force= 2   (lerp  3→1  at d=0.50)
-#   resman_loss_per_min = 500 (1200*0.50 − 100 offset)
+#   track_update_ms     = 30   (lerp 50→10 at d=0.50, t_track=0.5)
+#   track_joystick_force= 2.0  (lerp  3→1  at d=0.50, t_track=0.5)
+#   resman_loss_per_min = 141  (log scale 50→400 ml/min at d=0.50)
+# Note: AdaptationScheduler._actuate() overrides these values on the first frame.
 #
 # AdaptationScheduler will call set_parameter() on each tick to update
 # these live; the values here are the starting point only.

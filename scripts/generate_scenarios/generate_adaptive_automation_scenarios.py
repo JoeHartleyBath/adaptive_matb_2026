@@ -41,7 +41,7 @@ Level anchors
 -------------
     d_MODERATE = d_final               (calibrated 70%-performance threshold)
     d_LOW      = max(0.0, d_final - delta)
-    d_HIGH     = min(1.0, d_final + delta)
+    d_HIGH     = d_final + delta   (no ceiling — may exceed 1.0 at ceiling participants)
     default delta = 0.20
 
 Counterbalancing
@@ -88,7 +88,7 @@ from generate_full_study_scenarios import (  # noqa: E402
     _Line,
     _fmt_t,
 )
-from adaptation.difficulty_state import DifficultyState  # noqa: E402
+from adaptation.difficulty_state import make_task_params  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -96,7 +96,7 @@ from adaptation.difficulty_state import DifficultyState  # noqa: E402
 
 SUPPORTED_N_BLOCKS: tuple[int, ...] = (8, 10)
 DEFAULT_N_BLOCKS: int = 8
-DEFAULT_DELTA: float = 0.20
+DEFAULT_DELTA: float = 0.80
 DEFAULT_OUTPUT_DIR: Path = _REPO_ROOT / "experiment" / "scenarios"
 CONFIG_PATH: Path = _REPO_ROOT / "config" / "participant_assignments.yaml"
 
@@ -394,7 +394,7 @@ def main() -> None:
 
     # -- Parameter preview -------------------------------------------------
     for label, d in level_difficulties.items():
-        p = DifficultyState(d_init=d).params
+        p = make_task_params(d)
         print(
             f"  {label:8s}  d={d:.4f}  "
             f"track_ms={int(round(p.track_update_ms))}  "
