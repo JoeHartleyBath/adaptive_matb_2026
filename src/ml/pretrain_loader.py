@@ -332,7 +332,8 @@ def load_baseline_from_cache(
                 "forest_bidx": npz[f"{pid}_forest_bidx"],
             }
         return baseline
-    except (KeyError, Exception):
+    except (KeyError, Exception) as exc:
+        print(f"WARNING: pretrain baseline cache at {cache_path} could not be loaded ({exc}) — recomputing.", flush=True)
         return None
 
 

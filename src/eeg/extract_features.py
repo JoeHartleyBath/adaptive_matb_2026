@@ -257,16 +257,15 @@ def extract_features(
     bands: dict[str, tuple[float, float]],
     srate: float = 128.0,
 ) -> tuple[np.ndarray, list[str]]:
-    """Return (N, ~54) float32 feature matrix and feature names.
+    """Return (N, ~41) float32 feature matrix and feature names.
 
     Feature groups:
-      1. Bandpower (spectral, log) — 13 features
+      1. Bandpower (spectral, log) — 12 features  (FM_Delta, FAA removed)
       2. Hjorth parameters (per temporal region) — 4 × 3 = 12
       3. Spectral entropy (per temporal region) — 4
       4. Permutation entropy m=3 (per temporal region) — 4
-      5. Statistics: skewness, kurtosis, ZCR (per temporal region) — 4 × 3 = 12
-      6. Aperiodic 1/f slope (per temporal region) — 4
-      7. wPLI connectivity (FM↔Par, FM↔Cen, Cen↔Par × θ/α) — 5
+      5. Aperiodic 1/f slope (per temporal region) — 4
+      6. wPLI connectivity (FM↔Par, FM↔Cen, Cen↔Par × θ/α) — 5
     """
     features: list[np.ndarray] = []
     names:    list[str]        = []
@@ -281,13 +280,9 @@ def extract_features(
         lo, hi = bands[band]
         return _band_power(psd, freqs, idx, lo, hi)
 
-    delta_fm  = P("FrontalMidline", "Delta")
     theta_fm  = P("FrontalMidline", "Theta")
     alpha_fm  = P("FrontalMidline", "Alpha")
     beta_fm   = P("FrontalMidline", "Beta")
-
-    alpha_fl  = P("FrontalLeft",  "Alpha")
-    alpha_fr  = P("FrontalRight", "Alpha")
 
     theta_c   = P("Central", "Theta")
     alpha_c   = P("Central", "Alpha")
@@ -300,7 +295,6 @@ def extract_features(
     for val, nm in [
         (theta_fm,  "FM_Theta"),
         (alpha_fm,  "FM_Alpha"),
-        (delta_fm,  "FM_Delta"),
         (beta_fm,   "FM_Beta"),
         (alpha_par, "Par_Alpha"),
         (alpha_occ, "Occ_Alpha"),
@@ -311,12 +305,11 @@ def extract_features(
         names.append(nm)
 
     # Ratio / composite features
-    features.append(np.log(alpha_fr) - np.log(alpha_fl))                  # FAA
     features.append(np.log(beta_c  / (alpha_c + theta_c + 1e-12)))        # Engagement
     features.append(np.log(theta_fm / (alpha_fm + 1e-12)))                # FM_Theta/Alpha
     features.append(np.log(theta_fm / (beta_fm  + 1e-12)))                # FM_Theta/Beta
     features.append(np.log(theta_c  / (beta_c   + 1e-12)))                # Cen_Theta/Beta
-    names.extend(["FAA", "Cen_Engagement", "FM_Theta_Alpha", "FM_Theta_Beta", "Cen_Theta_Beta"])
+    names.extend(["Cen_Engagement", "FM_Theta_Alpha", "FM_Theta_Beta", "Cen_Theta_Beta"])
 
     # ------------------------------------------------------------------
     # 2–5. Time-domain features per temporal region
@@ -347,13 +340,8 @@ def extract_features(
         features.append(pe)
         names.append(f"{r}_PeEnt")
 
-        # 5. Skewness, kurtosis, ZCR
-        st = _stats_batch(sig)                              # (N, 3)
-        features.extend([st[:, 0], st[:, 1], st[:, 2]])
-        names.extend([f"{r}_Skew", f"{r}_Kurt", f"{r}_ZCR"])
-
     # ------------------------------------------------------------------
-    # 6. Aperiodic 1/f slope (per temporal region)
+    # 5. Aperiodic 1/f slope (per temporal region)
     # ------------------------------------------------------------------
     for region in t_regions:
         ch_idx = region_map[region]
@@ -364,7 +352,7 @@ def extract_features(
         names.append(f"{r}_1fSlope")
 
     # ------------------------------------------------------------------
-    # 7. wPLI connectivity features
+    # 6. wPLI connectivity features
     # ------------------------------------------------------------------
     _wpli_pairs = [
         ("FrontalMidline", "Parietal",  "Theta"),   # FM↔Par theta
@@ -509,7 +497,8 @@ def _load_norm_cache(
                 feat_names=feat_names,
             )
         return data
-    except Exception:
+    except Exception as exc:
+        print(f"WARNING: feature cache at {cache_path} could not be loaded ({exc}) — recomputing.", flush=True)
         return None
 
 

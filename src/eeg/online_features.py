@@ -51,8 +51,7 @@ class OnlineFeatureExtractor:
         cfg_path = region_cfg or _DEFAULT_REGION_CFG
         self.region_map = _build_region_map(cfg_path, channel_labels)
 
-        resolved_iaf = iaf if iaf is not None else 10.0
-        self.bands = iaf_bands(resolved_iaf)
+        self.bands = FIXED_BANDS
 
         self._feat_names: list[str] | None = None
 
