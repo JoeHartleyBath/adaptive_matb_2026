@@ -56,6 +56,44 @@ _labrecorder_rcs_recording_started: bool = False
 _labrecorder_rcs_host: Optional[str] = None
 _labrecorder_rcs_port: Optional[int] = None
 
+_LABRECORDER_EXE = Path(r"C:\LabRecorder\LabRecorder.exe")
+
+
+def _ensure_labrecorder_running(host: str = "127.0.0.1", port: int = 22345, timeout: float = 15.0) -> None:
+    """Launch LabRecorder.exe if its RCS port is not yet listening, then wait."""
+    def _rcs_open() -> bool:
+        try:
+            with socket.create_connection((host, port), timeout=1.5):
+                return True
+        except OSError:
+            return False
+
+    if _rcs_open():
+        print("  LabRecorder RCS: already running.")
+        return
+
+    if not _LABRECORDER_EXE.exists():
+        print(
+            f"  WARNING: LabRecorder not found at {_LABRECORDER_EXE}\n"
+            "  Start it manually before recording begins."
+        )
+        return
+
+    print(f"  Launching LabRecorder ({_LABRECORDER_EXE.name})...")
+    subprocess.Popen([str(_LABRECORDER_EXE)], close_fds=True)
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _rcs_open():
+            print("  LabRecorder RCS: ready.")
+            return
+        time.sleep(0.5)
+
+    print(
+        f"  WARNING: LabRecorder RCS port {port} did not open within {timeout:.0f}s.\n"
+        "  Recording may not start — check LabRecorder manually."
+    )
+
 
 def _read_pinned_pyglet_version(requirements_path: Path) -> Optional[str]:
     if not requirements_path.exists():
@@ -177,8 +215,8 @@ def _cleanup_labrecorder_rcs_recording() -> None:
     port = int(_labrecorder_rcs_port or 22345)
     try:
         _labrecorder_send_rcs(host, port, ["stop"], timeout_s=1.5)
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"WARNING: LabRecorder RCS stop command failed: {exc}", flush=True)
     finally:
         _labrecorder_rcs_recording_started = False
         _labrecorder_rcs_host = None
@@ -410,13 +448,17 @@ def _start_labrecorder_xdf_recording_rcs(
         filename_cmd += f" {{run:{run}}}"
 
     try:
-        # Typical robust sequence: refresh → select all → set filename → start.
+        # Typical robust sequence: refresh → select all → exclude TRG → set filename → start.
+        # The eego amplifier exposes a separate LSL outlet (type="TRG") for each
+        # amp's trigger channel.  It is not needed for EEG analysis and wastes
+        # space; deselect it before starting the recording.
         _labrecorder_send_rcs(
             host,
             port,
             [
                 "update",
                 "select all",
+                "deselect {type:TRG}",
                 filename_cmd,
                 "start",
             ],
@@ -1444,23 +1486,6 @@ def _run_preflight_checks(
         except Exception as exc:
             print(f"  [?] Joystick check skipped: {exc}")
 
-    # EEG amplifier battery (manual — no LSL battery stream exists for the amp).
-    # This is the only battery that cannot be checked automatically.
-    print("\n" + "=" * 60)
-    print("EEG AMPLIFIER BATTERY CHECK")
-    print("=" * 60)
-    print("  The ANTneuro amplifier battery cannot be checked automatically.")
-    print("  Confirm the charge level in eego software or on the hardware LED.")
-    while True:
-        amp_ok = input("\n  EEG amplifier battery adequate? (y/n): ").strip().lower()
-        if amp_ok in ("y", "yes"):
-            break
-        elif amp_ok in ("n", "no"):
-            print("\nSession cancelled: EEG amplifier battery not confirmed.", file=sys.stderr)
-            return False
-        else:
-            print("  Please enter y or n.")
-
     # Run stream checks in a retry loop
     while True:
         all_ok, has_warnings, result = _run_single_check()
@@ -1816,6 +1841,7 @@ def _run_single_scenario(
     mwl_model_dir: Optional[str] = None,
     mwl_audit_csv: Optional[str] = None,
     mwl_threshold: Optional[float] = None,
+    mwl_baseline_d: Optional[float] = None,
 ) -> tuple[int, Optional[Path]]:
     repo_root = Path(__file__).resolve().parents[1]
 
@@ -1829,6 +1855,33 @@ def _run_single_scenario(
     if not scenario_source_path.exists():
         print(f"Scenario file not found: {scenario_source_path}", file=sys.stderr)
         return 2, None
+
+    # Gate: XDF recording requires live EEG on the LSL network.
+    # Blocks until the required number of EEG streams are present; operator can
+    # fix the setup and press Enter to retry rather than restarting the session.
+    # Bypassed for --verification runs (desk testing without hardware).
+    if getattr(args, "labrecorder_rcs", False) and not getattr(args, "verification", False):
+        try:
+            import pylsl as _pylsl_gate
+            _n_required = getattr(args, "eeg_stream_count", 1)
+            while True:
+                _eeg_found = [s for s in _pylsl_gate.resolve_streams(wait_time=3.0) if s.type() == "EEG"]
+                if len(_eeg_found) >= _n_required:
+                    print(
+                        f"[REC] EEG gate: {len(_eeg_found)}/{_n_required} stream(s) confirmed before recording.",
+                        flush=True,
+                    )
+                    break
+                print(
+                    f"\n[REC] WAITING: XDF recording needs {_n_required} EEG stream(s) "
+                    f"but only {len(_eeg_found)} found on the LSL network.",
+                    file=sys.stderr,
+                )
+                print("  Start the EEG amplifier(s), then press Enter to retry (or Ctrl-C to abort).",
+                      file=sys.stderr)
+                input()
+        except ImportError:
+            pass  # pylsl absent — LabRecorder will silently omit EEG from the XDF
 
     scenario_target_path = openmatb_dir / "includes" / "scenarios" / scenario_filename
     scenario_target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1864,6 +1917,7 @@ def _run_single_scenario(
 
     # Precompute threshold kwarg for MwlAdaptationConfig bootstrap injection.
     _mwl_thr_kwarg = f", threshold={mwl_threshold!r}" if mwl_threshold is not None else ""
+    _mwl_baseline_d_kwarg = f", baseline_d={mwl_baseline_d!r}" if mwl_baseline_d is not None else ""
 
     # Generate bootstrap script dynamically for the scenario
     bootstrap = (
@@ -1965,7 +2019,7 @@ def _run_single_scenario(
             f"    import sys as _sys; _sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
             "    from adaptation.mwl_adaptation_scheduler import MwlAdaptationScheduler, MwlAdaptationConfig\n"
             f"    _mwl_cfg = MwlAdaptationConfig(seed={adaptation_seed!r}"
-            f", audit_csv_path={mwl_audit_csv!r}{_mwl_thr_kwarg})\n"
+            f", audit_csv_path={mwl_audit_csv!r}{_mwl_thr_kwarg}{_mwl_baseline_d_kwarg})\n"
             "    MwlAdaptationScheduler._MWL_CFG = _mwl_cfg\n"
             "    import core as _core_mod, core.scheduler as _sched_mod\n"
             "    _sched_mod.Scheduler = MwlAdaptationScheduler\n"
@@ -1994,6 +2048,31 @@ def _run_single_scenario(
         )
         time.sleep(1.0)  # let LSL outlet register
     elif mwl_adaptation_mode and mwl_model_dir:
+        # Gate: MWL estimator requires live EEG streams before it can connect.
+        # Blocks until the required streams are present so the operator can fix
+        # the setup without restarting the session.
+        try:
+            import pylsl as _pylsl_gate
+            _n_required = getattr(args, "eeg_stream_count", 1)
+            while True:
+                _eeg_found = [s for s in _pylsl_gate.resolve_streams(wait_time=3.0) if s.type() == "EEG"]
+                if len(_eeg_found) >= _n_required:
+                    print(
+                        f"[MWL] EEG gate: {len(_eeg_found)}/{_n_required} stream(s) confirmed.",
+                        flush=True,
+                    )
+                    break
+                print(
+                    f"\n[MWL] WAITING: MWL adaptation needs {_n_required} EEG stream(s) "
+                    f"but only {len(_eeg_found)} found on the LSL network.",
+                    file=sys.stderr,
+                )
+                print("  Start the EEG amplifier(s), then press Enter to retry (or Ctrl-C to abort).",
+                      file=sys.stderr)
+                input()
+        except ImportError:
+            pass  # pylsl absent — mwl_estimator will fail on connect anyway
+
         _repo_root = Path(__file__).resolve().parent.parent
         mwl_cmd = [
             sys.executable, "-m", "mwl_estimator",
@@ -2050,7 +2129,16 @@ def _run_single_scenario(
         # Stopping and restarting here ensures the XDF captures all scenario events.
         # MATB shows the block-start dialog before t=0, giving enough time for the
         # restart to complete before any scenario markers are sent.
-        if getattr(args, "labrecorder_rcs", False) and _labrecorder_rcs_recording_started:
+        #
+        # NOTE: Skipped for MWL adaptation runs.  In adaptation mode, LabRecorder was
+        # already restarted (above) once the MWL outlet appeared.  A second restart
+        # here fires at the same moment MwlAdaptationScheduler._resolve_mwl_stream()
+        # runs inside the MATB process — the brief network disruption from the stop/
+        # start caused all 474 S003 audit rows to report signal_quality=0.0 (see
+        # lab-notes/2026-04-02_pself_run.md, issue #12).  For adaptation XDFs, block
+        # boundaries are reconstructed from scenario timing when Markers are absent;
+        # connecting the MWL inlet correctly is more critical.
+        if getattr(args, "labrecorder_rcs", False) and _labrecorder_rcs_recording_started and not mwl_adaptation_mode:
             if _wait_for_markers_outlet(timeout_s=15.0):
                 lr_host = str(getattr(args, "labrecorder_host", "127.0.0.1"))
                 lr_port = int(getattr(args, "labrecorder_port", 22345))
@@ -2616,6 +2704,17 @@ def main() -> int:
             "Set automatically from the participant's Youden J threshold in model_config.json."
         ),
     )
+    parser.add_argument(
+        "--mwl-baseline-d",
+        type=float,
+        default=None,
+        metavar="D",
+        help=(
+            "Participant calibrated difficulty (d_final from staircase). Passed as baseline_d "
+            "to MwlAdaptationConfig so assisted tracking parameters are computed relative to "
+            "the participant's actual calibrated difficulty, not the default 0.5."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -2881,14 +2980,36 @@ def main() -> int:
 
     # Check if session output already exists (prevent accidental overwriting).
     # Loop so the operator can enter a corrected participant ID without restarting.
+    #
+    # When --only-scenario is supplied (the normal case when run_full_study_session.py
+    # launches individual conditions) we narrow the check to manifests that already
+    # exist for *that specific scenario*.  Files from earlier conditions in the same
+    # session directory are expected and must not trigger a false warning.
     while True:
         session_output_dir = output_root_path / "openmatb" / participant / session
         if not session_output_dir.exists():
             break
-        existing_files = list(session_output_dir.glob("*"))
+
+        if args.only_scenario:
+            # Scope to manifests for the scenario we are about to run.
+            target_scenario_name = Path(str(args.only_scenario)).stem
+            _sessions_dir = session_output_dir / "sessions"
+            existing_files = []
+            if _sessions_dir.exists():
+                for _mp in _sessions_dir.glob("**/*.manifest.json"):
+                    try:
+                        with open(_mp, encoding="utf-8") as _mf:
+                            _mdata = json.load(_mf)
+                        if _mdata.get("scenario_name") == target_scenario_name:
+                            existing_files.append(_mp)
+                    except Exception:
+                        pass
+        else:
+            existing_files = list(session_output_dir.glob("*"))
+
         if not existing_files:
             break
-        # Directory exists and has files — warn and offer options.
+        # Directory exists and has files for this scenario — warn and offer options.
         print(f"\n{'!'*60}", file=sys.stderr)
         print(f"!!! WARNING: Session output directory already contains data!", file=sys.stderr)
         print(f"  Participant : {participant}", file=sys.stderr)
@@ -2986,6 +3107,10 @@ def main() -> int:
         print("\n" + "=" * 60)
         print("Starting LabRecorder XDF recording via RCS for Pilot 1...")
         print("=" * 60)
+        _ensure_labrecorder_running(
+            host=str(args.labrecorder_host),
+            port=int(args.labrecorder_port),
+        )
 
         lab_root = Path(str(args.labrecorder_root)).resolve() if args.labrecorder_root else (output_root_path / "physiology")
         lab_template = str(args.labrecorder_template)
@@ -3087,6 +3212,7 @@ def main() -> int:
             mwl_model_dir=getattr(args, "mwl_model_dir", None),
             mwl_audit_csv=getattr(args, "mwl_audit_csv", None),
             mwl_threshold=getattr(args, "mwl_threshold", None),
+            mwl_baseline_d=getattr(args, "mwl_baseline_d", None),
         )
 
         if exit_code != 0:

@@ -156,7 +156,8 @@ def main() -> int:
 
                     try:
                         inlet = pylsl.StreamInlet(info, max_buflen=120)
-                    except Exception:
+                    except Exception as exc:
+                        print(f"WARNING: could not open LSL inlet for '{info.name()}' ({info.type()}): {exc}", flush=True)
                         continue
 
                     inlets[key] = inlet
@@ -185,7 +186,9 @@ def main() -> int:
             for key, inlet in list(inlets.items()):
                 try:
                     samples, timestamps = inlet.pull_chunk(timeout=0.0, max_samples=args.max_samples_per_pull)
-                except Exception:
+                except Exception as exc:
+                    print(f"WARNING: pull_chunk failed for stream '{stream_meta[key]['name']}' — dropping inlet: {exc}", flush=True)
+                    inlets.pop(key)
                     continue
 
                 if not timestamps:

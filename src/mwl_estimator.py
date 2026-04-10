@@ -1,6 +1,6 @@
 """Real-time MWL estimator process.
 
-Reads EEG from an LSL inlet, computes features, runs LogReg inference,
+Reads EEG from an LSL inlet, computes features, runs Linear SVM inference,
 and publishes P(overload) to an LSL outlet at ~4 Hz.
 
 Architecture reference: ADR-0003 — Process A (MWL Estimator).
@@ -10,8 +10,8 @@ Usage
     python -m mwl_estimator --model-dir models/P001 --stream-name eego
 
 Model directory must contain:
-    pipeline.pkl   — joblib: sklearn Pipeline (StandardScaler + LogReg)
-    selector.pkl   — joblib: SelectKBest (k=30)
+    pipeline.pkl   — joblib: sklearn Pipeline
+    selector.pkl   — joblib: SelectKBest
     norm_stats.json — {"mean": [...], "std": [...]}
 """
 
@@ -141,21 +141,30 @@ def _get_ref_channel_indices(info: pylsl.StreamInfo) -> list[int]:
     """Return indices of 'ref'-type channels from an LSL StreamInfo descriptor.
 
     The ANT eego amplifier labels electrode channels with type='ref' in the
-    stream XML.  Falls back to all channels if no typed descriptor is found.
+    stream XML.  Falls back to all channels only when no typed descriptor is
+    present in the stream XML (normal for non-ANT amplifiers); in that case a
+    WARNING is printed so the fallback is visible in session logs.
+
+    Raises if the XML descriptor exists but cannot be parsed, because that
+    indicates an unexpected hardware/driver change that would silently corrupt
+    the channel selection used during inference.
     """
-    try:
-        ch_elem = info.desc().child("channels").first_child()
-        ref_idx: list[int] = []
-        i = 0
-        while ch_elem.name() == "channel":
-            if ch_elem.child_value("type").strip().lower() == "ref":
-                ref_idx.append(i)
-            ch_elem = ch_elem.next_sibling()
-            i += 1
-        if ref_idx:
-            return ref_idx
-    except Exception:
-        pass
+    ch_elem = info.desc().child("channels").first_child()
+    ref_idx: list[int] = []
+    i = 0
+    while ch_elem.name() == "channel":
+        if ch_elem.child_value("type").strip().lower() == "ref":
+            ref_idx.append(i)
+        ch_elem = ch_elem.next_sibling()
+        i += 1
+    if ref_idx:
+        return ref_idx
+    print(
+        f"[MWL] WARNING: no 'ref'-type channels found in LSL descriptor for "
+        f"'{info.name()}' — using all {info.channel_count()} channels. "
+        "Verify this matches training data channel selection.",
+        flush=True,
+    )
     return list(range(info.channel_count()))
 
 
@@ -177,9 +186,13 @@ class _DualEegInlet:
         stream_name_substr: str,
         stream_srate: float,
         buffer_s: float,
+        preproc_cfg: EegPreprocessingConfig,
+        decim_factor: int,
     ) -> None:
         self.substr = stream_name_substr
         self.stream_srate = stream_srate
+        self.decim_factor = max(1, int(decim_factor))
+        self.analysis_srate = stream_srate / self.decim_factor
         self.n_channels = 0
         self._inlets: list[pylsl.StreamInlet] = []
         self._ref_idx: list[list[int]] = []
@@ -187,6 +200,12 @@ class _DualEegInlet:
         self._buffer = np.zeros((0, self._buf_n), dtype=np.float32)
         self._timestamps = np.zeros(self._buf_n, dtype=np.float64)
         self._write_ptr = 0
+        self._preproc_cfg = preproc_cfg
+        self._filt_buf_n = int(buffer_s * self.analysis_srate)
+        self._filt_buffer = np.zeros((0, self._filt_buf_n), dtype=np.float32)
+        self._filt_write_ptr = 0
+        self._filt_samples_filled = 0
+        self._preprocessor: EegPreprocessor | None = None
         self.is_connected = False
 
     def connect(self, timeout: float = 5.0) -> bool:
@@ -228,6 +247,9 @@ class _DualEegInlet:
 
         self.n_channels = total_ch
         self._buffer = np.zeros((self.n_channels, self._buf_n), dtype=np.float32)
+        self._filt_buffer = np.zeros((self.n_channels, self._filt_buf_n), dtype=np.float32)
+        self._preprocessor = EegPreprocessor(self._preproc_cfg)
+        self._preprocessor.initialize_filters(self.n_channels)  # no prewarm — run continuously
         self.is_connected = True
         log.info("Dual inlet ready: %d channels total.", self.n_channels)
         return True
@@ -274,13 +296,43 @@ class _DualEegInlet:
             self._timestamps[:rem] = ts_out[first:]
         self._write_ptr = (self._write_ptr + n_samp) % self._buf_n
 
+        # Persistent filter: decimate → filter → write to filtered ring buffer.
+        # This replicates the training pipeline (one continuous EegPreprocessor
+        # from start of recording), eliminating the IIR startup transient that
+        # corrupted per-window fresh-filter windows.
+        if self._preprocessor is not None:
+            dec = merged[:, ::self.decim_factor] if self.decim_factor > 1 else merged
+            n_filt = dec.shape[1]
+            if n_filt > 0:
+                filtered = self._preprocessor.process(dec)
+                end_f = self._filt_write_ptr + n_filt
+                if end_f <= self._filt_buf_n:
+                    self._filt_buffer[:, self._filt_write_ptr:end_f] = filtered
+                else:
+                    first_f = self._filt_buf_n - self._filt_write_ptr
+                    self._filt_buffer[:, self._filt_write_ptr:] = filtered[:, :first_f]
+                    self._filt_buffer[:, :n_filt - first_f] = filtered[:, first_f:]
+                self._filt_write_ptr = (self._filt_write_ptr + n_filt) % self._filt_buf_n
+                self._filt_samples_filled += n_filt
+
         return merged, ts_out
 
     def get_window(self, window_s: float) -> tuple[np.ndarray, np.ndarray]:
-        """Return the most recent *window_s* seconds from the ring buffer."""
+        """Return the most recent *window_s* seconds from the raw ring buffer."""
         n_samp = int(window_s * self.stream_srate)
         idx = np.arange(self._write_ptr - n_samp, self._write_ptr) % self._buf_n
         return self._buffer[:, idx].copy(), self._timestamps[idx].copy()
+
+    def get_filt_window(self, window_s: float) -> np.ndarray:
+        """Return the most recent *window_s* seconds from the filtered ring buffer.
+
+        The filtered buffer is populated by the persistent ``EegPreprocessor``
+        which processes each incoming chunk at the analysis srate — exactly
+        replicating the training preprocessing contract.
+        """
+        n_samp = int(window_s * self.analysis_srate)
+        idx = np.arange(self._filt_write_ptr - n_samp, self._filt_write_ptr) % self._filt_buf_n
+        return self._filt_buffer[:, idx].copy()
 
 
 # ---------------------------------------------------------------------------
@@ -295,31 +347,31 @@ def run(args: argparse.Namespace) -> None:
     with open(meta_path) as f:
         meta = yaml.safe_load(f)
     ch_names: list[str] = meta["channel_names"]
-    n_channels = len(ch_names)
 
     # ---- model artefacts ----
     model = load_model_artefacts(Path(args.model_dir))
 
-    # ---- EEG inlet (dual-amp merge) + preprocessor ----
+    # ---- EEG inlet (dual-amp merge) with persistent preprocessor ----
     # _DualEegInlet resolves both ANT eego streams by substring match, extracts
     # ref channels from each, and concatenates to 128 ch — mirroring offline
     # _merge_eeg_streams() so the model receives the same channel layout it was
-    # trained on.
+    # trained on.  The inlet also holds a persistent EegPreprocessor that
+    # processes each incoming chunk in-order, eliminating IIR startup transients.
+    preproc_cfg = EegPreprocessingConfig(srate=_ANALYSIS_SRATE)
+
+    # Decimation factor (stream srate → analysis srate)
+    decim_factor = max(1, int(round(args.stream_srate / _ANALYSIS_SRATE)))
+    log.info(
+        "Stream @ %.0f Hz → analysis @ %.0f Hz  (decimate ×%d)",
+        args.stream_srate, _ANALYSIS_SRATE, decim_factor,
+    )
+
     inlet = _DualEegInlet(
         stream_name_substr=args.stream_name,
         stream_srate=args.stream_srate,
         buffer_s=max(10.0, _WINDOW_S + 2.0),
-    )
-    preproc_cfg = EegPreprocessingConfig(srate=_ANALYSIS_SRATE)
-
-    # Decimation factor (stream srate → analysis srate)
-    decim_factor = int(round(args.stream_srate / _ANALYSIS_SRATE))
-    if decim_factor < 1:
-        decim_factor = 1
-    need_decimate = decim_factor > 1
-    log.info(
-        "Stream @ %.0f Hz → analysis @ %.0f Hz  (decimate ×%d)",
-        args.stream_srate, _ANALYSIS_SRATE, decim_factor,
+        preproc_cfg=preproc_cfg,
+        decim_factor=decim_factor,
     )
 
     # ---- feature extractor ----
@@ -338,20 +390,16 @@ def run(args: argparse.Namespace) -> None:
         log.error("Could not connect to EEG streams — aborting.")
         sys.exit(1)
 
-    # ---- warmup: fill buffer before first inference ----
+    # ---- warmup: fill filtered buffer before first inference ----
+    # Counts analysis-rate samples that have passed through the persistent
+    # filter — guarantees the IIR filters are fully warmed before inference.
     window_samples = int(_WINDOW_S * _ANALYSIS_SRATE)
-    samples_collected = 0
-    log.info("Warming up (need %d analysis-rate samples) ...", window_samples)
+    log.info("Warming up (need %d filtered samples) ...", window_samples)
 
-    while samples_collected < window_samples:
+    while inlet._filt_samples_filled < window_samples:
         chunk, _ = inlet.pull_chunk()
         if chunk.size == 0:
             time.sleep(0.01)
-            continue
-        n_new = chunk.shape[1]
-        if need_decimate:
-            n_new = n_new // decim_factor
-        samples_collected += n_new
 
     log.info("Warmup complete — starting inference loop.")
 
@@ -380,42 +428,25 @@ def run(args: argparse.Namespace) -> None:
 
         _t_tick_start = time.perf_counter()
 
-        # ---- extract window from ring buffer ----
-        # get_window returns (C, T) at the *stream* rate
+        # ---- extract windows from ring buffers ----
+        # Raw window (stream srate) → decimate → quality RMS check only.
+        # Filtered window (analysis srate) → features; already processed by
+        # the persistent EegPreprocessor, matching the training pipeline exactly.
         window_raw, _ = inlet.get_window(_WINDOW_S)
 
         if window_raw.size == 0:
             outlet.push_sample([0.5, 0.0, 0.0])
             continue
 
-        # ---- decimate to analysis rate ----
-        if need_decimate:
-            window_raw = _decimate(window_raw, decim_factor)
-
         # ---- signal quality check (on raw decimated data) ----
-        # Checked BEFORE filtering: the raw window amplitude reflects electrode
-        # contact quality and amplifier health without filter-transient artefacts.
-        # The ANT eego streams in V (not µV).  Clean DC-coupled EEG has RMS
-        # ~1e-3 – 0.1 V.  Thresholds:  > 1e-4 V (1 alive channel), < 100 V.
-        rms = float(np.sqrt(np.mean(window_raw ** 2)))
+        # Decimated but unfiltered — reflects electrode contact quality without
+        # filter-transient artefacts.  ANT eego streams in V; RMS > 1e-4 V.
+        window_raw_dec = _decimate(window_raw, inlet.decim_factor)
+        rms = float(np.sqrt(np.mean(window_raw_dec ** 2)))
         quality = 1.0 if 1e-4 < rms < 100.0 else 0.0
 
-        # ---- preprocess (BP → notch → CAR) ----
-        # Per-window fresh preprocessor, but pre-warmed from the first sample
-        # of each channel so the IIR filter starts in steady-state for that
-        # DC level — this eliminates the large onset transient that would
-        # otherwise push post-filter RMS far above the quality threshold.
-        win_preprocessor = EegPreprocessor(preproc_cfg)
-        win_preprocessor.initialize_filters(n_channels, prewarm=window_raw[:, 0])
-        window = win_preprocessor.process(window_raw)
-
-        # Temporary diagnostic — remove once RMS values are confirmed
-        if n_inferences < 5:
-            rms_filtered = float(np.sqrt(np.mean(window ** 2)))
-            log.info(
-                "[DIAG #%d] raw_rms=%.2f  filtered_rms=%.2f  quality=%.1f",
-                n_inferences, rms, rms_filtered, quality,
-            )
+        # ---- filtered window from persistent preprocessor ----
+        window = inlet.get_filt_window(_WINDOW_S)
 
         if quality < 0.5:
             outlet.push_sample([0.5, 0.0, quality])
@@ -430,10 +461,27 @@ def run(args: argparse.Namespace) -> None:
 
         # ---- feature selection + inference ----
         features_sel = selector.transform(features_normed[np.newaxis, :])
-        p_overload = float(pipeline.predict_proba(features_sel)[0, p_high_col])
+        proba_all = pipeline.predict_proba(features_sel)[0]
+        p_overload = float(proba_all[p_high_col])
 
         # Confidence: distance from decision boundary (0.5), scaled to [0, 1]
         confidence = min(1.0, abs(p_overload - 0.5) * 2.0)
+
+        if args.debug_verbose:
+            log.info(
+                "[DBG #%d] raw_rms=%.4f  filt_rms=%.4e  "
+                "feat_min=%.3f feat_max=%.3f feat_mean=%.3f  "
+                "z_min=%.2f z_max=%.2f z_out3=%d  "
+                "proba=%s  p_high=%.4f",
+                n_inferences, rms,
+                float(np.sqrt(np.mean(window ** 2))),
+                float(features.min()), float(features.max()), float(features.mean()),
+                float(feats_normed_min := features_normed.min()),
+                float(feats_normed_max := features_normed.max()),
+                int((np.abs(features_normed) > 3).sum()),
+                [f"{v:.3f}" for v in proba_all],
+                p_overload,
+            )
 
         outlet.push_sample([p_overload, confidence, quality])
         _tick_times.append(time.perf_counter() - _t_tick_start)
@@ -489,6 +537,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--timeout", type=float, default=30.0,
         help="Seconds to wait for EEG stream (default: 30)",
+    )
+    p.add_argument(
+        "--debug-verbose", action="store_true",
+        help="Log per-window feature stats and full proba vector (very noisy)",
     )
     return p.parse_args(argv)
 

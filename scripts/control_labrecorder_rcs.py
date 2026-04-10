@@ -192,13 +192,16 @@ def main() -> int:
             )
             print(str(expected))
 
-        # Typical robust sequence: update → select all → set filename → start.
+        # Typical robust sequence: update → select all → exclude TRG → set filename → start.
+        # The eego amplifier exposes a separate LSL outlet (type="TRG") for each
+        # amp's trigger channel.  It is not needed for EEG analysis; deselect it.
         _send_lines(
             host,
             port,
             [
                 "update",
                 "select all",
+                "deselect {type:TRG}",
                 filename_cmd,
                 "start",
             ],

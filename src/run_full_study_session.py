@@ -7,19 +7,20 @@ Automates the full flow:
   3. Rest baseline (2-min fixation cross for EEG normalisation)
   4. Scenario generation (calibration + adaptation scenarios from d_final)
   5. Calibration runs (2 × 9-min counterbalanced scenarios)
-  6. Model calibration (scratch 3-class LogReg on participant's MATB cal data)
+  6. Model calibration (scratch 3-class SVM-linear on participant's MATB cal data)
   7. Adaptation condition (generated scenario + MWL-driven toggle)
      / Control condition (same scenario, no adaptation)
      — conditions 7 counterbalanced via adaptation_first in config
   8. Post-session verification + analysis + plots
 
-Model strategy (validated 2026-03-27, n=1 PSELF pilot):
-  A scratch 3-class LogReg (SelectKBest k=30 + StandardScaler + LogReg l2,
-  C=0.003) trained directly on the participant's MATB calibration data
+Model strategy (validated 2026-04-02, n=1 PSELF pilot):
+  A scratch 3-class SVM-linear (SelectKBest k=35 + StandardScaler + SVC linear
+  C=1.0) trained directly on the participant's MATB calibration data
   outperforms TSST-group warm-start on every metric including within-block
-  performance correlation (r=0.408 vs 0.159).  No group model needed.
+  performance correlation.  No group model needed.
 
-  SVM-linear and SVM-RBF were also tested (sweep_scratch_models.py).
+  LogReg and SVM-RBF were also tested (sweep_scratch_models.py); SVM-linear
+  selected after sweep on 2026-04-02 (see lab notes 2026-04-02_pself_run.md).
   Linear SVM is comparable (AUCbin 0.743 vs 0.713) but P(H)|LOW=0.68 would
   saturate the adaptation scheduler at baseline.  SVM-RBF overfits the short
   cal blocks and collapses on adaptation windows.  LR_C0.003 retained.
@@ -257,6 +258,8 @@ def _openmatb_base_cmd(ctx: dict) -> list[str]:
     ]
     if ctx["verification"]:
         cmd += ["--verification", "--skip-stream-check", "--speed", str(ctx["speed"])]
+    elif ctx.get("skip_stream_check"):
+        cmd += ["--skip-stream-check"]
     if ctx["labrecorder_rcs"]:
         cmd += ["--labrecorder-rcs"]
     if ctx.get("eda_auto_port"):
@@ -331,7 +334,7 @@ def phase_rest_baseline(ctx: dict) -> None:
         "   and try not to blink or move for 2 minutes.'\n"
         "  Press ENTER when participant is settled and ready."
     )
-    cmd = _openmatb_base_cmd(ctx) + ["--only-scenario", "rest_baseline.txt", "--skip-stream-check"]
+    cmd = _openmatb_base_cmd(ctx) + ["--only-scenario", "rest_baseline.txt"]
     if ctx["labrecorder_rcs"]:
         cmd += ["--labrecorder-acq", "rest"]
     _run(cmd, "Rest baseline (fixation cross)")
@@ -452,17 +455,17 @@ def phase_calibration_runs(ctx: dict) -> None:
 
 
 def phase_model_calibration(ctx: dict) -> None:
-    """Phase 6: Calibrate participant model — scratch 3-class LogReg on MATB cal data.
+    """Phase 6: Calibrate participant model — scratch 3-class SVM-linear on MATB cal data.
 
-    Trains a fresh SelectKBest(k=30) + StandardScaler + LogReg(3-class, l2)
+    Trains a fresh SelectKBest(k=35) + StandardScaler + SVC(kernel='linear', C=1.0)
     directly on this participant's MATB calibration XDFs.  No group or pretrain
     model is used.
 
-    Validated as the best-performing strategy for MATB deployment (2026-03-27,
-    PSELF pilot, n=1): r_within_high=0.408, AUC=0.713, Acc@0.5=63.3% —
-    outperforming warm-start binary and 3-class variants on all metrics.  The
-    warm-start approach suffered from TSST->MATB cross-task domain shift and
-    produced saturated P(HIGH) values even at rest.
+    Model selection: SVM-linear (k=35, C=1.0) was selected over LogReg and SVM-RBF
+    via sweep_scratch_models.py (2026-04-02 PSELF pilot).  SVM-linear avoids the
+    P(HIGH)≈0 saturation seen with the earlier LogReg at baseline and gives better
+    adaptation-condition separation.  See lab notes 2026-04-02_pself_run.md.
+    k reduced from 40 → 35 (2026-04-10, selectk_sweep_s005_block01).
     """
     print("\n" + "=" * 60)
     print("  PHASE 6: MODEL CALIBRATION")
@@ -577,14 +580,18 @@ def phase_experimental_conditions(ctx: dict) -> None:
             ]
             if ctx.get("mwl_threshold") is not None:
                 cmd += ["--mwl-threshold", f"{ctx['mwl_threshold']:.6f}"]
+            if ctx.get("d_final") is not None:
+                cmd += ["--mwl-baseline-d", f"{ctx['d_final']:.4f}"]
         if ctx["labrecorder_rcs"]:
             cmd += ["--labrecorder-acq", condition]
 
         _run(cmd, label)
 
-        # Capture the adaptation run's session CSV for post-session analysis
+        # Capture session CSV for post-session analysis
         if condition == "adaptation":
             ctx["adaptation_session_csv"] = _find_latest_session_csv(ctx)
+        elif condition == "control":
+            ctx["control_session_csv"] = _find_latest_session_csv(ctx)
 
         if i < len(ctx["condition_order"]):
             _pause(f"{condition.title()} condition complete. Collect TLX, then continue.")
@@ -648,7 +655,53 @@ def phase_post_session(ctx: dict) -> None:
         _run(plot_cmd, "Plot MWL timeline")
         print(f"  Figure saved: {plot_out}")
     else:
-        print("\n  Skipping plot — audit CSV not found.")
+        print("\n  Skipping plot \u2014 audit CSV not found.")
+
+    # 8d. Adaptation vs control performance comparison
+    control_csv = ctx.get("control_session_csv")
+    if session_csv and session_csv.exists() and control_csv and control_csv.exists():
+        print("\n" + "-" * 60)
+        print("  ADAPTATION vs CONTROL \u2014 session KPI summary")
+        print("-" * 60)
+        try:
+            sys.path.insert(0, str(repo / "src"))
+            from performance.summarise_openmatb_performance import (
+                _collect_performance_rows,
+                _compute_derived_kpis,
+            )
+
+            def _fmt(v) -> str:
+                return f"{v:.4f}" if v is not None else "N/A"
+
+            rows_adapt = _collect_performance_rows(session_csv)
+            rows_ctrl  = _collect_performance_rows(control_csv)
+            kpi_adapt  = _compute_derived_kpis(rows_adapt)
+            kpi_ctrl   = _compute_derived_kpis(rows_ctrl)
+
+            track_a  = kpi_adapt.get("tracking", {}).get("center_deviation_rmse")
+            track_c  = kpi_ctrl.get("tracking",  {}).get("center_deviation_rmse")
+            comms_a  = kpi_adapt.get("comms",    {}).get("accuracy")
+            comms_c  = kpi_ctrl.get("comms",     {}).get("accuracy")
+            sysmon_a = kpi_adapt.get("sysmon",   {}).get("accuracy")
+            sysmon_c = kpi_ctrl.get("sysmon",    {}).get("accuracy")
+
+            print(f"  {'KPI':<30s} {'ADAPTATION':>12s} {'CONTROL':>10s}")
+            print(f"  {'-'*30} {'-'*12} {'-'*10}")
+            print(f"  {'Tracking RMSE (lower=better)':<30s} {_fmt(track_a):>12s} {_fmt(track_c):>10s}")
+            print(f"  {'Comms accuracy':<30s} {_fmt(comms_a):>12s} {_fmt(comms_c):>10s}")
+            print(f"  {'Sysmon accuracy':<30s} {_fmt(sysmon_a):>12s} {_fmt(sysmon_c):>10s}")
+            print()
+            print(f"  adaptation={session_csv.name}")
+            print(f"  control   ={control_csv.name}")
+        except Exception as _cmp_exc:
+            print(f"  WARNING: Could not compute condition comparison: {_cmp_exc}")
+    else:
+        _missing = []
+        if not (session_csv and session_csv.exists()):
+            _missing.append("adaptation CSV")
+        if not (control_csv and control_csv.exists()):
+            _missing.append("control CSV")
+        print(f"\n  Skipping condition comparison \u2014 missing: {', '.join(_missing)}")
 
 
 # ---------------------------------------------------------------------------
@@ -832,8 +885,8 @@ def _verify_phase_outputs(phase: int, ctx: dict, output_root: Path, pid: str, se
                             ok(f"{fname}: d_final in header", f"d_final = {d_str}")
                         else:
                             warn(f"{fname}: d_final in header", f"'{d_str}' not found in first 500 chars")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        warn(f"{fname}: d_final in header", f"could not read file: {exc}")
 
     elif phase == 5:
         # Calibration XDFs
@@ -1071,6 +1124,10 @@ def main() -> int:
         help="Auto-detect the Shimmer COM port (passes --eda-auto-port to run_openmatb.py).",
     )
     parser.add_argument(
+        "--skip-stream-check", action="store_true",
+        help="Skip preflight LSL stream checks (passes --skip-stream-check to run_openmatb.py).",
+    )
+    parser.add_argument(
         "--start-phase", type=int, default=1, metavar="N",
         help="Skip all phases before N (1-8). Use to resume a session mid-way.",
     )
@@ -1134,7 +1191,7 @@ def main() -> int:
         ("3", "Rest baseline", "2-min fixation cross (EEG normalisation)"),
         ("4", "Generate scenarios", "Calibration + adaptation from d_final"),
         ("5", "Calibration runs", "2 x 9-min counterbalanced (LabRecorder)"),
-        ("6", "Model calibration", "Scratch 3-class LogReg on participant's MATB cal data"),
+        ("6", "Model calibration", "Scratch 3-class SVM-linear (k=35, C=1.0) on participant's MATB cal data"),
         ("7", f"Condition A: {condition_order[0]}", "8-min block"),
         ("7", f"Condition B: {condition_order[1]}", "8-min block"),
         ("8", "Post-session", "Verification + analysis + plots"),
@@ -1168,15 +1225,34 @@ def main() -> int:
 
     # When skipping early phases, restore ctx keys that those phases would have set.
     if start_phase > 2:
-        # Phase 2 (staircase) sets d_final/staircase_csv.  Read from CSV if present.
-        import csv as _csv
-        _staircase_csv = session_data_dir / "staircase_log.csv"
-        _d_final = 0.8  # sensible default if CSV not found
-        if _staircase_csv.exists():
-            with open(_staircase_csv, newline="") as _f:
-                _rows = list(_csv.DictReader(_f))
-            if _rows:
-                _d_final = float(_rows[-1].get("d", _d_final))
+        # Phase 2 (staircase) sets d_final/staircase_csv.
+        # Identify the staircase run by finding the run manifest whose playlist
+        # contains adaptation_skeleton.txt, then extract d_final from that CSV.
+        _d_final = 0.8  # fallback if CSV not found or extraction fails
+        _staircase_csv = None
+        try:
+            _run_manifests = sorted(
+                (output_root / "openmatb" / pid / session).glob("run_manifest_*.json")
+            )
+            for _rm_path in _run_manifests:
+                _rm = json.loads(_rm_path.read_text(encoding="utf-8"))
+                _playlist = _rm.get("playlist", [])
+                if any("adaptation_skeleton" in (e.get("scenario_filename") or "") for e in _playlist):
+                    _csv_str = _playlist[0].get("session_csv")
+                    if _csv_str and Path(_csv_str).exists():
+                        _staircase_csv = Path(_csv_str)
+                        break
+            if _staircase_csv is None:
+                raise FileNotFoundError("No run manifest with adaptation_skeleton.txt found")
+            sys.path.insert(0, str(_REPO_ROOT / "scripts" / "generate_scenarios"))
+            from generate_full_study_scenarios import extract_d_final as _extract_d_final
+            _d_final = _extract_d_final(_staircase_csv)
+            print(f"  [resume] d_final={_d_final:.4f}  (from {_staircase_csv.name})")
+        except Exception as _exc:
+            print(
+                f"  WARNING: Could not read d_final from staircase CSV ({_exc}).\n"
+                f"           Using fallback d_final={_d_final:.4f} — verify this is correct."
+            )
         ctx_pre: dict = {"d_final": _d_final, "staircase_csv": _staircase_csv}
     else:
         ctx_pre = {}
@@ -1198,8 +1274,19 @@ def main() -> int:
         ctx_pre["adaptation_scenario"] = f"adaptive_automation_{_pid_lower}_c1_8min.txt"
 
     if start_phase > 6:
-        # Phase 6 sets participant_model_dir
+        # Phase 6 sets participant_model_dir and mwl_threshold.
+        # Restore both so Phase 7 (adaptation) uses the correct Youden J cutoff.
         ctx_pre["participant_model_dir"] = output_root / "models" / pid
+        _model_cfg_path = output_root / "models" / pid / "model_config.json"
+        if _model_cfg_path.exists():
+            _model_cfg = json.loads(_model_cfg_path.read_text(encoding="utf-8"))
+            ctx_pre["mwl_threshold"] = _model_cfg["youden_threshold"]
+            print(f"  [resume] mwl_threshold restored from model_config.json: {ctx_pre['mwl_threshold']:.4f}")
+        else:
+            print(
+                f"  WARNING: model_config.json not found at {_model_cfg_path}\n"
+                "           mwl_threshold will default to 0.5 — ensure Phase 6 ran successfully."
+            )
 
     # --- Build context dict passed to all phases ---
     ctx = {
@@ -1215,6 +1302,7 @@ def main() -> int:
         "condition_order": condition_order,
         "labrecorder_rcs": args.labrecorder_rcs,
         "eda_auto_port": args.eda_auto_port,
+        "skip_stream_check": args.skip_stream_check,
         "skip_smoke_test": args.skip_smoke_test,
         "verification": args.verification,
         "speed": args.speed,
@@ -1281,6 +1369,8 @@ def main() -> int:
         _gate(4)
 
     if start_phase <= 5:
+        if ctx["labrecorder_rcs"]:
+            _ensure_labrecorder_running()
         phase_calibration_runs(ctx)
         _gate(5)
         _pause("Calibration runs complete. Ready for model calibration?")
@@ -1289,16 +1379,17 @@ def main() -> int:
         phase_model_calibration(ctx)
         _gate(6)
 
+    # Ensure LabRecorder is running before the baseline and experimental
+    # conditions start.  When resuming from --start-phase 7 the earlier phases
+    # that would have launched it are skipped, so we guarantee it here.
+    if ctx["labrecorder_rcs"]:
+        _ensure_labrecorder_running()
+
     if ctx["skip_baseline_refresh"]:
         print("\n  [SKIPPED] Pre-adaptation baseline refresh (--skip-baseline-refresh)")
     else:
         phase_pre_adaptation_baseline(ctx)
         _gate(70)
-
-    # Ensure LabRecorder is running before the experimental conditions start.
-    # If resuming from --start-phase 7, it was never started by an earlier phase.
-    if ctx["labrecorder_rcs"]:
-        _ensure_labrecorder_running()
 
     phase_experimental_conditions(ctx)
     _gate(71)
