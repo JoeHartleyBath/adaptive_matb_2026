@@ -1,81 +1,9 @@
 participants:
-  # --- Pilot participants (not included in study analysis) ---
-  PPILOT01:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
-  PPILOT02:
-    adaptation_first: false
-    last_run: null
-    sessions_completed: []
-  PPILOT03:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
-  PPILOT04:
-    adaptation_first: false
-    last_run: null
-    sessions_completed: []
-  PPILOT05:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
-  PPILOT06:
-    adaptation_first: false
-    last_run: null
-    sessions_completed: []
-  PPILOT07:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
-  PPILOT08:
-    adaptation_first: false
-    last_run: null
-    sessions_completed: []
-  PPILOT09:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
-  PPILOT10:
-    adaptation_first: false
-    last_run: null
-    sessions_completed: []
-  # --- Development / self-test / dry-run (non-target-population; never included in analysis) ---
-  # PDRY01–PDRY05: informal dry-run testing with lab colleagues before ethics approval.
-  # These are NOT pilot participants — pilot slots (PPILOT01–10) are reserved for
-  # target-population participants under formal protocol after ethics approval.
-  PDRY01:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
-  PDRY02:
-    adaptation_first: false
-    last_run: null
-    sessions_completed: []
-  PDRY03:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
-  PDRY04:
-    adaptation_first: false
-    last_run: null
-    sessions_completed: []
-  PDRY05:
-    adaptation_first: true
-    last_run: null
-    sessions_completed: []
   DEV:
     adaptation_first: true
     last_run: '2026-03-03T10:32:14.770084'
     sessions_completed:
     - S001
-  PSELF:
-    adaptation_first: true
-    skip_practice: true
-    last_run: '2026-03-26T00:00:00'
-    sessions_completed:
-    - S001
-    - S002
   P001:
     adaptation_first: true
     last_run: '2026-03-03T10:43:59.834105'
@@ -197,3 +125,73 @@ participants:
     adaptation_first: false
     last_run: null
     sessions_completed: []
+  PDRY01:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PDRY02:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PDRY03:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PDRY04:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PDRY05:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PPILOT01:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PPILOT02:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PPILOT03:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PPILOT04:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PPILOT05:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PPILOT06:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PPILOT07:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PPILOT08:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PPILOT09:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PPILOT10:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PSELF:
+    adaptation_first: true
+    last_run: '2026-04-09T15:42:31.233102'
+    sessions_completed:
+    - S001
+    - S002
+    - S003
+    - S004
+    - STEST
+    skip_practice: true
