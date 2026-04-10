@@ -125,9 +125,9 @@ from build_mwl_training_dataset import (  # noqa: E402
 _MATB_SCENARIO_OFFSET_S = 12.0
 
 # ---------------------------------------------------------------------------
-# Frozen model config (2026-03-31, calibration_block_count_sweep, PSELF S001)
+# Frozen model config (2026-04-10, selectk_sweep_s005_block01, PSELF S005)
 # ---------------------------------------------------------------------------
-_CAL_K = 40             # SelectKBest k — SVM-linear sweep winner
+_CAL_K = 35             # SelectKBest k — S005 +block01 selectk sweep (2026-04-10)
 _CAL_C = 1.0            # SVM-linear C — SVM-linear sweep winner
 # Legacy LogReg constants retained for warm-start / group-model path only
 _LOGREG_K = 30
@@ -136,6 +136,7 @@ _LOGREG_PENALTY = "elasticnet"
 _LOGREG_L1_RATIO = 0.5
 _WARM_C = 0.1              # weak warm-start C (WS-weak winner)
 SEED = 42
+_LORO_MIN_J = 0.10         # minimum LORO Youden J to prefer LORO threshold over training-set
 
 # Region config — shared ANT Neuro NA-271 cap layout
 _DEFAULT_REGION_CFG = Path(__file__).resolve().parent.parent / "config" / "eeg_feature_extraction.yaml"
@@ -505,6 +506,74 @@ def _compute_resting_norm(
 
 
 # ===================================================================
+# LORO CV helper
+# ===================================================================
+
+def _compute_loro_threshold(
+    xdf_X_norm: list[np.ndarray],
+    xdf_y: list[np.ndarray],
+    cal_k: int,
+    cal_c: float,
+    seed: int,
+) -> tuple[float | None, float | None, list[float]]:
+    """Leave-One-Run-Out CV threshold for Youden J.
+
+    Trains a fresh SelectKBest + StandardScaler + SVC on all-but-one XDFs,
+    predicts p_high on the held-out XDF, then pools the held-out predictions
+    across all folds and computes a single Youden J threshold.
+
+    Returns (loro_thr, loro_j, fold_j_scores).  Returns (None, None, []) when
+    any fold has fewer than 2 classes in train or test.
+    """
+    n = len(xdf_X_norm)
+    pool_p: list[np.ndarray] = []
+    pool_y: list[np.ndarray] = []
+    fold_j: list[float] = []
+
+    for i in range(n):
+        train_X = np.concatenate([xdf_X_norm[j] for j in range(n) if j != i])
+        train_y = np.concatenate([xdf_y[j] for j in range(n) if j != i])
+        test_X = xdf_X_norm[i]
+        test_y = xdf_y[i]
+
+        if len(np.unique(train_y)) < 2 or len(np.unique(test_y)) < 2:
+            return None, None, []
+
+        k = min(cal_k, train_X.shape[1])
+        sel = SelectKBest(f_classif, k=k)
+        train_X_sel = sel.fit_transform(train_X, train_y)
+        sc = StandardScaler()
+        train_X_sc = sc.fit_transform(train_X_sel)
+        svc = SVC(
+            kernel="linear", C=cal_c,
+            class_weight="balanced", probability=True, random_state=seed,
+        )
+        svc.fit(train_X_sc, train_y)
+
+        test_X_sc = sc.transform(sel.transform(test_X))
+        p_high_fold = svc.predict_proba(test_X_sc)[:, -1]
+
+        # Per-fold J (diagnostic)
+        y_bin_fold = (test_y == test_y.max()).astype(int)
+        fpr_f, tpr_f, _ = roc_curve(y_bin_fold, p_high_fold)
+        fold_j.append(float(np.max(tpr_f - fpr_f)))
+
+        pool_p.append(p_high_fold)
+        pool_y.append(y_bin_fold)
+
+    # Pooled ROC over all held-out folds
+    all_p = np.concatenate(pool_p)
+    all_y = np.concatenate(pool_y)
+    if len(np.unique(all_y)) < 2:
+        return None, None, fold_j
+
+    fpr, tpr, thr = roc_curve(all_y, all_p)
+    j_scores = tpr - fpr
+    best_idx = int(np.argmax(j_scores))
+    return float(thr[best_idx]), float(j_scores[best_idx]), fold_j
+
+
+# ===================================================================
 # calibrate subcommand — main function
 # ===================================================================
 
@@ -584,15 +653,25 @@ def calibrate(
     print(f"\nLoading {len(xdf_files)} calibration XDF(s) for {pid}:")
     all_epochs: list[np.ndarray] = []
     all_labels: list[np.ndarray] = []
+    xdf_epoch_groups: list[list[np.ndarray]] = []   # per-XDF list of epoch arrays
+    xdf_label_groups: list[list[np.ndarray]] = []   # per-XDF list of label arrays
+    xdf_files_loaded: list[Path] = []               # XDFs that yielded ≥1 block
 
     for xdf_path in xdf_files:
         results = _load_xdf_block(xdf_path, expected_channels)
         if results is None:
             continue
+        xdf_epochs_this: list[np.ndarray] = []
+        xdf_labels_this: list[np.ndarray] = []
         for epochs, level in results:
             label = LABEL_MAP[level]
             all_epochs.append(epochs)
             all_labels.append(np.full(epochs.shape[0], label, dtype=np.int64))
+            xdf_epochs_this.append(epochs)
+            xdf_labels_this.append(np.full(epochs.shape[0], label, dtype=np.int64))
+        xdf_epoch_groups.append(xdf_epochs_this)
+        xdf_label_groups.append(xdf_labels_this)
+        xdf_files_loaded.append(xdf_path)
 
     if not all_epochs:
         sys.exit("ERROR: No valid calibration blocks loaded.")
@@ -613,7 +692,18 @@ def calibrate(
         cal_y = cal_labels_raw
         print(f"\n  Calibration (3-class): {len(cal_y)} windows  "
               f"(LOW={int((cal_y == 0).sum())}, MODERATE={int((cal_y == 1).sum())}, HIGH={int((cal_y == 2).sum())})")
-
+    # Per-XDF label vectors and window counts (post-filter) for LORO CV.
+    _xdf_y_loro: list[np.ndarray] = []
+    _xdf_window_counts: list[int] = []
+    for _lbl_list in xdf_label_groups:
+        _flat = np.concatenate(_lbl_list)
+        if binary:
+            _mask = (_flat == LABEL_MAP["LOW"]) | (_flat == LABEL_MAP["HIGH"])
+            _flat = _flat[_mask]
+            _xdf_y_loro.append((_flat == LABEL_MAP["HIGH"]).astype(np.int64))
+        else:
+            _xdf_y_loro.append(_flat.copy())
+        _xdf_window_counts.append(len(_xdf_y_loro[-1]))
     # --- 3. Extract features ---
     ch_names = expected_channels
     region_map = _build_region_map(region_cfg, ch_names)
@@ -648,6 +738,10 @@ def calibrate(
 
     # --- 5. Calibration-normalise, select features, fit classifier ---
     cal_X_norm = (cal_X - norm_mean) / norm_std
+
+    # Slice cal_X_norm into per-XDF arrays for LORO CV.
+    _loro_split_pts = np.cumsum(_xdf_window_counts[:-1]).tolist() if len(_xdf_window_counts) > 1 else []
+    xdf_X_norm_loro: list[np.ndarray] = list(np.split(cal_X_norm, _loro_split_pts))
 
     if scratch:
         # Fit own SelectKBest and StandardScaler on this participant's data.
@@ -708,8 +802,35 @@ def calibrate(
     fpr, tpr, thr = roc_curve(y_binary, p_high)
     j_scores = tpr - fpr
     best_idx = int(np.argmax(j_scores))
-    youden_thr = float(thr[best_idx])
-    youdens_j = float(j_scores[best_idx])
+    train_youden_thr = float(thr[best_idx])
+    train_youdens_j = float(j_scores[best_idx])
+
+    # LORO CV threshold (scratch + ≥2 XDFs only)
+    loro_thr: float | None = None
+    loro_j: float | None = None
+    loro_fold_j: list[float] = []
+    threshold_method = "train_set"
+
+    if scratch and len(xdf_files_loaded) >= 2:
+        loro_thr, loro_j, loro_fold_j = _compute_loro_threshold(
+            xdf_X_norm_loro, _xdf_y_loro, _CAL_K, _CAL_C, SEED,
+        )
+        if loro_thr is not None and loro_j is not None and loro_j >= _LORO_MIN_J:
+            youden_thr = loro_thr
+            youdens_j = loro_j
+            threshold_method = "loro"
+        else:
+            youden_thr = train_youden_thr
+            youdens_j = train_youdens_j
+            threshold_method = "train_set_fallback"
+            _reason = (
+                f"LORO J={loro_j:.4f}" if loro_j is not None else "LORO returned null"
+            )
+            print(f"  WARNING: LORO threshold rejected ({_reason} < min {_LORO_MIN_J:.2f}) "
+                  f"— falling back to training-set threshold ({train_youden_thr:.4f})")
+    else:
+        youden_thr = train_youden_thr
+        youdens_j = train_youdens_j
 
     # --- 7. Save deployment artefacts ---
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -727,6 +848,13 @@ def calibrate(
     model_config = {
         "youden_threshold": round(youden_thr, 6),
         "youdens_j": round(youdens_j, 6),
+        "threshold_method": threshold_method,
+        "train_youden_threshold": round(train_youden_thr, 6),
+        "train_youdens_j": round(train_youdens_j, 6),
+        "loro_youden_threshold": round(loro_thr, 6) if loro_thr is not None else None,
+        "loro_youdens_j": round(loro_j, 6) if loro_j is not None else None,
+        "loro_n_folds": len(loro_fold_j) if loro_fold_j else None,
+        "loro_fold_j_scores": [round(v, 6) for v in loro_fold_j] if loro_fold_j else None,
         "n_classes": int(len(np.unique(cal_y))),
         "model_k": int(deploy_selector.k) if hasattr(deploy_selector, "k") else _LOGREG_K,
         "calibrated_at": datetime.now(timezone.utc).isoformat(),
@@ -738,7 +866,11 @@ def calibrate(
     cal_preds = clf.predict(cal_X_sc)
     cal_acc = float(np.mean(cal_preds == cal_y))
     print(f"\n  Calibration accuracy: {cal_acc:.1%}")
-    print(f"  Youden threshold: {youden_thr:.4f}  (J={youdens_j:.4f})")
+    print(f"  Train-set threshold:  {train_youden_thr:.4f}  (J={train_youdens_j:.4f})")
+    if loro_thr is not None:
+        print(f"  LORO threshold:       {loro_thr:.4f}  (J={loro_j:.4f}, "
+              f"folds={len(loro_fold_j)}, fold_J={[round(v,3) for v in loro_fold_j]})")
+    print(f"  Deployed threshold:   {youden_thr:.4f}  [method={threshold_method}]")
     print(f"  Saved deployment artefacts to {out_dir}/")
     print(f"    pipeline.pkl, selector.pkl, norm_stats.json, model_config.json")
 
