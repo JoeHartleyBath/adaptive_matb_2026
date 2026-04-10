@@ -71,7 +71,11 @@ class AdaptationConfig:
     seed: int = 0
 
     # Staircase
-    target_score: float = 0.70   # target proportion of tracking time in-target
+    # Target is set to 0.90 rather than 0.70 because delta=0.80 drops tracking
+    # by ~0.22 between MODERATE and HIGH.  Calibrating at 0.90 means HIGH lands
+    # at ~0.68 in-target — appropriately hard but not impossible.  Targeting 0.70
+    # directly would push HIGH to ~0.48, which is overwhelming.
+    target_score: float = 0.85   # normalised RMSE score target: score = 1 - RMSE/max_deviation
     tolerance: float = 0.05
     window_sec: float = 45.0
     min_samples: int = 5
@@ -81,6 +85,11 @@ class AdaptationConfig:
     step_schedule: tuple = (0.2, 0.1, 0.05)
     stable_ticks_required: int = 3
     cooldown_sec: float = 20.0
+    # If d hasn't moved for this many seconds, declare convergence and exit.
+    # Acts as a safety-net for participants whose d_init is already on-target.
+    no_step_timeout_sec: float = 120.0
+    # If d is clamped at floor/ceiling for this many seconds, declare convergence.
+    boundary_convergence_sec: float = 60.0
 
     # Actuation flags (set False to freeze individual task parameters)
     actuate_tracking: bool = True
@@ -145,6 +154,7 @@ class AdaptationScheduler(Scheduler):
         )
         self._injected_line_id: int = _INJECTED_LINE_ID_START
         self._adaptation_ready: bool = False
+        self._convergence_exit_fired: bool = False
         # super().__init__() is blocking: it calls event_loop.run() and never
         # returns until the session ends.  _setup_adaptation() is therefore
         # called from update() on the very first frame instead.
@@ -172,6 +182,8 @@ class AdaptationScheduler(Scheduler):
             step_schedule=cfg.step_schedule,
             cooldown_sec=cfg.cooldown_sec,
             stable_ticks_required=cfg.stable_ticks_required,
+            no_step_timeout_sec=cfg.no_step_timeout_sec,
+            boundary_convergence_sec=cfg.boundary_convergence_sec,
         )
 
         p = self.state.params
@@ -318,21 +330,27 @@ class AdaptationScheduler(Scheduler):
 
         # Convergence: staircase has stabilised at the finest step.
         if self.controller.converged:
-            print(
-                f"[ADAPTATION t={t:6.1f}s] CONVERGED  "
-                f"d={self.state.d:.3f}  Ending block.",
-                flush=True,
-            )
-            self._log_adaptation(t, delta=None, score=score)
-            logger.log_manual_entry(
-                json.dumps({"event": "adaptation_converged", "t": round(t, 3), "d": self.state.d}),
-                key="adaptation",
-            )
-            try:
-                import pyglet
-                pyglet.app.exit()
-            except Exception:
-                pass
+            if not self._convergence_exit_fired:
+                self._convergence_exit_fired = True
+                print(
+                    f"[ADAPTATION t={t:6.1f}s] CONVERGED  "
+                    f"d={self.state.d:.3f}  Ending block.",
+                    flush=True,
+                )
+                self._log_adaptation(t, delta=None, score=score)
+                logger.log_manual_entry(
+                    json.dumps({"event": "adaptation_converged", "t": round(t, 3), "d": self.state.d}),
+                    key="adaptation",
+                )
+                # Stop all active plugins so OpenMATB exits via its normal
+                # check_if_must_exit() path.  pyglet.app.exit() alone is
+                # unreliable when called from within an update() callback.
+                for plugin in list(self.get_active_plugins().values()):
+                    try:
+                        plugin.stop()
+                    except Exception:
+                        pass
+                self.exit()
             return
 
         if delta is not None:
@@ -342,15 +360,20 @@ class AdaptationScheduler(Scheduler):
             if abs(self.state.d - d_old) < 1e-9:
                 # d didn't move — clamped at ceiling or floor.
                 boundary_label = "CEILING" if delta > 0 else "FLOOR"
-                self.controller.notify_boundary()
+                self.controller.notify_boundary(t)
+                elapsed = (
+                    t - self.controller._boundary_since_t
+                    if self.controller._boundary_since_t is not None else 0.0
+                )
                 print(
                     f"[ADAPTATION t={t:6.1f}s] {boundary_label} (clamped)  "
                     f"d={self.state.d:.3f}  score={score:.3f}  "
-                    f"boundary_ticks={self.controller._boundary_ticks}/{self.controller.stable_ticks_required}",
+                    f"boundary={elapsed:.0f}/{self.controller._boundary_convergence_sec:.0f}s",
                     flush=True,
                 )
                 # Check immediately: boundary ticks may have just triggered convergence.
-                if self.controller.converged:
+                if self.controller.converged and not self._convergence_exit_fired:
+                    self._convergence_exit_fired = True
                     print(
                         f"[ADAPTATION t={t:6.1f}s] CONVERGED (boundary)  "
                         f"d={self.state.d:.3f}  Ending block.",
@@ -361,11 +384,12 @@ class AdaptationScheduler(Scheduler):
                         json.dumps({"event": "adaptation_converged", "t": round(t, 3), "d": self.state.d}),
                         key="adaptation",
                     )
-                    try:
-                        import pyglet
-                        pyglet.app.exit()
-                    except Exception:
-                        pass
+                    for plugin in list(self.get_active_plugins().values()):
+                        try:
+                            plugin.stop()
+                        except Exception:
+                            pass
+                    self.exit()
                 return
 
             self._actuate()

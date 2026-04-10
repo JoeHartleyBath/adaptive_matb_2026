@@ -43,66 +43,68 @@ from typing import Optional
 #     an untested 30% extrapolation beyond the calibrated pilot HIGH.
 #     At 10 ms the cursor updates 100 ×/s; both drift and correction scale
 #     equally with step rate so this does not affect the difficulty balance.
-_TRACK_UPDATE_EASY_MS: float = 50.0   # d=0: slow cursor update rate (easier)
-_TRACK_UPDATE_HARD_MS: float = 10.0   # d=1: fast cursor update rate (original design value)
-_TRACK_FORCE_EASY: float = 3.0        # d=0: strong joystick correction (easier)
-_TRACK_FORCE_HARD: float = 1.0        # d=1: compensation limit — a perfect user can just cancel peak drift
+_TRACK_UPDATE_EASY_MS: float = 50.0   # d=-0.8: slow cursor update rate (easiest, floor participant LOW)
+_TRACK_UPDATE_HARD_MS: float = 10.0   # d=+1.8: fast cursor update rate (hardest, ceiling participant HIGH)
+_TRACK_FORCE_EASY: float = 3.0        # d=-0.8: strong joystick correction (easiest)
+_TRACK_FORCE_HARD: float = 1.0        # d=+1.8: compensation limit — a perfect user can just cancel peak drift
 
-# ResMan continuous drain – pump network totals from vendor resman.py defaults:
-#   infinite-capacity pumps 2+4 : 600+600  = 1200 ml/min
-#   finite-capacity pumps  5+6  : 600+600  = 1200 ml/min
-#   maximum_single_leakage      = (1200+1200)/2 = 1200 ml/min
-# _RESMAN_MAX_LEAK_PER_MIN matches generate_pilot_scenarios.py: maximum_single_leakage=1200.
-# Key values (with two-step offset): d=0.20→240, d=0.55→560, d=0.95→940 ml/min.
-_RESMAN_MAX_LEAK_PER_MIN: int = 1200
-_RESMAN_OFFSET_D_THRESHOLD: float = 0.50   # subtract 100 ml/min above this d
-_RESMAN_OFFSET_MODERATE: int = -100
-_RESMAN_OFFSET_HIGH_THRESHOLD: float = 0.90  # subtract a further 100 above this d
-_RESMAN_OFFSET_HIGH: int = -100
-
-# Comms event rate – TOTAL rate across all comms channels.
-#   build_standard_generators splits it equally: each of the 2 channels (own/other)
-#   gets rate * 0.5.  So total events per 300s = rate * 300.
+# ---------------------------------------------------------------------------
+# Log-scale event-rate and drain constants
+# ---------------------------------------------------------------------------
+# All event rates and drain use a common log (exponential) scale so that the
+# HIGH/LOW fold-change is the same for every participant regardless of where
+# the staircase converges.
 #
-#   Anchoring (pilot scenario files → d mapping):
-#     LOW  → d=0.00:   3 prompts,  rate =  3/300 = 0.010 Hz
-#     MOD  → d=0.30: ≈8-9 prompts, rate ≈  8/300 = 0.027 Hz  (lerp gives 0.028)
-#     HIGH → d=0.60:  14 prompts,  rate = 14/300 = 0.047 Hz  (lerp gives 0.047)
-#   Gradient extrapolated to d=1.0 for headroom: ≈21 prompts/300 s.
-#   Effective ceiling: AdaptationScheduler enforces min_comms_gap=20 s,
-#   so delivered rate is capped at ~0.050 Hz (≈15 prompts/300 s) regardless.
-_COMMS_RATE_EASY_HZ: float = 0.010   # exactly 3 prompts/300 s at d=0 (pilot LOW)
-_COMMS_RATE_HARD_HZ: float = 0.071   # ≈21 prompts/300 s at d=1; scheduler caps at ~15
-
-# SysMon event rate – TOTAL rate used identically for lights and scales groups.
-#   build_standard_generators splits each group: lights ÷ 2, scales ÷ 4.
-#   Total events per 300s = (sysmon_light_rate + sysmon_scale_rate) * 300
-#                         = 2 * sysmon_rate * 300.
+# Design endpoints:
+#   D_LOG_MIN = -0.8  →  floor participant LOW level  (d_final=0, delta=0.8)
+#   D_LOG_MAX = +1.8  →  ceiling participant HIGH level (d_final=1, delta=0.8)
+#   Total range = 2.6
 #
-#   Anchoring (pilot scenario files → d mapping):
-#     LOW  → d=0.00: 10 total failures, sysmon_rate = 10/600 = 0.017 Hz
-#     MOD  → d=0.30: 30 total failures, sysmon_rate = 30/600 = 0.050 Hz  (lerp gives 0.050)
-#     HIGH → d=0.60: 50 total failures, sysmon_rate = 50/600 = 0.083 Hz  (lerp gives 0.083)
-#   Gradient extrapolated to d=1.0: ≈77 total failures/300 s.
-#   Physical ceiling (6 channels × 1/alerttimeout ≈ 0.54 Hz total) is well above this.
-_SYSMON_RATE_EASY_HZ: float = 0.017  # exactly 10 total failures/300 s at d=0 (pilot LOW)
-_SYSMON_RATE_HARD_HZ: float = 0.128  # ≈77 total failures/300 s at d=1 (extrapolated)
-
-# ResMan pump failure rate – TOTAL rate across all 8 pump channels.
-#   build_standard_generators divides equally: each pump gets rate / 8.
-#   Total events per 300s = rate * 300.
+# SysMon (lights + scales) — no physical scheduling cap:
+#   1 event/block at d=-0.8,  18 events/block at d=+1.8
+#   Gives exact 6x H/L for every participant (delta=0.8, range=2.6):
+#     fold = (18/1)^(2*0.8/2.6) = 18^0.615 ≈ 6
 #
-#   Anchoring (pilot scenario files → d mapping):
-#     LOW  → d=0.00:  2 failures, rate =  2/300 = 0.007 Hz
-#     MOD  → d=0.30: ≈6-7 failures, rate ≈ 6/300 = 0.020 Hz  (lerp gives 0.024)
-#     HIGH → d=0.60: 12 failures, rate = 12/300 = 0.040 Hz  (lerp gives 0.040)
-#   Gradient extrapolated to d=1.0: ≈19 pump failures/300 s.
-_RESMAN_PUMP_RATE_EASY_HZ: float = 0.007   # exactly 2 failures/300 s at d=0 (pilot LOW)
-_RESMAN_PUMP_RATE_HARD_HZ: float = 0.062   # ≈19 pump failures/300 s at d=1 (extrapolated)
+# Comms — physically capped by prompt duration (18s) + refractory (1s) = 19s/slot:
+#   floor(54/19) = 2 prompts/block maximum.
+#   1 event/block at d=-0.8,  2 events/block at d=+1.8.
+#   Limited separation (1→2 per block) but 1 vs 2 concurrent prompts still
+#   loads the participant differently due to task interaction.
+#
+# ResMan pump failures — capped by failure duration (10s) + refractory (1s) = 11s/slot:
+#   floor(54/11) = 4 failures/block maximum.
+#   1 event/block at d=-0.8,  4 events/block at d=+1.8.
+#
+# Drain (continuous leak) — log scale, 50 ml/min at d=-0.8, 1200 ml/min at d=+1.8.
+#   1200 ml/min is the physical pump-network maximum.
+
+_D_LOG_MIN: float = -0.8   # d value at the low anchor (floor participant LOW level)
+_D_LOG_MAX: float =  1.8   # d value at the high anchor (ceiling participant HIGH level)
+_D_LOG_RANGE: float = _D_LOG_MAX - _D_LOG_MIN   # 2.6
+
+# Event rates (Hz): value = MIN * (MAX/MIN)^t  where t = (d - D_MIN) / D_RANGE
+_EFF_SEC: float = 54.0                          # schedulable seconds per 60-s block
+_SYSMON_RATE_MIN_HZ:  float =  1.0 / _EFF_SEC  # 1 event/block at d=-0.8
+_SYSMON_RATE_MAX_HZ:  float = 18.0 / _EFF_SEC  # 18 events/block at d=+1.8  (6x H/L)
+_COMMS_RATE_MIN_HZ:   float =  1.0 / _EFF_SEC  # 1 event/block at d=-0.8
+_COMMS_RATE_MAX_HZ:   float =  2.0 / _EFF_SEC  # 2 events/block at d=+1.8  (physical max)
+_PUMP_RATE_MIN_HZ:    float =  1.0 / _EFF_SEC  # 1 event/block at d=-0.8
+_PUMP_RATE_MAX_HZ:    float =  4.0 / _EFF_SEC  # 4 events/block at d=+1.8  (physical max)
+
+# Drain (ml/min)
+# The naive-participant sustainable max inflow to tank A or B is 600 ml/min
+# (pump 2: E→A and pump 4: F→B, drawing from infinite tanks E and F).
+# Pumps 1 and 3 draw from finite reserves C and D which deplete in ~1.25 min
+# without also running pumps 5/6; participants cannot be assumed to know this.
+# Ceiling is set to 400 ml/min — safely below the 600 ml/min naive max —
+# so tanks are always recoverable.  The pump failure events (up to 4/block at
+# d=+1.8) provide the primary resman workload challenge at high difficulty.
+_DRAIN_MIN_ML_MIN: float =  50.0   # at d=-0.8
+_DRAIN_MAX_ML_MIN: float = 400.0   # at d=+1.8 (below naive sustainable max of 600 ml/min)
 
 
 # ---------------------------------------------------------------------------
-# Helper
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _lerp(easy: float, hard: float, d: float) -> float:
@@ -110,21 +112,19 @@ def _lerp(easy: float, hard: float, d: float) -> float:
     return easy + (hard - easy) * d
 
 
-def _resman_leak(d: float) -> int:
-    """Replicate the two-step offset formula from generate_pilot_scenarios.py.
+def _log_rate(min_val: float, max_val: float, d: float) -> float:
+    """Exponential interpolation anchored at _D_LOG_MIN (-0.8) and _D_LOG_MAX (+1.8).
 
-    Examples
-    --------
-    d=0.20 (LOW)      → 240 ml/min
-    d=0.55 (MODERATE) → 560 ml/min
-    d=0.95 (HIGH)     → 940 ml/min
+    t = 0 at d=-0.8, t = 1 at d=+1.8.  Clamped so values outside that range
+    return the endpoint value (no further extrapolation).
     """
-    leak = int(_RESMAN_MAX_LEAK_PER_MIN * d)
-    if d >= _RESMAN_OFFSET_D_THRESHOLD:
-        leak += _RESMAN_OFFSET_MODERATE
-    if d >= _RESMAN_OFFSET_HIGH_THRESHOLD:
-        leak += _RESMAN_OFFSET_HIGH
-    return max(0, leak)
+    t = max(0.0, min(1.0, (d - _D_LOG_MIN) / _D_LOG_RANGE))
+    return min_val * (max_val / min_val) ** t
+
+
+def _log_drain(d: float) -> int:
+    """Continuous resman tank drain (ml/min).  Log scale, 50->1200 over [-0.8, +1.8]."""
+    return round(_log_rate(_DRAIN_MIN_ML_MIN, _DRAIN_MAX_ML_MIN, d))
 
 
 # ---------------------------------------------------------------------------
@@ -150,18 +150,28 @@ class TaskParams:
     resman_pump_rate_hz: float
 
 
-def _make_params(d: float) -> TaskParams:
+def make_task_params(d: float) -> TaskParams:
+    """Compute TaskParams for difficulty d.  Valid for any real d.
+
+    Track and joystick remain linear (d=0 easy, d=1 hard) with physical floors.
+    All event rates and drain use a log (exponential) scale anchored at
+    d=-0.8 (minimum) and d=+1.8 (maximum), giving ~6x H/L for sysmon and
+    consistent fold-change regardless of where the staircase converges.
+    Log-scale values are clamped at their endpoints for d outside [-0.8, 1.8].
+    """
+    # Tracking uses the same [-0.8, +1.8] range as all other subtasks.  t=0 at
+    # d=-0.8 (easiest: 50 ms update, force 3.0) and t=1 at d=+1.8 (hardest:
+    # 10 ms update, force 1.0).  Clamped at endpoints — no extrapolation.
+    t_track = max(0.0, min(1.0, (d - _D_LOG_MIN) / _D_LOG_RANGE))
     return TaskParams(
-        track_update_ms=_lerp(_TRACK_UPDATE_EASY_MS, _TRACK_UPDATE_HARD_MS, d),
-        track_joystick_force=_lerp(_TRACK_FORCE_EASY, _TRACK_FORCE_HARD, d),
-        resman_loss_a_per_min=_resman_leak(d),
-        resman_loss_b_per_min=_resman_leak(d),
-        comms_rate_hz=_lerp(_COMMS_RATE_EASY_HZ, _COMMS_RATE_HARD_HZ, d),
-        sysmon_light_rate_hz=_lerp(_SYSMON_RATE_EASY_HZ, _SYSMON_RATE_HARD_HZ, d),
-        sysmon_scale_rate_hz=_lerp(_SYSMON_RATE_EASY_HZ, _SYSMON_RATE_HARD_HZ, d),
-        resman_pump_rate_hz=_lerp(
-            _RESMAN_PUMP_RATE_EASY_HZ, _RESMAN_PUMP_RATE_HARD_HZ, d
-        ),
+        track_update_ms=_lerp(_TRACK_UPDATE_EASY_MS, _TRACK_UPDATE_HARD_MS, t_track),
+        track_joystick_force=_lerp(_TRACK_FORCE_EASY, _TRACK_FORCE_HARD, t_track),
+        resman_loss_a_per_min=_log_drain(d),
+        resman_loss_b_per_min=_log_drain(d),
+        comms_rate_hz=_log_rate(_COMMS_RATE_MIN_HZ, _COMMS_RATE_MAX_HZ, d),
+        sysmon_light_rate_hz=_log_rate(_SYSMON_RATE_MIN_HZ, _SYSMON_RATE_MAX_HZ, d),
+        sysmon_scale_rate_hz=_log_rate(_SYSMON_RATE_MIN_HZ, _SYSMON_RATE_MAX_HZ, d),
+        resman_pump_rate_hz=_log_rate(_PUMP_RATE_MIN_HZ, _PUMP_RATE_MAX_HZ, d),
     )
 
 
@@ -190,9 +200,13 @@ class DifficultyState:
         d_max: float = 1.0,
         seed: Optional[int] = None,
     ) -> None:
-        if not (0.0 <= d_min <= d_max <= 1.0):
+        # d_min / d_max can be outside [0, 1] when the staircase needs to find
+        # a threshold for very easy (d_min < 0) or ceiling (d_max > 1)
+        # participants.  make_task_params() extrapolates linearly and applies
+        # physical floors/ceilings to keep all output values valid.
+        if d_min > d_max:
             raise ValueError(
-                f"Invalid difficulty bounds: d_min={d_min}, d_max={d_max}"
+                f"Invalid difficulty bounds: d_min={d_min} > d_max={d_max}"
             )
 
         self.d_min = d_min
@@ -202,7 +216,7 @@ class DifficultyState:
         # Initialised in update()
         self.d: float = 0.0
         self.d_prev: float = 0.0
-        self.params: TaskParams = _make_params(0.5)
+        self.params: TaskParams = make_task_params(0.5)
 
         self.update(d_init)
 
@@ -215,7 +229,7 @@ class DifficultyState:
         """
         self.d_prev = self.d
         self.d = max(self.d_min, min(self.d_max, float(d_new)))
-        self.params = _make_params(self.d)
+        self.params = make_task_params(self.d)
 
     def as_dict(self) -> dict:
         """Return a fully serialisable snapshot for structured logging."""
