@@ -24,3 +24,5 @@ Open or unresolved questions must live in `open_decisions.md`.
 | DC-10 | Warm-start weak L2 (C=0.1) is the best LogReg personalisation | Modelling | Final | [dc_logreg_personalisation_comparison.md](modelling/dc_logreg_personalisation_comparison.md) |
 | DC-11 | 120 s per label is best for offline TSST controller simulation | Adaptation | Final (corrected 2026-03-16) | [dc_calibration_duration.md](adaptation/dc_calibration_duration.md) |
 | DC-12 | Resting EEG baseline before familiarisation | Study design | Final | [dc_resting_baseline_placement.md](study_design/dc_resting_baseline_placement.md) |
+| DC-13 | Log-scale event rates with symmetric difficulty extrapolation (delta=0.8) | Adaptation | Current (revisable) | [dc_difficulty_parameter_scaling.md](adaptation/dc_difficulty_parameter_scaling.md) |
+| DC-14 | Staircase convergence target = 0.90 (not 0.70) | Adaptation | Current | [dc_staircase_target_score.md](adaptation/dc_staircase_target_score.md) |
