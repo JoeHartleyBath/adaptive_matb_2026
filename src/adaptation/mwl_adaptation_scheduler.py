@@ -11,7 +11,7 @@ tracking-task assistance.
 ║                                                                    ║
 ║  • Overload detected  (MWL > threshold) → assistance ON            ║
 ║    Tracking becomes easier by reducing difficulty by the            ║
-║    HIGH → MODERATE calibration delta (Δd = 0.30 by default).       ║
+║    HIGH → MODERATE calibration delta (Δd = 0.80 by default).       ║
 ║                                                                    ║
 ║  • Overload resolved  (MWL < threshold) → assistance OFF           ║
 ║    Tracking returns to its baseline (scenario-set) difficulty.      ║
@@ -85,6 +85,8 @@ from adaptation.difficulty_state import (
     _TRACK_FORCE_EASY,
     _TRACK_FORCE_HARD,
     _lerp,
+    _D_LOG_MIN,
+    _D_LOG_RANGE,
 )
 
 
@@ -114,7 +116,7 @@ class MwlAdaptationConfig:
     # calibration levels.
     # Maps to: taskupdatetime += 12 ms (slower cursor = easier),
     #          joystickforce  += 0.6  (stronger correction = easier).
-    assistance_d_delta: float = 0.30
+    assistance_d_delta: float = 0.80
 
     # Baseline difficulty level.  Set from staircase calibration output.
     # Used to compute baseline and assisted tracking parameters.
@@ -229,6 +231,15 @@ class MwlAdaptationScheduler(Scheduler):
         if cfg.audit_csv_path:
             self._audit_logger = AdaptationLogger(cfg.audit_csv_path)
             self._audit_logger.open()
+
+        # ── Adaptation-event LSL outlet ──────────────────────────────
+        # Publishes "assist_on" / "assist_off" as string markers so that
+        # LabRecorder captures them in the XDF file alongside physio data.
+        _outlet_info = pylsl.StreamInfo(
+            "AdaptationEvents", "Markers", 1, 0,
+            pylsl.cf_string, "AdaptationEvents",
+        )
+        self._event_outlet: pylsl.StreamOutlet = pylsl.StreamOutlet(_outlet_info)
 
         # ── Apply baseline tracking params ───────────────────────────
         self._actuate_tracking()
@@ -456,6 +467,7 @@ class MwlAdaptationScheduler(Scheduler):
                 f"smoothed={self._mwl_smoothed:.3f}  {reason}",
                 flush=True,
             )
+            self._event_outlet.push_sample([action])
 
         # Recompute cooldown after potential action for audit log
         cooldown_remaining = max(0.0, self._cooldown_end_t - t)
@@ -490,18 +502,47 @@ class MwlAdaptationScheduler(Scheduler):
         """
         if "track" not in self.plugins:
             return
+        track = self.plugins["track"]
         if self._assistance_on:
-            self.plugins["track"].set_parameter(
+            # Snapshot the scenario-current baseline before overwriting.
+            # The scenario fires block-transition events (e.g. track;taskupdatetime;10)
+            # via super().update() before our policy runs, so track.parameters holds
+            # the correct value for the current block at this moment.
+            try:
+                self._baseline_update_ms = float(track.parameters["taskupdatetime"])
+                self._baseline_force = float(track.parameters["joystickforce"])
+            except (KeyError, TypeError, AttributeError):
+                pass  # retain compiled value if parameters dict unavailable
+            # Recompute assisted params for this block so the relief is a
+            # consistent Δd = assistance_d_delta regardless of which block
+            # level triggered the assist.
+            # 1. Invert t_track from the snapshotted baseline_ms.
+            # 2. Recover d_current in the [-0.8, +1.8] scale.
+            # 3. Shift by Δd (clamped so t_assisted stays in [0, 1]).
+            _t_baseline = (
+                (_TRACK_UPDATE_EASY_MS - self._baseline_update_ms)
+                / (_TRACK_UPDATE_EASY_MS - _TRACK_UPDATE_HARD_MS)
+            )
+            _d_current = _t_baseline * _D_LOG_RANGE + _D_LOG_MIN
+            _d_assisted = _d_current - self._adapt_cfg.assistance_d_delta
+            _t_assisted = max(0.0, min(1.0, (_d_assisted - _D_LOG_MIN) / _D_LOG_RANGE))
+            self._assisted_update_ms = _lerp(
+                _TRACK_UPDATE_EASY_MS, _TRACK_UPDATE_HARD_MS, _t_assisted,
+            )
+            self._assisted_force = _lerp(
+                _TRACK_FORCE_EASY, _TRACK_FORCE_HARD, _t_assisted,
+            )
+            track.set_parameter(
                 "taskupdatetime", int(round(self._assisted_update_ms)),
             )
-            self.plugins["track"].set_parameter(
+            track.set_parameter(
                 "joystickforce", float(self._assisted_force),
             )
         else:
-            self.plugins["track"].set_parameter(
+            track.set_parameter(
                 "taskupdatetime", int(round(self._baseline_update_ms)),
             )
-            self.plugins["track"].set_parameter(
+            track.set_parameter(
                 "joystickforce", float(self._baseline_force),
             )
 
