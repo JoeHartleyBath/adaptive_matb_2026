@@ -33,7 +33,7 @@ import math
 import random
 import unittest
 
-from adaptation.difficulty_state import DifficultyState, _resman_leak
+from adaptation.difficulty_state import DifficultyState, _log_drain
 from adaptation.staircase_controller import StaircaseController
 from adaptation.event_generators import PoissonEventGenerator, build_standard_generators
 
@@ -80,11 +80,14 @@ class TestDifficultyState(unittest.TestCase):
         state.update(-0.3)
         self.assertAlmostEqual(state.d, 0.2)
 
-    def test_resman_leak_key_values(self):
-        # Matches expected values from generate_pilot_scenarios.py
-        self.assertEqual(_resman_leak(0.20), 240)   # 1200*0.20 = 240, no offset
-        self.assertEqual(_resman_leak(0.55), 560)   # 1200*0.55=660, -100=560
-        self.assertEqual(_resman_leak(0.95), 940)   # 1200*0.95=1140, -100-100=940
+    def test_log_drain_key_values(self):
+        # Log scale: 50 ml/min at d=-0.8, 400 ml/min at d=+1.8
+        # (capped below the 600 ml/min naive-participant sustainable max)
+        self.assertEqual(_log_drain(-0.8), 50)
+        self.assertEqual(_log_drain(1.8), 400)
+        # Monotonically increasing
+        self.assertLess(_log_drain(0.0), _log_drain(0.5))
+        self.assertLess(_log_drain(0.5), _log_drain(1.0))
 
     def test_as_dict_is_serialisable(self):
         import json

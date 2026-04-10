@@ -34,7 +34,7 @@ and end the block.
 
 Usage
 -----
-    ctrl = StaircaseController(target_score=0.70, window_sec=45.0)
+    ctrl = StaircaseController(target_score=0.90, window_sec=45.0)
     ctrl.push_performance(t=12.3, score=0.85)
     ...
     delta = ctrl.tick(t=50.0)   # returns +step, −step, or None
@@ -64,7 +64,7 @@ class StaircaseController:
     Parameters
     ----------
     target_score:
-        Desired normalised performance level in [0, 1].  Default 0.70.
+        Desired normalised performance level in [0, 1].  Default 0.90.
     tolerance:
         Half-width of the dead band around *target_score*; no step is taken
         when |window_mean − target| ≤ tolerance.  Default 0.05.
@@ -93,7 +93,7 @@ class StaircaseController:
 
     def __init__(
         self,
-        target_score: float = 0.70,
+        target_score: float = 0.85,
         tolerance: float = 0.05,
         window_sec: float = 45.0,
         min_samples: int = 3,
@@ -105,6 +105,8 @@ class StaircaseController:
         step_down: float = 0.0,
         n_reversals_to_halve: int = 0,
         min_step: float = 0.0,
+        no_step_timeout_sec: float = 120.0,
+        boundary_convergence_sec: float = 60.0,
     ) -> None:
         if not (0.0 <= target_score <= 1.0):
             raise ValueError(f"target_score must be in [0, 1]; got {target_score}")
@@ -126,6 +128,10 @@ class StaircaseController:
         self._stable_ticks_at_final_step: int = 0    # consecutive no-step ticks at finest step
         self._converged: bool = False
         self._boundary_ticks: int = 0                # consecutive ticks clamped at d_min/d_max
+        self._boundary_since_t: Optional[float] = None  # time of first boundary tick
+        self._boundary_convergence_sec: float = boundary_convergence_sec
+        self._d_stable_since_t: Optional[float] = None  # time of first in-band tick this run
+        self._no_step_timeout_sec: float = no_step_timeout_sec
 
         self._buffer: Deque[_Sample] = deque()
         self._last_step_t: float = -999.0
@@ -147,17 +153,19 @@ class StaircaseController:
             self._first_sample_t = float(t)
         self._buffer.append(_Sample(t=float(t), score=float(score)))
 
-    def notify_boundary(self) -> None:
+    def notify_boundary(self, t: float) -> None:
         """Signal that the last requested step was clamped at d_min or d_max.
 
         Called by the scheduler when it tries to apply a delta but d doesn't
-        move (ceiling or floor hit).  After *stable_ticks_required* consecutive
-        boundary ticks, declares convergence so the session ends cleanly.
+        move (ceiling or floor hit).  After *boundary_convergence_sec* seconds
+        stuck at the boundary, declares convergence so the session ends cleanly.
         """
         if self._converged:
             return
         self._boundary_ticks += 1
-        if self._boundary_ticks >= self.stable_ticks_required:
+        if self._boundary_since_t is None:
+            self._boundary_since_t = t
+        elif (t - self._boundary_since_t) >= self._boundary_convergence_sec:
             self._converged = True
 
     def tick(self, t: float) -> Optional[float]:
@@ -209,17 +217,22 @@ class StaircaseController:
             direction = -1
         else:
             # Score is within the dead band — no step.
-            # Count stability only once we are on the final fine step.
+            # Normal convergence: must reach the finest step (2 reversals) first.
             if at_final_step:
                 self._stable_ticks_at_final_step += 1
                 if self._stable_ticks_at_final_step >= self.stable_ticks_required:
                     self._converged = True
+            # Timeout fallback: if no step has fired for no_step_timeout_sec,
+            # d is stable enough — declare convergence regardless of schedule position.
+            if self._d_stable_since_t is None:
+                self._d_stable_since_t = t
+            elif (t - self._d_stable_since_t) >= self._no_step_timeout_sec:
+                self._converged = True
             return None
 
-        # A step will fire.
-        # If we're already at the final step, reset the stability counter.
-        if at_final_step:
-            self._stable_ticks_at_final_step = 0
+        # A step will fire — reset stability counters.
+        self._stable_ticks_at_final_step = 0
+        self._d_stable_since_t = None
 
         # Reversal detection: advance the step schedule on each direction flip.
         if self._last_direction is not None and direction != self._last_direction:
@@ -230,8 +243,9 @@ class StaircaseController:
         self._last_direction = direction
         self._last_step_t = t
 
-        # A non-clamped step is about to fire — reset boundary counter.
+        # A non-clamped step is about to fire — reset boundary counters.
         self._boundary_ticks = 0
+        self._boundary_since_t = None
 
         current_step = self._step_schedule[self._schedule_idx]
         return current_step if direction == +1 else -current_step
@@ -290,6 +304,8 @@ class StaircaseController:
             "stable_ticks_required": self.stable_ticks_required,
             "stable_ticks_at_final_step": self._stable_ticks_at_final_step,
             "boundary_ticks": self._boundary_ticks,
+            "boundary_since_t": round(self._boundary_since_t, 3) if self._boundary_since_t is not None else None,
+            "d_stable_since_t": round(self._d_stable_since_t, 3) if self._d_stable_since_t is not None else None,
             "converged": self._converged,
             "n_samples": len(self._buffer),
             "window_mean": (
