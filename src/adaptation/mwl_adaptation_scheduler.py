@@ -186,17 +186,24 @@ class MwlAdaptationScheduler(Scheduler):
         # from the calibrated difficulty level and the assistance delta.
         d_assisted = max(0.0, cfg.baseline_d - cfg.assistance_d_delta)
 
+        # Normalize d values to t ∈ [0, 1] before passing to _lerp.
+        # _lerp(easy, hard, d) treats its third arg as t ∈ [0,1]; the raw d
+        # value from the staircase lives in [-0.8, 1.8] and must be mapped
+        # via t = (d - D_LOG_MIN) / D_LOG_RANGE first (matches make_task_params).
+        t_baseline = max(0.0, min(1.0, (cfg.baseline_d - _D_LOG_MIN) / _D_LOG_RANGE))
+        t_assisted = max(0.0, min(1.0, (d_assisted    - _D_LOG_MIN) / _D_LOG_RANGE))
+
         self._baseline_update_ms: float = _lerp(
-            _TRACK_UPDATE_EASY_MS, _TRACK_UPDATE_HARD_MS, cfg.baseline_d,
+            _TRACK_UPDATE_EASY_MS, _TRACK_UPDATE_HARD_MS, t_baseline,
         )
         self._baseline_force: float = _lerp(
-            _TRACK_FORCE_EASY, _TRACK_FORCE_HARD, cfg.baseline_d,
+            _TRACK_FORCE_EASY, _TRACK_FORCE_HARD, t_baseline,
         )
         self._assisted_update_ms: float = _lerp(
-            _TRACK_UPDATE_EASY_MS, _TRACK_UPDATE_HARD_MS, d_assisted,
+            _TRACK_UPDATE_EASY_MS, _TRACK_UPDATE_HARD_MS, t_assisted,
         )
         self._assisted_force: float = _lerp(
-            _TRACK_FORCE_EASY, _TRACK_FORCE_HARD, d_assisted,
+            _TRACK_FORCE_EASY, _TRACK_FORCE_HARD, t_assisted,
         )
 
         # ── Assistance state ─────────────────────────────────────────

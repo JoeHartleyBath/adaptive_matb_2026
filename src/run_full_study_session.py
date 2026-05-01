@@ -35,6 +35,7 @@ The script pauses for operator confirmation between major phases.
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import socket
 import subprocess
@@ -124,6 +125,62 @@ def _ensure_labrecorder_running(host: str = "127.0.0.1", port: int = 22345, time
 
 
 # ---------------------------------------------------------------------------
+# Holding screen (participant monitor)
+# ---------------------------------------------------------------------------
+
+_HOLDING_SCREEN_PROC: subprocess.Popen | None = None
+_HOLDING_SCREEN_SCRIPT = _REPO_ROOT / "scripts" / "session" / "holding_screen.py"
+
+
+def _read_matb_screen_index() -> int:
+    """Read screen_index from src/vendor/openmatb/config.ini."""
+    import configparser
+    cfg_path = _REPO_ROOT / "src" / "vendor" / "openmatb" / "config.ini"
+    try:
+        cp = configparser.ConfigParser()
+        cp.read(str(cfg_path), encoding="utf-8")
+        return cp.getint("Openmatb", "screen_index", fallback=1)
+    except Exception:
+        return 1
+
+
+def _start_holding_screen(python: str) -> None:
+    """Launch the holding screen subprocess on the participant monitor."""
+    global _HOLDING_SCREEN_PROC
+    if not _HOLDING_SCREEN_SCRIPT.exists():
+        print("  [holding screen] Script not found — skipping.")
+        return
+    screen_idx = _read_matb_screen_index()
+    try:
+        _HOLDING_SCREEN_PROC = subprocess.Popen(
+            [python, str(_HOLDING_SCREEN_SCRIPT), str(screen_idx)],
+            close_fds=True,
+        )
+        print(f"  [holding screen] Started on screen {screen_idx} (PID {_HOLDING_SCREEN_PROC.pid}).")
+    except Exception as exc:
+        print(f"  WARNING: Could not start holding screen: {exc}")
+
+
+def _stop_holding_screen() -> None:
+    """Terminate the holding screen subprocess."""
+    global _HOLDING_SCREEN_PROC
+    if _HOLDING_SCREEN_PROC is not None:
+        try:
+            _HOLDING_SCREEN_PROC.terminate()
+            _HOLDING_SCREEN_PROC.wait(timeout=3)
+        except Exception:
+            try:
+                _HOLDING_SCREEN_PROC.kill()
+            except Exception:
+                pass
+        _HOLDING_SCREEN_PROC = None
+        print("  [holding screen] Stopped.")
+
+
+atexit.register(_stop_holding_screen)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -179,6 +236,44 @@ def _smoke_test_dual_eeg_inlet(stream_substr: str = "eego", timeout_s: float = 1
     return all_ok
 
 
+def _require_eeg_streams(ctx: dict) -> None:
+    """Block until both EEG data streams are confirmed live, or operator overrides.
+
+    Calls _smoke_test_dual_eeg_inlet() in a loop.  On failure, offers the
+    operator the chance to fix the issue and retry before allowing the task
+    to launch.  With --no-pause (dry-run/verification mode), auto-continues.
+
+    This is the gate that prevents calibration and condition runs from
+    launching when EEG streaming has silently dropped.
+    """
+    if ctx.get("verification"):
+        return  # dry-run / verification mode: skip EEG check
+
+    while True:
+        if _smoke_test_dual_eeg_inlet():
+            return  # both streams confirmed live
+
+        if _NO_PAUSE:
+            print("  (--no-pause: continuing despite EEG stream check failure)")
+            return
+
+        print("\n  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("  EEG STREAM CHECK FAILED — do NOT start the task yet.")
+        print("  Check eego software: are both amplifiers streaming?")
+        print("  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print()
+        print("  R  Retry — after restarting eego / reconnecting amplifiers")
+        print("  C  Continue anyway (EEG data will be missing or incomplete)")
+        print()
+        choice = ""
+        while choice not in ("C", "R"):
+            choice = input("  Your choice [C/R]: ").strip().upper()
+        if choice == "C":
+            print("  WARNING: Continuing with EEG stream check failed. EEG data may be lost.")
+            return
+        # R — loop back and retry
+
+
 def _load_participant_config(pid: str) -> dict:
     """Load participant entry from participant_assignments.yaml."""
     with _ASSIGNMENTS_PATH.open(encoding="utf-8") as fh:
@@ -221,15 +316,12 @@ def _run(cmd: list[str], label: str, allow_fail: bool = False, **kwargs) -> subp
     If allow_fail is True, prints a warning and returns the result for the caller to handle.
     """
     print(f"\n>>> [{label}]")
-    print(f"    {' '.join(cmd)}")
     result = subprocess.run(cmd, **kwargs)
     if result.returncode != 0:
         if allow_fail:
             print(f"\n  WARNING: [{label}] exited with code {result.returncode} (continuing).")
         else:
             sys.exit(f"\n!!! [{label}] failed with exit code {result.returncode}")
-    else:
-        print(f"    [{label}] OK")
     return result
 
 
@@ -284,10 +376,64 @@ def _find_rest_xdf(ctx: dict, acq: str = "rest") -> Path | None:
     return candidates[-1]
 
 
+def _run_eeg_quality_check(xdf_path: Path, ctx: dict) -> bool:
+    """Run check_eeg_signal.py on *xdf_path*. Returns True (GO) or False (NO-GO)."""
+    result = _run(
+        [
+            ctx["python"],
+            str(ctx["repo_root"] / "scripts" / "session" / "check_eeg_signal.py"),
+            "--xdf", str(xdf_path),
+        ],
+        "EEG signal quality check",
+        allow_fail=True,
+    )
+    return result.returncode == 0
+
+
+def _subphase_cr_prompt(label: str) -> str:
+    """Print a C/R/Q menu after a subphase verification issue.
+
+    Returns ``'C'`` (continue), ``'R'`` (rerun), or ``'Q'`` (quit).
+    Respects ``_NO_PAUSE``: auto-returns ``'C'`` in dry-run/automated mode.
+    """
+    if _NO_PAUSE:
+        print(f"  (--no-pause: auto-continuing after {label} issue)")
+        return "C"
+    print("\n  ---------------------------------------------------------")
+    print(f"  Subphase issue: {label}")
+    print("  C  Continue -- accept recording with noted issues")
+    print("  R  Rerun    -- re-seat/re-check, then repeat this subphase")
+    print("  Q  Quit     -- abort session (data needs manual review)")
+    print("  ---------------------------------------------------------")
+    choice = ""
+    while choice not in ("C", "R", "Q"):
+        choice = input("  Your choice [C/R/Q]: ").strip().upper()
+    return choice
+
+
+def _rename_xdf_old(xdf_path: Path) -> Path:
+    """Rename *xdf_path* to ``<stem>_old_N.xdf`` (N incremented until unused).
+
+    Returns the new path.  calibrate_participant.py already filters ``*_old*``
+    files so renamed XDFs are automatically excluded from model training.
+    """
+    parent = xdf_path.parent
+    stem = xdf_path.stem
+    n = 1
+    while True:
+        new_path = parent / f"{stem}_old_{n}.xdf"
+        if not new_path.exists():
+            break
+        n += 1
+    xdf_path.rename(new_path)
+    print(f"  Archived bad XDF: {xdf_path.name} -> {new_path.name}")
+    return new_path
+
+
 def _find_latest_session_csv(ctx: dict) -> Path:
     """Find the most recent session CSV from manifests in the sessions dir."""
     sessions_dir = ctx["session_data_dir"] / "sessions"
-    manifests = sorted(sessions_dir.glob("**/*.manifest.json"))
+    manifests = sorted(sessions_dir.glob("**/*.manifest.json"), key=lambda p: p.stat().st_mtime)
     if not manifests:
         sys.exit(f"ERROR: No manifests found in {sessions_dir}")
     # Use the last manifest (most recent run)
@@ -334,6 +480,7 @@ def phase_rest_baseline(ctx: dict) -> None:
         "   and try not to blink or move for 2 minutes.'\n"
         "  Press ENTER when participant is settled and ready."
     )
+    _require_eeg_streams(ctx)
     cmd = _openmatb_base_cmd(ctx) + ["--only-scenario", "rest_baseline.txt"]
     if ctx["labrecorder_rcs"]:
         cmd += ["--labrecorder-acq", "rest"]
@@ -343,11 +490,55 @@ def phase_rest_baseline(ctx: dict) -> None:
     # Only resolvable when LabRecorder is active.
     if ctx["labrecorder_rcs"]:
         rest_xdf = _find_rest_xdf(ctx)
-        if rest_xdf:
+        if not rest_xdf:
+            print("  WARNING: Rest baseline XDF not found — norm will fall back to LOW block.")
+        else:
             ctx["rest_baseline_xdf"] = rest_xdf
             print(f"  Rest XDF: {rest_xdf}")
-        else:
-            print("  WARNING: Rest baseline XDF not found — norm will fall back to LOW block.")
+
+            # EEG signal quality check — loop until GO or operator override.
+            while True:
+                check = _run(
+                    [
+                        ctx["python"],
+                        str(ctx["repo_root"] / "scripts" / "session" / "check_eeg_signal.py"),
+                        "--xdf", str(rest_xdf),
+                    ],
+                    "EEG signal check",
+                    allow_fail=True,
+                )
+                if check.returncode == 0:
+                    break  # GO — proceed to calibration
+
+                # NO-GO — check script has already printed the flagged channels.
+                if _NO_PAUSE:
+                    print("  (--no-pause: auto-continuing despite flagged channels)")
+                    break
+
+                print("\n  ─────────────────────────────────────────────────────────")
+                print("  C  Continue to calibration anyway")
+                print("  R  Re-seat electrode(s), then re-run the 2-min rest baseline")
+                print("  ─────────────────────────────────────────────────────────")
+                choice = ""
+                while choice not in ("C", "R"):
+                    choice = input("  Your choice [C/R]: ").strip().upper()
+
+                if choice == "C":
+                    print("  Continuing despite flagged channel(s).")
+                    break
+
+                # R — participant stays seated; re-run baseline immediately.
+                print("  Instruct participant to stay seated and keep eyes on the cross.")
+                cmd_rest = _openmatb_base_cmd(ctx) + ["--only-scenario", "rest_baseline.txt"]
+                if ctx["labrecorder_rcs"]:
+                    cmd_rest += ["--labrecorder-acq", "rest"]
+                _run(cmd_rest, "Rest baseline (re-run)")
+                rest_xdf = _find_rest_xdf(ctx)
+                if rest_xdf is None:
+                    print("  WARNING: No XDF found after re-run — skipping signal check.")
+                    break
+                ctx["rest_baseline_xdf"] = rest_xdf
+                print(f"  Rest XDF: {rest_xdf}")
 
 
 def phase_staircase(ctx: dict) -> None:
@@ -441,17 +632,90 @@ def phase_calibration_runs(ctx: dict) -> None:
     print("\n" + "=" * 60)
     print("  PHASE 5: CALIBRATION RUNS")
     print("=" * 60)
+    phys_dir = (
+        ctx["output_root"] / "physiology"
+        / f"sub-{ctx['pid']}" / f"ses-{ctx['session']}" / "physio"
+    )
     for condition in (1, 2):
         scenario = ctx[f"calibration_scenario_c{condition}"]
-        cmd = _openmatb_base_cmd(ctx) + [
-            "--only-scenario", scenario,
-            "--skip-stream-check",
-        ]
-        if ctx["labrecorder_rcs"]:
-            cmd += ["--labrecorder-acq", f"cal_c{condition}"]
-        _run(cmd, f"Calibration run C{condition}: {scenario}")
-        if condition == 1:
-            _pause("Calibration run 1 complete. Collect TLX, then continue.")
+        while True:
+            _require_eeg_streams(ctx)
+            cmd = _openmatb_base_cmd(ctx) + [
+                "--only-scenario", scenario,
+                "--skip-stream-check",
+            ]
+            if ctx["labrecorder_rcs"]:
+                cmd += ["--labrecorder-acq", f"cal_c{condition}"]
+            _run(cmd, f"Calibration run C{condition}: {scenario}")
+            try:
+                ctx[f"cal_c{condition}_csv"] = _find_latest_session_csv(ctx)
+            except Exception as _exc:
+                print(f"  WARNING: Could not capture cal C{condition} session CSV: {_exc}")
+
+            if not ctx["labrecorder_rcs"]:
+                # No XDF expected — skip all checks.
+                if condition == 1:
+                    _pause("Calibration run 1 complete. TLX shown on screen — wait for participant to finish, then continue.")
+                break
+
+            # --- Subphase checkpoint: verify the calibration XDF ---
+            candidates = sorted(
+                phys_dir.glob(f"*acq-cal_c{condition}*.xdf"),
+                key=lambda p: p.stat().st_mtime,
+            ) if phys_dir.exists() else []
+
+            issues: list[str] = []
+
+            if not candidates:
+                issues.append(f"No *acq-cal_c{condition}*.xdf found in {phys_dir}")
+            else:
+                xdf_path = candidates[-1]
+                print(f"\n  Cal C{condition} XDF: {xdf_path.name}")
+                try:
+                    import pyxdf as _pyxdf
+                    _streams, _ = _pyxdf.load_xdf(str(xdf_path))
+                    _dur = None
+                    for _s in _streams:
+                        _ts = _s.get("time_stamps")
+                        if _ts is not None and len(_ts) >= 2:
+                            _dur = float(_ts[-1] - _ts[0])
+                            break
+                    if _dur is not None:
+                        if abs(_dur - 540.0) <= 45.0:
+                            print(f"  Duration: {_dur:.1f} s  [OK]")
+                        else:
+                            issues.append(f"Duration {_dur:.1f} s (expected 540 +/- 45 s)")
+                    _marker_streams = [_s for _s in _streams if _s["info"]["type"][0] == "Markers"]
+                    if _marker_streams:
+                        _n_ev = sum(len(_s.get("time_series", [])) for _s in _marker_streams)
+                        print(f"  Markers: {len(_marker_streams)} stream(s), {_n_ev} event(s)  [OK]")
+                    else:
+                        issues.append("No Markers stream — block timing will be unreliable")
+                except Exception as _exc:
+                    issues.append(f"Could not inspect XDF: {_exc}")
+
+                eeg_ok = _run_eeg_quality_check(xdf_path, ctx)
+                if not eeg_ok:
+                    issues.append("EEG signal quality check failed (see channel report above)")
+
+            if not issues:
+                if condition == 1:
+                    _pause("Calibration run 1 complete. TLX shown on screen — wait for participant to finish, then continue.")
+                break  # accept recording
+
+            print(f"\n  Cal C{condition} issues ({len(issues)}):")
+            for _iss in issues:
+                print(f"    - {_iss}")
+            choice = _subphase_cr_prompt(f"Cal C{condition}")
+            if choice == "C":
+                if condition == 1:
+                    _pause("Calibration run 1 complete. TLX shown on screen — wait for participant to finish, then continue.")
+                break
+            elif choice == "Q":
+                sys.exit(f"Session aborted by operator at Cal C{condition} checkpoint.")
+            # "R": archive the bad XDF and loop back to rerun the scenario.
+            if candidates:
+                _rename_xdf_old(candidates[-1])
 
 
 def phase_model_calibration(ctx: dict) -> None:
@@ -481,16 +745,13 @@ def phase_model_calibration(ctx: dict) -> None:
     model_out = ctx["model_out_dir"]
 
     calibrate_cmd = [
-        py, str(ctx["repo_root"] / "scripts" / "calibrate_participant.py"),
+        py, str(ctx["repo_root"] / "scripts" / "session" / "calibrate_participant.py"),
         "calibrate",
-        "--scratch",   # 3-class; fits own selector + scaler on this participant's MATB cal data
         "--xdf-dir", str(xdf_dir),
         "--pid", pid,
         "--out-dir", str(model_out),
     ]
     # Resting XDF (Phase 1) provides the outer feature normalisation reference.
-    # Even in scratch mode the first normalisation step uses rest vs task contrast;
-    # the inner StandardScaler is then fit on those already-normalised features.
     rest_xdf = ctx.get("rest_baseline_xdf")
     if rest_xdf and rest_xdf.exists():
         calibrate_cmd += ["--resting-xdf", str(rest_xdf)]
@@ -498,7 +759,7 @@ def phase_model_calibration(ctx: dict) -> None:
     else:
         print("  No resting XDF — norm stats will use LOW block fallback.")
 
-    _run(calibrate_cmd, "Calibrate participant model (scratch 3-class)")
+    _run(calibrate_cmd, "Calibrate participant model (3-class)")
     ctx["participant_model_dir"] = model_out
 
     # Read the Youden J threshold written by the calibration script.
@@ -526,33 +787,52 @@ def phase_pre_adaptation_baseline(ctx: dict) -> None:
         "   focus on the fixation cross, and try not to move for 1 minute.'\n"
         "  Press ENTER when participant is ready."
     )
-    cmd = _openmatb_base_cmd(ctx) + ["--only-scenario", "rest_baseline.txt"]
-    if ctx["labrecorder_rcs"]:
-        cmd += ["--labrecorder-acq", "rest_adapt"]
-    _run(cmd, "Pre-adaptation rest baseline")
-
-    # Locate the fresh XDF and refresh norm_stats.json
+    _require_eeg_streams(ctx)
     model_dir = ctx.get("participant_model_dir")
-    if not (ctx["labrecorder_rcs"] and model_dir):
-        print("  Skipping baseline refresh: no LabRecorder or model dir.")
-        return
+    while True:
+        cmd = _openmatb_base_cmd(ctx) + ["--only-scenario", "rest_baseline.txt"]
+        if ctx["labrecorder_rcs"]:
+            cmd += ["--labrecorder-acq", "rest_adapt"]
+        _run(cmd, "Pre-adaptation rest baseline")
 
-    rest_xdf = _find_rest_xdf(ctx, acq="rest_adapt")
-    if not rest_xdf:
-        print("  WARNING: Pre-adaptation rest XDF not found — norm_stats.json NOT refreshed.")
-        return
+        # Locate the fresh XDF and refresh norm_stats.json
+        if not (ctx["labrecorder_rcs"] and model_dir):
+            print("  Skipping baseline refresh: no LabRecorder or model dir.")
+            break
 
-    _run(
-        [
-            ctx["python"],
-            str(ctx["repo_root"] / "scripts" / "update_session_baseline.py"),
-            "--xdf", str(rest_xdf),
-            "--model-dir", str(model_dir),
-            "--duration", "60",
-        ],
-        "Refresh norm_stats.json from pre-adaptation baseline",
-    )
-    print(f"  norm_stats.json refreshed — MWL estimator will use new baseline.")
+        rest_xdf = _find_rest_xdf(ctx, acq="rest_adapt")
+        if not rest_xdf:
+            print("  WARNING: Pre-adaptation rest XDF not found — norm_stats.json NOT refreshed.")
+            break
+
+        _run(
+            [
+                ctx["python"],
+                str(ctx["repo_root"] / "scripts" / "session" / "update_session_baseline.py"),
+                "--xdf", str(rest_xdf),
+                "--model-dir", str(model_dir),
+                "--duration", "60",
+            ],
+            "Refresh norm_stats.json from pre-adaptation baseline",
+        )
+        print(f"  norm_stats.json refreshed — MWL estimator will use new baseline.")
+
+        # --- Subphase checkpoint: EEG signal quality on the fresh baseline ---
+        eeg_ok = _run_eeg_quality_check(rest_xdf, ctx)
+        if eeg_ok:
+            break  # all good
+
+        choice = _subphase_cr_prompt("Pre-adaptation baseline")
+        if choice == "C":
+            break
+        elif choice == "Q":
+            sys.exit("Session aborted by operator at pre-adaptation baseline checkpoint.")
+        # "R": archive the bad XDF and repeat the 1-minute recording.
+        _rename_xdf_old(rest_xdf)
+        _pause(
+            "Re-seating electrodes — instruct participant to sit quietly again.\n"
+            "  Press ENTER when ready to repeat the 1-minute baseline."
+        )
 
 
 def phase_experimental_conditions(ctx: dict) -> None:
@@ -563,38 +843,133 @@ def phase_experimental_conditions(ctx: dict) -> None:
     print("=" * 60)
     scenario = ctx["adaptation_scenario"]
 
-    # Smoke-test both EEG amps before any scenario launch (fast fail)
-    if "adaptation" in ctx["condition_order"] and not ctx.get("skip_smoke_test"):
-        if not _smoke_test_dual_eeg_inlet():
-            sys.exit("Aborted: EEG dual-inlet smoke test failed. Fix EEG streams and re-run.")
+    # Confirm both EEG streams are live before any condition scenario launches.
+    _require_eeg_streams(ctx)
 
+    phys_dir = (
+        ctx["output_root"] / "physiology"
+        / f"sub-{ctx['pid']}" / f"ses-{ctx['session']}" / "physio"
+    )
     for i, condition in enumerate(ctx["condition_order"], 1):
         label = f"Condition {i}/{len(ctx['condition_order'])}: {condition}"
-        cmd = _openmatb_base_cmd(ctx) + ["--only-scenario", scenario, "--skip-stream-check"]
+        while True:
+            cmd = _openmatb_base_cmd(ctx) + ["--only-scenario", scenario, "--skip-stream-check"]
 
-        if condition == "adaptation":
-            cmd += [
-                "--mwl-adaptation",
-                "--mwl-model-dir", str(ctx["participant_model_dir"]),
-                "--mwl-audit-csv", str(ctx["audit_csv"]),
-            ]
-            if ctx.get("mwl_threshold") is not None:
-                cmd += ["--mwl-threshold", f"{ctx['mwl_threshold']:.6f}"]
-            if ctx.get("d_final") is not None:
-                cmd += ["--mwl-baseline-d", f"{ctx['d_final']:.4f}"]
-        if ctx["labrecorder_rcs"]:
-            cmd += ["--labrecorder-acq", condition]
+            if condition == "adaptation":
+                cmd += [
+                    "--mwl-adaptation",
+                    "--mwl-model-dir", str(ctx["participant_model_dir"]),
+                    "--mwl-audit-csv", str(ctx["audit_csv"]),
+                ]
+                if ctx.get("mwl_threshold") is not None:
+                    cmd += ["--mwl-threshold", f"{ctx['mwl_threshold']:.6f}"]
+                if ctx.get("d_final") is not None:
+                    cmd += ["--mwl-baseline-d", f"{ctx['d_final']:.4f}"]
+            if ctx["labrecorder_rcs"]:
+                cmd += ["--labrecorder-acq", condition]
 
-        _run(cmd, label)
+            _run(cmd, label)
 
-        # Capture session CSV for post-session analysis
-        if condition == "adaptation":
-            ctx["adaptation_session_csv"] = _find_latest_session_csv(ctx)
-        elif condition == "control":
-            ctx["control_session_csv"] = _find_latest_session_csv(ctx)
+            # Capture session CSV for post-session analysis
+            if condition == "adaptation":
+                ctx["adaptation_session_csv"] = _find_latest_session_csv(ctx)
+            elif condition == "control":
+                ctx["control_session_csv"] = _find_latest_session_csv(ctx)
 
-        if i < len(ctx["condition_order"]):
-            _pause(f"{condition.title()} condition complete. Collect TLX, then continue.")
+            if not ctx["labrecorder_rcs"]:
+                # No XDF expected — skip all checks.
+                if i < len(ctx["condition_order"]):
+                    _pause(f"{condition.title()} condition complete. TLX shown on screen — wait for participant to finish, then continue.")
+                break
+
+            # --- Subphase checkpoint: verify the condition XDF ---
+            candidates = sorted(
+                phys_dir.glob(f"*acq-{condition}*.xdf"),
+                key=lambda p: p.stat().st_mtime,
+            ) if phys_dir.exists() else []
+
+            issues: list[str] = []
+
+            if not candidates:
+                issues.append(f"No *acq-{condition}*.xdf found in {phys_dir}")
+            else:
+                xdf_path = candidates[-1]
+                print(f"\n  {condition.title()} XDF: {xdf_path.name}")
+                try:
+                    import pyxdf as _pyxdf
+                    _streams, _ = _pyxdf.load_xdf(str(xdf_path))
+                    _dur = None
+                    for _s in _streams:
+                        _ts = _s.get("time_stamps")
+                        if _ts is not None and len(_ts) >= 2:
+                            _dur = float(_ts[-1] - _ts[0])
+                            break
+                    if _dur is not None:
+                        if abs(_dur - 480.0) <= 45.0:
+                            print(f"  Duration: {_dur:.1f} s  [OK]")
+                        else:
+                            issues.append(f"Duration {_dur:.1f} s (expected 480 +/- 45 s)")
+                    _marker_streams = [_s for _s in _streams if _s["info"]["type"][0] == "Markers"]
+                    if _marker_streams:
+                        _n_ev = sum(len(_s.get("time_series", [])) for _s in _marker_streams)
+                        print(f"  Markers: {len(_marker_streams)} stream(s), {_n_ev} event(s)  [OK]")
+                    else:
+                        issues.append("No Markers stream")
+                except Exception as _exc:
+                    issues.append(f"Could not inspect XDF: {_exc}")
+
+                eeg_ok = _run_eeg_quality_check(xdf_path, ctx)
+                if not eeg_ok:
+                    issues.append("EEG signal quality check failed (see channel report above)")
+
+            # Adaptation-specific: check audit CSV has at least one row
+            if condition == "adaptation":
+                audit_csv = ctx.get("audit_csv")
+                if audit_csv and audit_csv.exists():
+                    try:
+                        import csv as _csv_mod
+                        with open(audit_csv, newline="") as _af:
+                            _rows = list(_csv_mod.DictReader(_af))
+                        if _rows:
+                            print(f"  Audit CSV: {len(_rows)} row(s)  [OK]")
+                        else:
+                            issues.append("Audit CSV is empty — adaptation may not have been active")
+                    except Exception as _exc:
+                        issues.append(f"Could not read audit CSV: {_exc}")
+                else:
+                    issues.append("Audit CSV not found")
+
+            if not issues:
+                if i < len(ctx["condition_order"]):
+                    _pause(f"{condition.title()} condition complete. TLX shown on screen — wait for participant to finish, then continue.")
+                break  # accept recording
+
+            print(f"\n  {condition.title()} condition issues ({len(issues)}):")
+            for _iss in issues:
+                print(f"    - {_iss}")
+            choice = _subphase_cr_prompt(f"{condition.title()} condition")
+            if choice == "C":
+                if i < len(ctx["condition_order"]):
+                    _pause(f"{condition.title()} condition complete. TLX shown on screen — wait for participant to finish, then continue.")
+                break
+            elif choice == "Q":
+                sys.exit(f"Session aborted by operator at {condition} condition checkpoint.")
+            # "R": archive bad XDF and (for adaptation) archive audit CSV so MATB recreates it.
+            if candidates:
+                _rename_xdf_old(candidates[-1])
+            if condition == "adaptation":
+                _audit_csv = ctx.get("audit_csv")
+                if _audit_csv and _audit_csv.exists():
+                    _audit_n = 1
+                    while True:
+                        _audit_new = _audit_csv.parent / f"{_audit_csv.stem}_old_{_audit_n}.csv"
+                        if not _audit_new.exists():
+                            break
+                        _audit_n += 1
+                    _audit_csv.rename(_audit_new)
+                    print(f"  Archived audit CSV: {_audit_csv.name} -> {_audit_new.name}")
+            _pause(f"Re-running {condition} condition — ensure LabRecorder is ready, then press ENTER.")
+            # continue -> rerun the scenario
 
 
 def phase_post_session(ctx: dict) -> None:
@@ -607,6 +982,7 @@ def phase_post_session(ctx: dict) -> None:
     audit_csv = ctx["audit_csv"]
     session_csv = ctx.get("adaptation_session_csv")
     pid = ctx["pid"]
+    session = ctx["session"]
 
     # 8a. Verification (best-effort — don't abort the session on failure)
     if audit_csv.exists():
@@ -629,7 +1005,7 @@ def phase_post_session(ctx: dict) -> None:
         analysis_out = ctx["session_data_dir"] / f"adaptation_analysis_{pid.lower()}.json"
         _run(
             [
-                py, str(repo / "scripts" / "analyse_adaptation_session.py"),
+                py, str(repo / "scripts" / "analysis" / "analyse_adaptation_session.py"),
                 "--audit", str(audit_csv),
                 "--session", str(session_csv),
                 "--out", str(analysis_out),
@@ -642,11 +1018,11 @@ def phase_post_session(ctx: dict) -> None:
 
     # 8c. Plot
     if audit_csv.exists():
-        fig_dir = repo / "results" / "figures"
+        fig_dir = repo / "results" / "figures" / pid / session
         fig_dir.mkdir(parents=True, exist_ok=True)
-        plot_out = fig_dir / f"adaptation_{pid.lower()}__fig01__mwl_timeline.png"
+        plot_out = fig_dir / f"{pid.lower()}_{session.lower()}_fig01_mwl_timeline.png"
         plot_cmd = [
-            py, str(repo / "scripts" / "plot_adaptation_session.py"),
+            py, str(repo / "scripts" / "analysis" / "plot_adaptation_session.py"),
             "--audit", str(audit_csv),
             "--out", str(plot_out),
         ]
@@ -680,8 +1056,8 @@ def phase_post_session(ctx: dict) -> None:
 
             track_a  = kpi_adapt.get("tracking", {}).get("center_deviation_rmse")
             track_c  = kpi_ctrl.get("tracking",  {}).get("center_deviation_rmse")
-            comms_a  = kpi_adapt.get("comms",    {}).get("accuracy")
-            comms_c  = kpi_ctrl.get("comms",     {}).get("accuracy")
+            comms_a  = kpi_adapt.get("communications", {}).get("accuracy")
+            comms_c  = kpi_ctrl.get("communications",  {}).get("accuracy")
             sysmon_a = kpi_adapt.get("sysmon",   {}).get("accuracy")
             sysmon_c = kpi_ctrl.get("sysmon",    {}).get("accuracy")
 
@@ -702,6 +1078,58 @@ def phase_post_session(ctx: dict) -> None:
         if not (control_csv and control_csv.exists()):
             _missing.append("control CSV")
         print(f"\n  Skipping condition comparison \u2014 missing: {', '.join(_missing)}")
+
+    # 8e. TLX comparison figure (all available conditions)
+    cal_c1_csv = ctx.get("cal_c1_csv")
+    cal_c2_csv = ctx.get("cal_c2_csv")
+    tlx_inputs = {
+        "adaptation": session_csv,
+        "control": control_csv,
+        "cal_c1": cal_c1_csv,
+        "cal_c2": cal_c2_csv,
+    }
+    tlx_available = [k for k, v in tlx_inputs.items() if v and v.exists()]
+    if len(tlx_available) >= 2:
+        fig_dir = repo / "results" / "figures" / pid / session
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        tlx_fig = fig_dir / f"{pid.lower()}_{session.lower()}_fig02_tlx_comparison.png"
+        tlx_json = fig_dir / f"{pid.lower()}_{session.lower()}_fig02_tlx_comparison.json"
+        tlx_cmd = [py, str(repo / "scripts" / "analysis" / "tlx_compare_conditions.py"),
+                   "--out", str(tlx_json), "--plot", str(tlx_fig)]
+        if cal_c1_csv and cal_c1_csv.exists():
+            tlx_cmd += ["--cal-c1", str(cal_c1_csv)]
+        if cal_c2_csv and cal_c2_csv.exists():
+            tlx_cmd += ["--cal-c2", str(cal_c2_csv)]
+        if session_csv and session_csv.exists():
+            tlx_cmd += ["--adaptation", str(session_csv)]
+        if control_csv and control_csv.exists():
+            tlx_cmd += ["--control", str(control_csv)]
+        _run(tlx_cmd, "TLX comparison figure", allow_fail=True)
+        if tlx_fig.exists():
+            print(f"  Figure saved: {tlx_fig}")
+    else:
+        print(f"\n  Skipping TLX figure \u2014 fewer than 2 condition CSVs available.")
+
+    # 8f. Performance-by-level figure (all available conditions)
+    perf_inputs = [v for v in tlx_inputs.values() if v and v.exists()]
+    if perf_inputs:
+        fig_dir = repo / "results" / "figures" / pid / session
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        perf_fig = fig_dir / f"{pid.lower()}_{session.lower()}_fig03_performance_by_level.png"
+        perf_json = fig_dir / f"{pid.lower()}_{session.lower()}_fig03_performance_by_level.json"
+        perf_cmd = [py, str(repo / "scripts" / "analysis" / "performance_compare_by_level.py"),
+                    "--out", str(perf_json), "--plot", str(perf_fig)]
+        if cal_c1_csv and cal_c1_csv.exists():
+            perf_cmd += ["--cal-c1", str(cal_c1_csv)]
+        if cal_c2_csv and cal_c2_csv.exists():
+            perf_cmd += ["--cal-c2", str(cal_c2_csv)]
+        if session_csv and session_csv.exists():
+            perf_cmd += ["--adaptation", str(session_csv)]
+        if control_csv and control_csv.exists():
+            perf_cmd += ["--control", str(control_csv)]
+        _run(perf_cmd, "Performance-by-level figure", allow_fail=True)
+        if perf_fig.exists():
+            print(f"  Figure saved: {perf_fig}")
 
 
 # ---------------------------------------------------------------------------
@@ -853,12 +1281,15 @@ def _verify_phase_outputs(phase: int, ctx: dict, output_root: Path, pid: str, se
             fail("d_final in range [0.05, 0.95]", f"d_final = {d_final:.4f}")
         else:
             ok("d_final in range [0.05, 0.95]", f"d_final = {d_final:.4f}")
-            if d_final <= 0.05 or d_final >= 0.95:
+            if d_final < 0.10 or d_final > 0.90:
                 warn("d_final not at ceiling/floor", f"d_final = {d_final:.4f} -- at extreme")
 
     elif phase == 3:
-        # Rest baseline XDF
-        candidates = sorted(phys_dir.glob("*acq-rest*.xdf"), key=lambda p: p.stat().st_mtime) if phys_dir.exists() else []
+        # Rest baseline XDF (exclude rest_adapt refresh files)
+        candidates = sorted(
+            [p for p in phys_dir.glob("*acq-rest*.xdf") if "rest_adapt" not in p.name],
+            key=lambda p: p.stat().st_mtime,
+        ) if phys_dir.exists() else []
         if not candidates:
             fail("Rest baseline XDF found", f"No *acq-rest*.xdf in {phys_dir}")
         else:
@@ -1319,6 +1750,8 @@ def main() -> int:
 
     # --- Execute phases ---
     _pause("Review session plan above. Ready to begin?")
+
+    _start_holding_screen(ctx["python"])
 
     # Convenience: run post-phase gate when --post-phase-verify is active.
     def _gate(phase_num: int) -> None:

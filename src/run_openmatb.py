@@ -41,7 +41,7 @@ from typing import Optional
 # Setting to -3 suppresses everything including the spurious "Stream transmission
 # broke off; re-connecting" ERROR messages that eego amps emit on normal
 # keep-alive reconnects.  Real data problems are caught by the sample-flow check.
-os.environ.setdefault("LSL_LOGLEVEL", "-3")
+os.environ["LSL_LOGLEVEL"] = "-3"
 
 # ---------------------------------------------------------------------------
 # Subprocess management (global state for crash-safe cleanup)
@@ -80,7 +80,12 @@ def _ensure_labrecorder_running(host: str = "127.0.0.1", port: int = 22345, time
         return
 
     print(f"  Launching LabRecorder ({_LABRECORDER_EXE.name})...")
-    subprocess.Popen([str(_LABRECORDER_EXE)], close_fds=True)
+    subprocess.Popen(
+        [str(_LABRECORDER_EXE)],
+        close_fds=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -272,13 +277,13 @@ def _wait_for_markers_outlet(timeout_s: float = 15.0, poll_interval_s: float = 0
     Returns True if found, False on timeout.
     """
     print(
-        f"[REC] Waiting for MATB Markers outlet (type=Markers, timeout={timeout_s:.0f}s)...",
+        f"[REC] Waiting for MATB Markers outlet (name=OpenMATB, timeout={timeout_s:.0f}s)...",
         flush=True,
     )
     import pylsl
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        streams = pylsl.resolve_stream("type", "Markers", 1, poll_interval_s)
+        streams = pylsl.resolve_stream("name", "OpenMATB", 1, poll_interval_s)
         if streams:
             print(f"[REC] Markers outlet found: '{streams[0].name()}' — restarting LabRecorder.", flush=True)
             return True
@@ -448,7 +453,18 @@ def _start_labrecorder_xdf_recording_rcs(
         filename_cmd += f" {{run:{run}}}"
 
     try:
-        # Typical robust sequence: refresh → select all → exclude TRG → set filename → start.
+        # Step 1: trigger stream re-discovery.
+        # "update" is sent in its own connection so LabRecorder has time to
+        # complete the async LSL network scan before "select all" runs.
+        # Without this separation, when LabRecorder is idle (e.g. 2nd condition
+        # in a phase), the EEG streams are not yet resolved by the time the
+        # select+start commands are processed, resulting in an XDF with no EEG
+        # stream.  When already recording the issue doesn't arise because the
+        # stream list is already populated (the _old1 restart path).
+        _labrecorder_send_rcs(host, port, ["update"], timeout_s=timeout_s)
+        time.sleep(1.5)
+
+        # Step 2: select streams, set filename, start.
         # The eego amplifier exposes a separate LSL outlet (type="TRG") for each
         # amp's trigger channel.  It is not needed for EEG analysis and wastes
         # space; deselect it before starting the recording.
@@ -456,7 +472,6 @@ def _start_labrecorder_xdf_recording_rcs(
             host,
             port,
             [
-                "update",
                 "select all",
                 "deselect {type:TRG}",
                 filename_cmd,
@@ -689,7 +704,7 @@ def _start_hr_streamer(
         "error": None,
     }
 
-    streamer_script = repo_root / "scripts" / "stream_polar_hr.py"
+    streamer_script = repo_root /  "scripts" / "session" / "stream_polar_hr.py"
     if not streamer_script.exists():
         result["error"] = f"HR streamer script not found: {streamer_script}"
         return result
@@ -840,7 +855,7 @@ def _start_python_lsl_recorder(
         "error": None,
     }
 
-    recorder_script = repo_root / "scripts" / "record_lsl_streams.py"
+    recorder_script = repo_root / "scripts" / "session"/ "record_lsl_streams.py"
     if not recorder_script.exists():
         result["error"] = f"Recorder script not found: {recorder_script}"
         return result
@@ -949,6 +964,53 @@ def _probe_device_battery(cmd: list, timeout: float = 40.0) -> dict:
     except Exception as exc:
         result["error"] = str(exc)
     return result
+
+
+def _audio_check_play(sounds_dir: Path) -> bool:
+    """Play a short sample comms prompt to verify audio output.
+
+    Uses the same pyglet engine as the experiment (french/female voice).
+    Falls back to winsound if pyglet raises.  Returns True on success.
+    """
+    # A callsign-style sequence that mirrors a real comms prompt.
+    sequence = ["n", "a", "s", "a", "radio", "com_1", "frequency", "1", "2", "1"]
+
+    # --- pyglet path (preferred: same engine as the experiment) ---------------
+    try:
+        import pyglet
+        import pyglet.media
+
+        group = pyglet.media.SourceGroup()
+        for token in sequence:
+            wav = sounds_dir / f"{token}.wav"
+            src = pyglet.media.load(str(wav), streaming=False)
+            group.add(src)
+
+        player = pyglet.media.Player()
+        player.queue(group)
+        player.play()
+
+        # pyglet audio runs on a background thread — poll until playback ends.
+        deadline = time.monotonic() + 20.0
+        while player.source is not None:
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.05)
+
+        return True
+
+    except Exception:
+        pass
+
+    # --- winsound fallback (Windows standard library, synchronous) -----------
+    try:
+        import winsound
+        for token in sequence:
+            wav = sounds_dir / f"{token}.wav"
+            winsound.PlaySound(str(wav), winsound.SND_FILENAME)
+        return True
+    except Exception:
+        return False
 
 
 def _preflight_stream_check(
@@ -1345,6 +1407,7 @@ def _run_preflight_checks(
     check_eda: bool = True,
     check_hr: bool = True,
     check_joystick: bool = True,
+    check_audio: bool = True,
     eeg_stream_type: str = "EEG",
     eeg_stream_count: int = 1,
     eda_stream_name: str = "ShimmerEDA",
@@ -1485,6 +1548,50 @@ def _run_preflight_checks(
                     return False
         except Exception as exc:
             print(f"  [?] Joystick check skipped: {exc}")
+
+    # Audio check — played once before the stream retry loop so the participant
+    # can confirm headphone audio before the session begins.
+    if check_audio:
+        sounds_dir = Path(__file__).parent / "vendor" / "openmatb" / "includes" / "sounds" / "french" / "female"
+        print("\n" + "=" * 60)
+        print("AUDIO CHECK")
+        print("=" * 60)
+        print("  A short audio sample will play through the participant's headphones.")
+        print("  Ask the participant to put on their headphones before continuing.")
+
+        while True:
+            input("\n  Press Enter to play the audio sample...")
+
+            print("  Playing...")
+            playback_ok = _audio_check_play(sounds_dir)
+
+            if not playback_ok:
+                print("  [!!] Audio playback failed (could not load WAV files).")
+                print("  Options:")
+                print("    [r] Retry")
+                print("    [n] Cancel and exit")
+                resp = input("  Choice (r/n): ").strip().lower()
+                if resp in ("n", "no"):
+                    return False
+                continue  # retry
+
+            # Playback succeeded — ask the participant directly.
+            print("  Sample played.")
+            resp = input("  Ask the participant: did you hear the audio? (Enter/y = yes, n = no): ").strip().lower()
+
+            if resp in ("", "y", "yes"):
+                print("  [OK] Audio: confirmed by participant")
+                break
+            else:
+                print("  [!!] Participant did not hear audio.")
+                print("       Check: headphone connection, Windows audio output device, volume level.")
+                print("  Options:")
+                print("    [r] Replay the sample")
+                print("    [n] Cancel and exit")
+                resp2 = input("  Choice (r/n): ").strip().lower()
+                if resp2 in ("n", "no"):
+                    return False
+                # else replay
 
     # Run stream checks in a retry loop
     while True:
@@ -1650,6 +1757,35 @@ def _update_manifest_metadata(
 
     _atomic_write_json(manifest_path, manifest)
 
+
+# ---------------------------------------------------------------------------
+# Scenario timing helper (also used by the terminal ticker)
+# ---------------------------------------------------------------------------
+_TICKER_INTERVAL_S: float = 10.0  # how often to refresh the ticker line
+
+
+def _scenario_max_time_seconds(path: Path) -> int:
+    """Return the last timestamp (seconds) in a scenario .txt file, or 0 on parse failure."""
+    max_sec = 0
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            parts = stripped.split(";")
+            if not parts:
+                continue
+            time_str = parts[0]
+            try:
+                h, m, s = time_str.split(":")
+                sec = int(h) * 3600 + int(m) * 60 + int(s)
+            except Exception:
+                continue
+            if sec > max_sec:
+                max_sec = sec
+    except Exception:
+        pass
+    return max_sec
 
 
 def _block_dialog_lines(
@@ -1909,6 +2045,7 @@ def _run_single_scenario(
     # Suppress interactive dialog for automated / verification runs
     if getattr(args, "verification", False):
         env["OPENMATB_SUPPRESS_BLOCK_DIALOG"] = "1"
+        env["OPENMATB_VERIFICATION"] = "1"
 
     # Calculate paths specifically for this run
     scenario_rel_path = scenario_filename
@@ -2031,6 +2168,12 @@ def _run_single_scenario(
         )
         + "runpy.run_path('main.py', run_name='__main__')\n"
     )
+
+    # Parse expected block duration for the terminal ticker (best-effort).
+    try:
+        _expected_block_seconds = _scenario_max_time_seconds(scenario_source_path)
+    except Exception:
+        _expected_block_seconds = 0
 
     # Start MWL subprocess (simulated or real estimator) before OpenMATB
     global _mwl_subprocess
@@ -2161,7 +2304,38 @@ def _run_single_scenario(
                 except Exception as _lr_exc:
                     print(f"[REC] WARNING: LabRecorder restart failed: {_lr_exc}", flush=True)
 
-        exit_code = proc.wait()
+        # --- Terminal ticker: show elapsed / remaining while block runs ---
+        _block_start = time.monotonic()
+        _last_tick: float = -1.0
+        _show_ticker = not getattr(args, "verification", False)
+        _stem = Path(scenario_filename).stem
+        _block_label = f"[Block {block_index + 1}] {_stem}"
+        exit_code = None
+        while exit_code is None:
+            exit_code = proc.poll()
+            if exit_code is not None:
+                break
+            _now = time.monotonic()
+            if _show_ticker and (_now - _last_tick) >= _TICKER_INTERVAL_S:
+                _elapsed = int(_now - _block_start)
+                _e_m, _e_s = divmod(_elapsed, 60)
+                if _expected_block_seconds > 0:
+                    _remaining = max(0, _expected_block_seconds - _elapsed)
+                    _r_m, _r_s = divmod(_remaining, 60)
+                    _ticker_line = (
+                        f"\r{_block_label}: running  "
+                        f"elapsed {_e_m:02d}:{_e_s:02d}  |  "
+                        f"~{_r_m:02d}:{_r_s:02d} remaining    "
+                    )
+                else:
+                    _ticker_line = (
+                        f"\r{_block_label}: running  elapsed {_e_m:02d}:{_e_s:02d}    "
+                    )
+                print(_ticker_line, end="", flush=True)
+                _last_tick = _now
+            time.sleep(0.5)
+        if _show_ticker and _last_tick >= 0:
+            print()  # end ticker line cleanly
     finally:
         _cleanup_mwl_subprocess()
         # Best-effort cleanup: do not leave the vendor submodule dirty.
@@ -2250,25 +2424,6 @@ def _run_single_scenario(
             csv_path = Path(csv_path_str)
         else:
             csv_path = None
-
-        def _scenario_max_time_seconds(path: Path) -> int:
-            max_sec = 0
-            for line in path.read_text(encoding="utf-8").splitlines():
-                stripped = line.strip()
-                if not stripped or stripped.startswith("#"):
-                    continue
-                parts = stripped.split(";")
-                if not parts:
-                    continue
-                time_str = parts[0]
-                try:
-                    h, m, s = time_str.split(":")
-                    sec = int(h) * 3600 + int(m) * 60 + int(s)
-                except Exception:
-                    continue
-                if sec > max_sec:
-                    max_sec = sec
-            return max_sec
 
         def _csv_max_scenario_time_seconds(path: Path) -> float:
             try:
@@ -2752,7 +2907,7 @@ def main() -> int:
             print(
                 f"ERROR: MWL model artefacts missing from {_model_dir}:\n"
                 + "".join(f"  - {f}\n" for f in _missing)
-                + "Run 'python scripts/calibrate_participant.py calibrate' first.",
+                + "Run 'python scripts/session/calibrate_participant.py calibrate' first.",
                 file=sys.stderr,
             )
             return 2
@@ -2809,8 +2964,8 @@ def main() -> int:
     run_preflight = not args.verification and not args.skip_stream_check
 
     # Start EDA streamer before preflight so the stream check can verify it is live.
-    # If neither --eda-port nor --eda-auto-port is given, default to auto-detect.
-    _eda_auto_port = getattr(args, "eda_auto_port", False) or not args.eda_port
+    # Only auto-detect EDA port when --eda-auto-port is explicitly passed.
+    _eda_auto_port = getattr(args, "eda_auto_port", False)
     if run_preflight and (args.eda_port or _eda_auto_port):
         print("\n" + "=" * 60)
         print("Starting EDA streamer before preflight checks...")
@@ -3098,10 +3253,6 @@ def main() -> int:
             print(f" - {name}", file=sys.stderr)
         return 2
 
-    print(f"Playlist ({len(playlist)} scenarios):")
-    for s in playlist:
-        print(f" - {s}")
-
     # Start LabRecorder (XDF) recording via RCS for Pilot 1 when no physiology artifact is provided.
     if args.pilot1 and physiology_recording_path is None and args.labrecorder_rcs:
         print("\n" + "=" * 60)
@@ -3170,8 +3321,8 @@ def main() -> int:
         print(f"Recording to: {physiology_recording_path}")
         print("=" * 60 + "\n")
 
-    # Final launch checkpoint (only for real runs, not verification)
-    if not args.verification:
+    # Final launch checkpoint (only for real runs, not verification, not when called from orchestrator)
+    if not args.verification and not args.only_scenario:
         print("\n" + "=" * 60)
         print(f"  Participant: {participant}  |  Session: {session}  |  {len(playlist)} scenarios")
         print("=" * 60)
