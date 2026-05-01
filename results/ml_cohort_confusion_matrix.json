@@ -1,0 +1,46 @@
+{
+  "n_participants": 1,
+  "cohort_breakdown": "dry_run=1",
+  "labels": [
+    "LOW",
+    "MODERATE",
+    "HIGH"
+  ],
+  "cv_10fold": {
+    "accuracy": 0.6972,
+    "confusion_matrix": [
+      [
+        337,
+        107,
+        71
+      ],
+      [
+        70,
+        382,
+        63
+      ],
+      [
+        125,
+        63,
+        430
+      ]
+    ],
+    "per_class": {
+      "LOW": {
+        "n": 515,
+        "correct": 337,
+        "recall": 0.6544
+      },
+      "MODERATE": {
+        "n": 515,
+        "correct": 382,
+        "recall": 0.7417
+      },
+      "HIGH": {
+        "n": 618,
+        "correct": 430,
+        "recall": 0.6958
+      }
+    }
+  }
+}

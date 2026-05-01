@@ -1,0 +1,267 @@
+EEG Deep Diagnostic
+File : C:\data\adaptive_matb\physiology\sub-PDRY07\ses-S001\physio\sub-PDRY07_ses-S001_task-matb_acq-rest_physio.xdf
+Date : 2026-05-01T16:58:59.294872
+
+========================================================================
+  0. XDF STREAM HEADER
+========================================================================
+  Channels        : 128
+  Samples         : 14002  (109.4 s at 128.0 Hz after decimation)
+  Actual srate    : 500.0 Hz
+  Nominal srate   : 500.0000000000000 Hz
+  Manufacturer    : ?
+  Stream name     : EE225-000000-000495-02-eego_laptop
+  Channel units (from desc): ['V', 'none']
+
+========================================================================
+  1. RAW SIGNAL (pre-filter, pre-CAR)
+========================================================================
+  Per-channel RMS distribution (µV):
+  All channels                    p  0=  199.7  p  5=  772.3  p 25= 2801.7  p 50= 4915.3  p 75= 7320.8  p 95=13349.4  p100=17198.4
+
+========================================================================
+  2. SCALE / UNIT PROBE
+========================================================================
+  Median raw RMS (×1e6)         : 4915.3 µV
+  Median raw RMS (as-is, no ×)  : 0.004915
+  Verdict: VERY HIGH — likely artifact, scaling issue, or saturation.
+
+========================================================================
+  3. FILTER-ONLY (bandpass + notch, NO CAR)
+========================================================================
+  Per-channel RMS after bandpass+notch (µV):
+  All channels                    p  0=30154.5  p  5=30422.4  p 25=30670.2  p 50=30813.5  p 75=30920.2  p 95=31043.0  p100=31227.7
+  Filter improvement (raw/filt)   p  0=    0.0  p  5=    0.0  p 25=    0.1  p 50=    0.2  p 75=    0.2  p 95=    0.4  p100=    0.6
+
+  Channels >200 µV after filter (pre-CAR): 128
+  ['Z2', 'Z4', 'Z6', 'Z8', 'Z10', 'Z12', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11', 'L12', 'L13', 'L14', 'LL1', 'LL2', 'LL3', 'LL4', 'LL5', 'LL6', 'LL7', 'LL8', 'LL9', 'LL10', 'LL11', 'LL12', 'Z1', 'Z3', 'Z5', 'Z9', 'Z11', 'Z13', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12', 'R13', 'R14', 'RR1', 'RR2', 'RR3', 'RR4', 'RR5', 'RR6', 'RR7', 'RR8', 'RR9', 'RR10', 'RR11', 'RR12', 'LL13', 'LL14', 'LA1', 'LA2', 'LA3', 'LA4', 'LA5', 'LB1', 'LB2', 'LB3', 'LB4', 'LB5', 'LB6', 'LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LD1', 'LD2', 'LD3', 'LD4', 'LD5', 'LD6', 'LD7', 'LE1', 'LE2', 'LE3', 'LE4', 'Lm', 'RR13', 'RR14', 'RA1', 'RA2', 'RA3', 'RA4', 'RA5', 'RB1', 'RB2', 'RB3', 'RB4', 'RB5', 'RB6', 'RC1', 'RC2', 'RC3', 'RC4', 'RC5', 'RC6', 'RC7', 'RD1', 'RD2', 'RD3', 'RD4', 'RD5', 'RD6', 'RD7', 'RE1', 'RE2', 'RE3', 'RE4', 'RM']
+
+========================================================================
+  4. FULL PIPELINE (bandpass + notch + CAR)
+========================================================================
+  Per-channel RMS after full pipeline (µV):
+  All channels                    p  0=   34.9  p  5=   40.5  p 25=   72.2  p 50=  136.1  p 75=  226.9  p 95=  416.9  p100=  628.2
+
+  Channels >200 µV after full pipeline: 41
+  ['Z2', 'Z8', 'L9', 'L14', 'LL2', 'LL9', 'LL10', 'Z5', 'Z11', 'R2', 'R3', 'R5', 'R6', 'R7', 'R9', 'R10', 'RR1', 'RR2', 'RR4', 'RR6', 'RR10', 'LA2', 'LA5', 'LB1', 'LB5', 'LC1', 'LD1', 'LD2', 'LD4', 'LD5', 'LE1', 'LE2', 'RR13', 'RA1', 'RA5', 'RB1', 'RB5', 'RC4', 'RD4', 'RD6', 'RM']
+
+  CAR impact (full - filter_only) per-channel RMS:
+  Δ RMS (µV)                      p  0=-30780.6  p  5=-30779.2  p 25=-30776.4  p 50=-30761.2  p 75=-30553.7  p 95=-30061.6  p100=-29526.3
+  >> CAR is REDUCING average channel noise — functioning as intended.
+
+========================================================================
+  5. PSD OF KEY CHANNELS
+========================================================================
+  Channel               Name        RMS µV    Delta+1 Hz    10-20 Hz    30-40 Hz    40-48 Hz
+  ------------------------------------------------------------------------------------------
+  best (lowest RMS)     L5            34.9        -118.1      -127.8      -131.3      -140.5
+  p25                   R13           72.4        -115.0      -127.1      -129.9      -139.7
+  median                R14          138.0        -113.5      -127.9      -131.5      -140.6
+  p75                   LL2          227.7        -113.2      -122.8      -123.1      -131.4
+  worst (highest RMS)   Z5           628.2        -108.3      -126.2      -129.1      -137.9
+
+  Median across ALL channels:
+     1- 4 Hz : -113.6 dB
+     4- 8 Hz : -123.3 dB
+     8-13 Hz : -125.0 dB
+    13-30 Hz : -124.9 dB
+    30-40 Hz : -129.8 dB
+
+========================================================================
+  6. TEMPORAL STABILITY (10-s rolling epoch RMS)
+========================================================================
+  Epochs: 10
+  Median-channel RMS per 10-s epoch (µV): 436 36 37 37 36 36 39 37 30 36
+  Epoch-to-epoch CV of median RMS: 1.579 (VARIABLE)
+  >> Noise DECREASES across recording — filter transient or settling artefact at start.
+
+========================================================================
+  7. CLIPPING / SATURATION CHECK
+========================================================================
+  Absolute max across all channels : 18583.6 µV
+  99.9th percentile                : 17977.9 µV
+  Channels with >5 consecutive identical samples: 0
+  >> Values exceed ±800 µV — possible saturation/clipping.
+
+========================================================================
+  6b. SETTLED SIGNAL QUALITY (skip first 20 s)
+========================================================================
+  Skipping first 2560 samples (20 s) to bypass filter transient.
+  Settled signal per-channel RMS (µV):
+  All channels (settled)          p  0=   17.0  p  5=   31.8  p 25=   34.0  p 50=   36.2  p 75=   38.2  p 95=   41.8  p100=  187.7
+
+  After settling — channels >200 µV (NOISY) : 0
+  After settling — channels 100-200 µV (warn): 3
+  After settling — channels ≤100 µV (ok)      : 125
+
+  >> Dropping from 41 to 0 noisy channels after settling — audit noise count is inflated by filter transient.
+
+========================================================================
+  8. SPATIAL PATTERN (central vs. peripheral)
+========================================================================
+  Central  (Z, C-prefixed)                n= 12  median RMS= 125.6 µV  bad(>200)=4/12
+  Peripheral (LL/RR/LA-E/RA-E/Lm/RM)      n= 88  median RMS= 139.0 µV  bad(>200)=28/88
+  Other / unclassified                    n= 28  median RMS= 133.2 µV  bad(>200)=9/28
+
+  Fraction bad: peripheral=32%  central=33%
+  >> Central channels also heavily affected — suggests global noise (reference, movement, power).
+
+========================================================================
+  9. PER-CHANNEL RMS TABLE (full pipeline)
+========================================================================
+  Ch          RMS µV    Flag
+  ------------------------------
+  Z2           242.6   NOISY
+  Z4           151.4    warn
+  Z6           158.7    warn
+  Z8           367.6   NOISY
+  Z10           36.7      ok
+  Z12           90.4      ok
+  L1           128.4    warn
+  L2            35.7      ok
+  L3           113.7    warn
+  L4            94.8      ok
+  L5            34.9      ok
+  L6           142.7    warn
+  L7           111.1    warn
+  L8           162.5    warn
+  L9           242.8   NOISY
+  L10           45.5      ok
+  L11          125.5    warn
+  L12          144.8    warn
+  L13           54.4      ok
+  L14          263.3   NOISY
+  LL1          122.1    warn
+  LL2          227.7   NOISY
+  LL3           88.2      ok
+  LL4          110.0    warn
+  LL5           85.8      ok
+  LL6          117.5    warn
+  LL7          112.5    warn
+  LL8          134.2    warn
+  LL9          319.4   NOISY
+  LL10         447.8   NOISY
+  LL11         152.5    warn
+  LL12          35.1      ok
+  Z1            36.7      ok
+  Z3            99.7      ok
+  Z5           628.2   NOISY
+  Z9            97.5      ok
+  Z11          217.1   NOISY
+  Z13           75.1      ok
+  R1            41.3      ok
+  R2           438.9   NOISY
+  R3           226.7   NOISY
+  R4            46.4      ok
+  R5           482.5   NOISY
+  R6           231.3   NOISY
+  R7           274.4   NOISY
+  R8            94.8      ok
+  R9           483.1   NOISY
+  R10          201.0   NOISY
+  R11           70.4      ok
+  R12          178.7    warn
+  R13           72.4      ok
+  R14          138.0    warn
+  RR1          248.2   NOISY
+  RR2          308.2   NOISY
+  RR3           76.5      ok
+  RR4          299.1   NOISY
+  RR5          156.0    warn
+  RR6          228.2   NOISY
+  RR7          120.6    warn
+  RR8           55.7      ok
+  RR9           71.7      ok
+  RR10         215.8   NOISY
+  RR11          52.1      ok
+  RR12         195.4    warn
+  LL13         105.0    warn
+  LL14         178.0    warn
+  LA1           48.6      ok
+  LA2          212.7   NOISY
+  LA3          124.0    warn
+  LA4          143.8    warn
+  LA5          214.1   NOISY
+  LB1          245.5   NOISY
+  LB2           37.0      ok
+  LB3           82.4      ok
+  LB4           50.0      ok
+  LB5          576.5   NOISY
+  LB6           49.9      ok
+  LC1          205.9   NOISY
+  LC2           73.0      ok
+  LC3           58.7      ok
+  LC4           53.3      ok
+  LC5           46.3      ok
+  LC6          160.6    warn
+  LC7          153.0    warn
+  LD1          202.1   NOISY
+  LD2          316.6   NOISY
+  LD3          157.1    warn
+  LD4          262.2   NOISY
+  LD5          257.1   NOISY
+  LD6           72.7      ok
+  LD7          150.9    warn
+  LE1          268.0   NOISY
+  LE2          348.2   NOISY
+  LE3           40.2      ok
+  LE4          103.8    warn
+  Lm            89.6      ok
+  RR13         236.8   NOISY
+  RR14         164.2    warn
+  RA1          237.7   NOISY
+  RA2           74.5      ok
+  RA3           62.4      ok
+  RA4          187.9    warn
+  RA5          276.0   NOISY
+  RB1          230.0   NOISY
+  RB2          166.6    warn
+  RB3           45.8      ok
+  RB4           45.0      ok
+  RB5          259.0   NOISY
+  RB6           65.8      ok
+  RC1           73.6      ok
+  RC2          167.4    warn
+  RC3           64.8      ok
+  RC4          376.0   NOISY
+  RC5           56.8      ok
+  RC6           41.0      ok
+  RC7           71.0      ok
+  RD1          170.6    warn
+  RD2          165.9    warn
+  RD3          123.9    warn
+  RD4          297.9   NOISY
+  RD5           43.2      ok
+  RD6          530.4   NOISY
+  RD7          199.8    warn
+  RE1           58.1      ok
+  RE2          114.0    warn
+  RE3           47.7      ok
+  RE4          108.1    warn
+  RM           225.0   NOISY
+
+========================================================================
+  10. COMPARISON BASELINE
+========================================================================
+  Reference: sub-PDRY06_ses-S001_task-matb_acq-rest_physio.xdf
+  Channels  : 128
+  Ref full-pipeline RMS (µV)      p  0=   78.9  p  5=   84.3  p 25=  113.1  p 50=  170.0  p 75=  263.6  p 95=  383.0  p100=  680.4
+  PDRY07 full-pipeline RMS (µV)   p  0=   34.9  p  5=   40.5  p 25=   72.2  p 50=  136.1  p 75=  226.9  p 95=  416.9  p100=  628.2
+
+  Noisy channels (>200 µV) — reference: 52  target: 41
+  Median RMS delta (target - reference): -33.9 µV
+  >> Target is CLEANER than reference by more than 20 µV.
+
+========================================================================
+  SUMMARY VERDICT
+========================================================================
+
+  ISSUES DETECTED:
+    [!] Raw RMS is extremely high — check amplifier scale/units.
+    [!] 128 channels >200 µV even before CAR.
+    [!] Temporal instability detected — recording may contain transient artefacts.
+    [!] Central channels are also noisy — systemic noise problem.
+
+  POSITIVE INDICATORS:
+    [+] CAR is reducing noisy channel count — functioning correctly.
+    [+] No clipping / saturation detected.

@@ -1,0 +1,20 @@
+{
+  "cal_c1": {
+    "mental demand": 7.555941,
+    "physical demand": 6.822917,
+    "time pressure": 5.337577,
+    "effort": 7.237654,
+    "frustration": 5.72338,
+    "performance": 4.874614,
+    "raw_tlx": 6.2586805
+  },
+  "cal_c2": {
+    "mental demand": 6.369599,
+    "physical demand": 7.748843,
+    "time pressure": 4.19946,
+    "effort": 5.395448,
+    "frustration": 3.591821,
+    "performance": 5.096451,
+    "raw_tlx": 5.400270333333334
+  }
+}

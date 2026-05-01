@@ -1,0 +1,70 @@
+{
+  "pid": "PDRY07",
+  "session": "S001",
+  "physio_dir": "C:\\data\\adaptive_matb\\physiology\\sub-PDRY07\\ses-S001\\physio",
+  "model_dir": null,
+  "timestamp_utc": "2026-05-01T16:04:06.222821+00:00",
+  "recordings": {
+    "rest": {
+      "found": true,
+      "path": "C:\\data\\adaptive_matb\\physiology\\sub-PDRY07\\ses-S001\\physio\\sub-PDRY07_ses-S001_task-matb_acq-rest_physio.xdf",
+      "duration_s": 109.4,
+      "n_channels": 128,
+      "srate_actual": 500.0,
+      "decimated": true,
+      "flat_channels": [],
+      "noisy_channels": [],
+      "median_prep_rms_uv": 36.8,
+      "timestamp_ok": true,
+      "timestamp_n_gaps": 0,
+      "timestamp_max_gap_s": 0.008,
+      "ok": true
+    },
+    "cal_c1": {
+      "found": true,
+      "path": "C:\\data\\adaptive_matb\\physiology\\sub-PDRY07\\ses-S001\\physio\\sub-PDRY07_ses-S001_task-matb_acq-cal_c1_physio.xdf",
+      "duration_s": 55.2,
+      "n_channels": 128,
+      "srate_actual": 500.0,
+      "decimated": true,
+      "flat_channels": [],
+      "noisy_channels": [],
+      "median_prep_rms_uv": 81.6,
+      "timestamp_ok": true,
+      "timestamp_n_gaps": 0,
+      "timestamp_max_gap_s": 0.008,
+      "ok": true
+    },
+    "cal_c2": {
+      "found": true,
+      "path": "C:\\data\\adaptive_matb\\physiology\\sub-PDRY07\\ses-S001\\physio\\sub-PDRY07_ses-S001_task-matb_acq-cal_c2_physio.xdf",
+      "load_error": true,
+      "ok": false
+    },
+    "adaptation": {
+      "found": true,
+      "path": "C:\\data\\adaptive_matb\\physiology\\sub-PDRY07\\ses-S001\\physio\\sub-PDRY07_ses-S001_task-matb_acq-adaptation_physio.xdf",
+      "duration_s": 154.3,
+      "n_channels": 128,
+      "srate_actual": 500.0,
+      "decimated": true,
+      "flat_channels": [],
+      "noisy_channels": [
+        "RC1"
+      ],
+      "median_prep_rms_uv": 186.6,
+      "timestamp_ok": true,
+      "timestamp_n_gaps": 0,
+      "timestamp_max_gap_s": 0.008,
+      "ok": false
+    },
+    "control": {
+      "found": true,
+      "path": "C:\\data\\adaptive_matb\\physiology\\sub-PDRY07\\ses-S001\\physio\\sub-PDRY07_ses-S001_task-matb_acq-control_physio.xdf",
+      "load_error": true,
+      "ok": false
+    }
+  },
+  "model": {},
+  "overall_ok": false
+}

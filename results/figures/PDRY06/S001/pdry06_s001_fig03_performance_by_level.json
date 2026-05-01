@@ -1,0 +1,410 @@
+{
+  "cal_c1": {
+    "HIGH": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 59.61738208153209,
+          "n": 5350
+        },
+        "sysmon": {
+          "accuracy": 0.9298245614035088,
+          "counts": {
+            "HIT": 53,
+            "MISS": 1,
+            "FA": 3,
+            "OTHER": 0,
+            "TOTAL": 57,
+            "DEMAND_TOTAL": 54
+          },
+          "rt_mean_s": 2328.302,
+          "rt_std_s": 2098.371,
+          "rt_n": 53
+        },
+        "communications": {
+          "accuracy": 0.6666666666666666,
+          "counts": {
+            "HIT": 2,
+            "MISS": 0,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 3,
+            "DEMAND_TOTAL": 2
+          },
+          "rt_mean_s": 14560.0,
+          "rt_std_s": 880.0,
+          "rt_n": 2
+        }
+      },
+      "n_blocks": 3,
+      "total_s": 177.0
+    },
+    "MODERATE": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 35.5821393401721,
+          "n": 5303
+        },
+        "sysmon": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 26,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 26,
+            "DEMAND_TOTAL": 26
+          },
+          "rt_mean_s": 2046.154,
+          "rt_std_s": 1405.821,
+          "rt_n": 26
+        }
+      },
+      "n_blocks": 3,
+      "total_s": 177.0
+    },
+    "LOW": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 31.276154847080722,
+          "n": 3540
+        },
+        "sysmon": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 12,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 12,
+            "DEMAND_TOTAL": 12
+          },
+          "rt_mean_s": 1400.0,
+          "rt_std_s": 346.41,
+          "rt_n": 12
+        },
+        "communications": {
+          "accuracy": 0.5,
+          "counts": {
+            "HIT": 1,
+            "MISS": 0,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 2,
+            "DEMAND_TOTAL": 1
+          },
+          "rt_mean_s": 14080.0,
+          "rt_std_s": 0.0,
+          "rt_n": 1
+        }
+      },
+      "n_blocks": 3,
+      "total_s": 177.0
+    }
+  },
+  "cal_c2": {
+    "HIGH": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 62.22784537255029,
+          "n": 5350
+        },
+        "sysmon": {
+          "accuracy": 0.9482758620689655,
+          "counts": {
+            "HIT": 55,
+            "MISS": 0,
+            "FA": 3,
+            "OTHER": 0,
+            "TOTAL": 58,
+            "DEMAND_TOTAL": 55
+          },
+          "rt_mean_s": 2170.909,
+          "rt_std_s": 1192.96,
+          "rt_n": 55
+        },
+        "communications": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 2,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 2,
+            "DEMAND_TOTAL": 2
+          },
+          "rt_mean_s": 10880.0,
+          "rt_std_s": 2240.0,
+          "rt_n": 2
+        }
+      },
+      "n_blocks": 3,
+      "total_s": 177.0
+    },
+    "MODERATE": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 30.751596106512224,
+          "n": 5300
+        },
+        "sysmon": {
+          "accuracy": 0.92,
+          "counts": {
+            "HIT": 23,
+            "MISS": 1,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 25,
+            "DEMAND_TOTAL": 24
+          },
+          "rt_mean_s": 1747.826,
+          "rt_std_s": 1154.526,
+          "rt_n": 23
+        }
+      },
+      "n_blocks": 3,
+      "total_s": 177.0
+    },
+    "LOW": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 31.58935695366313,
+          "n": 3543
+        },
+        "sysmon": {
+          "accuracy": 0.9230769230769231,
+          "counts": {
+            "HIT": 12,
+            "MISS": 0,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 13,
+            "DEMAND_TOTAL": 12
+          },
+          "rt_mean_s": 1350.0,
+          "rt_std_s": 504.149,
+          "rt_n": 12
+        },
+        "communications": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 1,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 1,
+            "DEMAND_TOTAL": 1
+          },
+          "rt_mean_s": 10720.0,
+          "rt_std_s": 0.0,
+          "rt_n": 1
+        }
+      },
+      "n_blocks": 3,
+      "total_s": 177.0
+    }
+  },
+  "adaptation": {
+    "HIGH": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 58.51013079932973,
+          "n": 7136
+        },
+        "sysmon": {
+          "accuracy": 0.9733333333333334,
+          "counts": {
+            "HIT": 73,
+            "MISS": 0,
+            "FA": 2,
+            "OTHER": 0,
+            "TOTAL": 75,
+            "DEMAND_TOTAL": 73
+          },
+          "rt_mean_s": 2000.0,
+          "rt_std_s": 1559.065,
+          "rt_n": 73
+        },
+        "communications": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 2,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 2,
+            "DEMAND_TOTAL": 2
+          },
+          "rt_mean_s": 13920.0,
+          "rt_std_s": 320.0,
+          "rt_n": 2
+        }
+      },
+      "n_blocks": 4,
+      "total_s": 236.0
+    },
+    "MODERATE": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 25.93601767064124,
+          "n": 3536
+        },
+        "sysmon": {
+          "accuracy": 0.9411764705882353,
+          "counts": {
+            "HIT": 16,
+            "MISS": 0,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 17,
+            "DEMAND_TOTAL": 16
+          },
+          "rt_mean_s": 1325.0,
+          "rt_std_s": 386.491,
+          "rt_n": 16
+        },
+        "communications": {
+          "accuracy": 0.5,
+          "counts": {
+            "HIT": 1,
+            "MISS": 1,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 2,
+            "DEMAND_TOTAL": 2
+          },
+          "rt_mean_s": 17840.0,
+          "rt_std_s": 0.0,
+          "rt_n": 1
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 118.0
+    },
+    "LOW": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 32.76232978610045,
+          "n": 2355
+        },
+        "sysmon": {
+          "accuracy": 0.8888888888888888,
+          "counts": {
+            "HIT": 8,
+            "MISS": 0,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 9,
+            "DEMAND_TOTAL": 8
+          },
+          "rt_mean_s": 2450.0,
+          "rt_std_s": 2026.697,
+          "rt_n": 8
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 117.8
+    }
+  },
+  "control": {
+    "HIGH": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 47.10893680943016,
+          "n": 7131
+        },
+        "sysmon": {
+          "accuracy": 0.9859154929577465,
+          "counts": {
+            "HIT": 70,
+            "MISS": 0,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 71,
+            "DEMAND_TOTAL": 70
+          },
+          "rt_mean_s": 2037.143,
+          "rt_std_s": 1426.001,
+          "rt_n": 70
+        },
+        "communications": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 2,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 2,
+            "DEMAND_TOTAL": 2
+          },
+          "rt_mean_s": 12360.0,
+          "rt_std_s": 760.0,
+          "rt_n": 2
+        }
+      },
+      "n_blocks": 4,
+      "total_s": 236.0
+    },
+    "MODERATE": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 26.983212023358163,
+          "n": 3534
+        },
+        "sysmon": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 17,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 17,
+            "DEMAND_TOTAL": 17
+          },
+          "rt_mean_s": 1858.824,
+          "rt_std_s": 1553.387,
+          "rt_n": 17
+        },
+        "communications": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 1,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 1,
+            "DEMAND_TOTAL": 1
+          },
+          "rt_mean_s": 18160.0,
+          "rt_std_s": 0.0,
+          "rt_n": 1
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 118.0
+    },
+    "LOW": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 17.34188078145893,
+          "n": 2175
+        },
+        "sysmon": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 8,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 8,
+            "DEMAND_TOTAL": 8
+          },
+          "rt_mean_s": 1600.0,
+          "rt_std_s": 714.143,
+          "rt_n": 8
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 117.9
+    }
+  }
+}

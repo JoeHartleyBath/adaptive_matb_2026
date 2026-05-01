@@ -1,0 +1,20 @@
+{
+  "adaptation": {
+    "mental demand": 8.028549,
+    "physical demand": 6.388889,
+    "time pressure": 7.237654,
+    "effort": 8.038194,
+    "frustration": 8.125,
+    "performance": 6.138117,
+    "raw_tlx": 7.326067166666667
+  },
+  "control": {
+    "mental demand": 9.050926,
+    "physical demand": 6.302083,
+    "time pressure": 7.893519,
+    "effort": 8.510802,
+    "frustration": 7.970679,
+    "performance": 6.070602,
+    "raw_tlx": 7.633101833333334
+  }
+}

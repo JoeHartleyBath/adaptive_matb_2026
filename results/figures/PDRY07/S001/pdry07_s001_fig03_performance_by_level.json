@@ -1,0 +1,198 @@
+{
+  "adaptation": {
+    "HIGH": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 33.70179121610888,
+          "n": 7079
+        },
+        "sysmon": {
+          "accuracy": 0.8431372549019608,
+          "counts": {
+            "HIT": 43,
+            "MISS": 3,
+            "FA": 5,
+            "OTHER": 0,
+            "TOTAL": 51,
+            "DEMAND_TOTAL": 46
+          },
+          "rt_mean_s": 2967.442,
+          "rt_std_s": 2133.642,
+          "rt_n": 43
+        },
+        "communications": {
+          "accuracy": 0.0,
+          "counts": {
+            "HIT": 0,
+            "MISS": 3,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 3,
+            "DEMAND_TOTAL": 3
+          },
+          "warning": "All communications trials are MISS with NaN responded_* and response_time. This often means responses were not validated/submitted. Default validate key is ENTER (press after selecting radio + tuning frequency)."
+        }
+      },
+      "n_blocks": 4,
+      "total_s": 236.0
+    },
+    "MODERATE": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 21.223121890789027,
+          "n": 2175
+        },
+        "sysmon": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 7,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 7,
+            "DEMAND_TOTAL": 7
+          },
+          "rt_mean_s": 1742.857,
+          "rt_std_s": 592.47,
+          "rt_n": 7
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 117.9
+    },
+    "LOW": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 16.53594648242744,
+          "n": 1954
+        },
+        "sysmon": {
+          "accuracy": 0.6666666666666666,
+          "counts": {
+            "HIT": 4,
+            "MISS": 1,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 6,
+            "DEMAND_TOTAL": 5
+          },
+          "rt_mean_s": 3100.0,
+          "rt_std_s": 2547.548,
+          "rt_n": 4
+        },
+        "communications": {
+          "accuracy": 0.0,
+          "counts": {
+            "HIT": 0,
+            "MISS": 1,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 1,
+            "DEMAND_TOTAL": 1
+          },
+          "warning": "All communications trials are MISS with NaN responded_* and response_time. This often means responses were not validated/submitted. Default validate key is ENTER (press after selecting radio + tuning frequency)."
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 118.0
+    }
+  },
+  "control": {
+    "HIGH": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 31.00438158921829,
+          "n": 7079
+        },
+        "sysmon": {
+          "accuracy": 0.8913043478260869,
+          "counts": {
+            "HIT": 41,
+            "MISS": 2,
+            "FA": 3,
+            "OTHER": 0,
+            "TOTAL": 46,
+            "DEMAND_TOTAL": 43
+          },
+          "rt_mean_s": 2697.561,
+          "rt_std_s": 1914.322,
+          "rt_n": 41
+        },
+        "communications": {
+          "accuracy": 0.0,
+          "counts": {
+            "HIT": 0,
+            "MISS": 3,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 3,
+            "DEMAND_TOTAL": 3
+          },
+          "warning": "All communications trials are MISS with NaN responded_* and response_time. This often means responses were not validated/submitted. Default validate key is ENTER (press after selecting radio + tuning frequency)."
+        }
+      },
+      "n_blocks": 4,
+      "total_s": 236.0
+    },
+    "MODERATE": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 24.552165727942867,
+          "n": 2358
+        },
+        "sysmon": {
+          "accuracy": 0.7777777777777778,
+          "counts": {
+            "HIT": 7,
+            "MISS": 1,
+            "FA": 1,
+            "OTHER": 0,
+            "TOTAL": 9,
+            "DEMAND_TOTAL": 8
+          },
+          "rt_mean_s": 2657.143,
+          "rt_std_s": 2365.742,
+          "rt_n": 7
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 117.9
+    },
+    "LOW": {
+      "kpis": {
+        "tracking": {
+          "center_deviation_rmse": 17.493487114233748,
+          "n": 1952
+        },
+        "sysmon": {
+          "accuracy": 1.0,
+          "counts": {
+            "HIT": 4,
+            "MISS": 0,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 4,
+            "DEMAND_TOTAL": 4
+          },
+          "rt_mean_s": 2000.0,
+          "rt_std_s": 1964.688,
+          "rt_n": 4
+        },
+        "communications": {
+          "accuracy": 0.0,
+          "counts": {
+            "HIT": 0,
+            "MISS": 1,
+            "FA": 0,
+            "OTHER": 0,
+            "TOTAL": 1,
+            "DEMAND_TOTAL": 1
+          },
+          "warning": "All communications trials are MISS with NaN responded_* and response_time. This often means responses were not validated/submitted. Default validate key is ENTER (press after selecting radio + tuning frequency)."
+        }
+      },
+      "n_blocks": 2,
+      "total_s": 118.0
+    }
+  }
+}
