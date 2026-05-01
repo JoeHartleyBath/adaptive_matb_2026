@@ -8,9 +8,9 @@ Requirements:
   pip install pyshimmer pylsl
 
 Usage:
-  python scripts/stream_shimmer_eda.py --port COM5
-    python scripts/stream_shimmer_eda.py --auto-port --ports COM3,COM5
-  python scripts/stream_shimmer_eda.py --port COM5 --name ShimmerEDA
+  python scripts/session/stream_shimmer_eda.py --port COM5
+    python scripts/session/stream_shimmer_eda.py --auto-port --ports COM3,COM5
+  python scripts/session/stream_shimmer_eda.py --port COM5 --name ShimmerEDA
 
 The script creates an LSL outlet with:
   - Name: "ShimmerEDA" (configurable via --name)
@@ -461,10 +461,10 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/stream_shimmer_eda.py --port COM5
-    python scripts/stream_shimmer_eda.py --auto-port
-    python scripts/stream_shimmer_eda.py --auto-port --ports COM3,COM5
-  python scripts/stream_shimmer_eda.py --port COM5 --name ShimmerEDA
+  python scripts/session/stream_shimmer_eda.py --port COM5
+    python scripts/session/stream_shimmer_eda.py --auto-port
+    python scripts/session/stream_shimmer_eda.py --auto-port --ports COM3,COM5
+  python scripts/session/stream_shimmer_eda.py --port COM5 --name ShimmerEDA
 
 The script creates an LSL stream with type="EDA" that can be recorded
 alongside OpenMATB markers and EEG using LabRecorder.

@@ -58,6 +58,7 @@ $IconDll               = "$env:SystemRoot\System32\shell32.dll"
 $StudyIconIndex        = 131   # blue person silhouette
 $PilotIconIndex        = 175   # coloured flask / tiles (visually distinct)
 $StaircaseIconIndex    = 24    # clock / timer (visually distinct from full-session icons)
+$DryIconIndex          = 134   # wrench / tools (visually distinct — dry run / testing)
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -122,8 +123,22 @@ New-SessionShortcut `
     -IconFile    $IconDll `
     -IconIndex   $PilotIconIndex
 
+New-SessionShortcut `
+    -Name        "Adaptive MATB - Dry Run Staircase" `
+    -BatFile     (Join-Path $RepoRoot "scripts\session_start_STAIRCASE_DRY.bat") `
+    -Description "Run Practice + Staircase only for a dry-run participant (no sensors needed)" `
+    -IconFile    $IconDll `
+    -IconIndex   $StaircaseIconIndex
+
+New-SessionShortcut `
+    -Name        "Adaptive MATB - Dry Run Session" `
+    -BatFile     (Join-Path $RepoRoot "scripts\session_start_DRY.bat") `
+    -Description "Launch a dry-run session (PDRY01-PDRY05)" `
+    -IconFile    $IconDll `
+    -IconIndex   $DryIconIndex
+
 Write-Host ""
-Write-Host "  Done. Four shortcuts are now on the desktop." -ForegroundColor Green
+Write-Host "  Done. Six shortcuts are now on the desktop." -ForegroundColor Green
 Write-Host "  Staircase icons = run first (no sensors).  Session icons = run second (sensors fitted)." -ForegroundColor DarkGray
 Write-Host "  If you move the repository folder, re-run this script." -ForegroundColor DarkGray
 Write-Host ""

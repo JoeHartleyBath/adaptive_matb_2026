@@ -20,21 +20,21 @@ that the two scripts remain in sync.
 Usage
 -----
     # From a staircase-calibration session CSV:
-    python scripts/generate_adaptive_automation_scenarios.py \\
+    python scripts/generate_scenarios/generate_adaptive_automation_scenarios.py \\
         --participant P001 \\
         --condition 1 \\
         --calibration-csv "D:/data/openmatb/P001/session1.csv"
 
     # Override d_final directly (for testing / dry runs):
-    python scripts/generate_adaptive_automation_scenarios.py \\
+    python scripts/generate_scenarios/generate_adaptive_automation_scenarios.py \\
         --participant P001 --condition 1 --d-final 0.55
 
     # 10-block variant:
-    python scripts/generate_adaptive_automation_scenarios.py \\
+    python scripts/generate_scenarios/generate_adaptive_automation_scenarios.py \\
         --participant P001 --condition 1 --d-final 0.55 --n-blocks 10
 
     # Dry run (print to stdout, do not write file):
-    python scripts/generate_adaptive_automation_scenarios.py \\
+    python scripts/generate_scenarios/generate_adaptive_automation_scenarios.py \\
         --participant P001 --condition 1 --d-final 0.55 --dry-run
 
 Level anchors
@@ -60,7 +60,7 @@ calibration generator.)
 See also
 --------
     docs/openmatb/ADAPTATION_DESIGN.md
-    scripts/generate_full_study_scenarios.py   (calibration counterpart)
+    scripts/generate_scenarios/generate_full_study_scenarios.py   (calibration counterpart)
     src/adaptation/difficulty_state.py         (canonical parameter mapping)
 """
 
@@ -298,6 +298,12 @@ def write_scenario(
         f"{end_t};resman;stop",
         f"{end_t};scheduling;stop",
         f"{end_t};labstreaminglayer;marker;{scene_end_m}",
+        f"",
+        f"# --- NASA-TLX (blocking) ---",
+        f"{end_t};labstreaminglayer;marker;STUDY/V0/TLX/{cond_marker}/START|{payload}",
+        f"{end_t};genericscales;filename;nasatlx_en.txt",
+        f"{end_t};genericscales;start",
+        f"{end_t};labstreaminglayer;marker;STUDY/V0/TLX/{cond_marker}/END|{payload}",
         f"{end_t};labstreaminglayer;stop",
     ]
 
@@ -422,7 +428,7 @@ def main() -> None:
     if not args.dry_run:
         print(
             f"\nQuick check (dry run):\n"
-            f"  python scripts/generate_adaptive_automation_scenarios.py "
+            f"  python scripts/generate_scenarios/generate_adaptive_automation_scenarios.py "
             f"--participant {args.participant} "
             f"--condition {args.condition} "
             f"--n-blocks {args.n_blocks} "

@@ -10,9 +10,9 @@
 #
 
 Usage:
-    python scripts/generate_participant_assignments.py --n-per-sequence 10
-    python scripts/generate_participant_assignments.py --n-per-sequence 10 --start 1
-    python scripts/generate_participant_assignments.py --participant-ids P001 P002 P003 --sequences SEQ1 SEQ2 SEQ3
+    python scripts/generate_scenarios/generate_participant_assignments.py --n-per-sequence 10
+    python scripts/generate_scenarios/generate_participant_assignments.py --n-per-sequence 10 --start 1
+    python scripts/generate_scenarios/generate_participant_assignments.py --participant-ids P001 P002 P003 --sequences SEQ1 SEQ2 SEQ3
 """
 
 import argparse

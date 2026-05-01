@@ -2,7 +2,7 @@
 
 Usage
 -----
-    python scripts/calibrate_participant.py \\
+    python scripts/session/calibrate_participant.py \\
         --pretrained /path/to/eegnet_pretrained.pt \\
         --xdf-dir    /raw/calibration/P001/ \\
         --pid        P001 \\

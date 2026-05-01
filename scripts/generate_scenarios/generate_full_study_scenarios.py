@@ -12,17 +12,17 @@ restarts between blocks.
 Usage
 -----
     # From a staircase-calibration session CSV:
-    python scripts/generate_full_study_scenarios.py \\
+    python scripts/generate_scenarios/generate_full_study_scenarios.py \\
         --participant P001 \\
         --condition 1 \\
         --calibration-csv "D:/data/openmatb/P001/session1.csv"
 
     # Override d_final directly (for testing):
-    python scripts/generate_full_study_scenarios.py \\
+    python scripts/generate_scenarios/generate_full_study_scenarios.py \\
         --participant P001 --condition 1 --d-final 0.55
 
     # Dry run (print to stdout, do not write file):
-    python scripts/generate_full_study_scenarios.py \\
+    python scripts/generate_scenarios/generate_full_study_scenarios.py \\
         --participant P001 --condition 1 --d-final 0.55 --dry-run
 
 Level anchors
@@ -784,7 +784,7 @@ def main() -> None:
     if not args.dry_run:
         print(f"\nQuick check (dry run for comparison):")
         print(
-            f"  python scripts/generate_full_study_scenarios.py "
+            f"  python scripts/generate_scenarios/generate_full_study_scenarios.py "
             f"--participant {args.participant} "
             f"--condition {args.condition} "
             f"--d-final {d_final:.4f} --dry-run"

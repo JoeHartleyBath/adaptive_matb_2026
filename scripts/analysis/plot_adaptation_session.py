@@ -9,23 +9,20 @@ block boundaries) and produces a timeline figure showing:
   - Workload block backgrounds colour-coded by level (if session CSV given)
 
 Output follows the naming convention:
-    results/figures/adaptation__fig01__mwl_timeline.png
+    results/figures/{PID}/{SESSION}/{pid}_{session}_fig01_mwl_timeline.png
 
 Usage
 -----
-    python scripts/plot_adaptation_session.py \
+    python scripts/analysis/plot_adaptation_session.py \
         --audit   /path/to/adaptation_audit.csv \
         --session /path/to/openmatb_session.csv \
-        --out     results/figures/adaptation__fig01__mwl_timeline.png
+        --out     results/figures/P001/S001/p001_s001_fig01_mwl_timeline.png
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
-import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib
@@ -33,118 +30,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-from adaptation.adaptation_logger import COLUMNS as AUDIT_COLUMNS  # noqa: E402
-
-# ---------------------------------------------------------------------------
-# Data structures (same as analyse_adaptation_session.py)
-# ---------------------------------------------------------------------------
-
-@dataclass
-class AuditRow:
-    timestamp_lsl: float
-    scenario_time_s: float
-    mwl_raw: float
-    mwl_smoothed: float
-    signal_quality: float
-    threshold: float
-    action: str
-    assistance_on: bool
-    cooldown_remaining_s: float
-    hold_counter_s: float
-    reason: str
-
-
-@dataclass
-class BlockSegment:
-    name: str
-    level: str
-    block_num: int
-    start_sec: float
-    end_sec: float
-
-
-# ---------------------------------------------------------------------------
-# Loaders
-# ---------------------------------------------------------------------------
-
-def _load_audit_csv(path: Path) -> list[AuditRow]:
-    rows: list[AuditRow] = []
-    with open(path, "r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        if reader.fieldnames is None:
-            sys.exit(f"ERROR: Empty CSV: {path}")
-        missing = set(AUDIT_COLUMNS) - set(reader.fieldnames)
-        if missing:
-            sys.exit(f"ERROR: Audit CSV missing columns: {missing}")
-        for row in reader:
-            rows.append(AuditRow(
-                timestamp_lsl=float(row["timestamp_lsl"]),
-                scenario_time_s=float(row["scenario_time_s"]),
-                mwl_raw=float(row["mwl_raw"]),
-                mwl_smoothed=float(row["mwl_smoothed"]),
-                signal_quality=float(row["signal_quality"]),
-                threshold=float(row["threshold"]),
-                action=row["action"].strip(),
-                assistance_on=row["assistance_on"].strip() == "True",
-                cooldown_remaining_s=float(row["cooldown_remaining_s"]),
-                hold_counter_s=float(row["hold_counter_s"]),
-                reason=row["reason"],
-            ))
-    if not rows:
-        sys.exit(f"ERROR: No data rows in audit CSV: {path}")
-    return rows
-
-
-_LEVEL_RE = re.compile(r"/block_(\d+)/(\w+)$")
-
-
-def _load_session_blocks(csv_path: Path) -> list[BlockSegment]:
-    starts: dict[str, tuple[float, str, int]] = {}
-    ends: dict[str, float] = {}
-
-    with open(csv_path, "r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            row_type = (row.get("type") or "").strip().lower()
-            module = (row.get("module") or "").strip().lower()
-            address = (row.get("address") or "").strip().lower()
-            if row_type != "event" or module != "labstreaminglayer" or address != "marker":
-                continue
-            t_str = row.get("scenario_time") or ""
-            try:
-                t = float(t_str)
-            except ValueError:
-                continue
-            raw_value = (row.get("value") or "").split("|", 1)[0].strip()
-            if not raw_value:
-                continue
-            body = raw_value
-            if body.startswith("STUDY/V0/"):
-                body = body[len("STUDY/V0/"):]
-            if body.endswith("/START"):
-                base = body[:-len("/START")]
-                m = _LEVEL_RE.search(base)
-                if m:
-                    starts[base] = (t, m.group(2).upper(), int(m.group(1)))
-            elif body.endswith("/END"):
-                base = body[:-len("/END")]
-                ends[base] = t
-
-    segments: list[BlockSegment] = []
-    for base, (start_t, level, block_num) in starts.items():
-        end_t = ends.get(base)
-        if end_t is None or end_t <= start_t:
-            continue
-        segments.append(BlockSegment(
-            name=base, level=level, block_num=block_num,
-            start_sec=start_t, end_sec=end_t,
-        ))
-    segments.sort(key=lambda s: s.start_sec)
-    return segments
-
+from adaptation.audit_loader import (  # noqa: E402
+    AuditRow,
+    BlockSegment,
+    load_audit_csv as _load_audit_csv,
+    load_session_blocks as _load_session_blocks,
+)
 
 # ---------------------------------------------------------------------------
 # Colours
@@ -263,9 +157,9 @@ def main() -> None:
     parser.add_argument("--session", type=Path, default=None,
                         help="Path to OpenMATB session CSV (for block boundaries)")
     parser.add_argument("--out", type=Path,
-                        default=_REPO_ROOT / "results" / "figures"
-                        / "adaptation__fig01__mwl_timeline.png",
-                        help="Output figure path")
+                        default=None,
+                        help="Output figure path (e.g. results/figures/P001/S001/p001_s001_fig01_mwl_timeline.png). "
+                             "Omit to show interactively.")
     args = parser.parse_args()
 
     print("Loading audit CSV...")

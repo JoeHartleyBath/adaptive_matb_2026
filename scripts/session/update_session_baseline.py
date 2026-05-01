@@ -18,7 +18,7 @@ adaptation blocks begin.  See ADR-0005 for full evidence and rationale.
 
 Usage
 -----
-    python scripts/update_session_baseline.py \\
+    python scripts/session/update_session_baseline.py \\
         --xdf   "C:/data/.../ses-S002/physio/sub-P01_ses-S002_..._baseline.xdf" \\
         --model-dir "C:/data/adaptive_matb/models/P01" \\
         --duration 60
@@ -41,7 +41,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 

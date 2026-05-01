@@ -7,7 +7,7 @@ then runs the calibrated model and reports per-block and overall metrics:
 
 Usage
 -----
-    python scripts/evaluate_model_on_adaptation.py \
+    python scripts/analysis/evaluate_model_on_adaptation.py \
         --xdf    "C:/data/adaptive_matb/physiology/sub-PSELF/ses-S001/physio/sub-PSELF_ses-S001_task-matb_acq-adaptation_physio_old1.xdf" \
         --scenario "experiment/scenarios/adaptive_automation_pself_c1_8min.txt" \
         --model-dir "C:/data/adaptive_matb/models/PSELF" \
@@ -26,18 +26,17 @@ import joblib
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
-sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
-from build_mwl_training_dataset import (  # noqa: E402
+from eeg import EegPreprocessor, extract_windows, slice_block  # noqa: E402
+from eeg.extract_features import _build_region_map, _extract_feat  # noqa: E402
+from eeg.xdf_loader import (  # noqa: E402
     PREPROCESSING_CONFIG,
     WINDOW_CONFIG,
     _load_eeg_metadata,
     _merge_eeg_streams,
 )
-from eeg import EegPreprocessor, extract_windows, slice_block  # noqa: E402
-from eeg.extract_features import _build_region_map, _extract_feat  # noqa: E402
 
 _DEFAULT_REGION_CFG = _REPO_ROOT / "config" / "eeg_feature_extraction.yaml"
 _ANALYSIS_SRATE = 128.0

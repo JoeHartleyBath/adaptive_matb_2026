@@ -1,69 +1,24 @@
-"""Train a group LogReg model and calibrate it for a single participant.
+"""Calibrate a personalised SVM MWL model for one participant.
 
-Two subcommands
----------------
-    train-group   Build (or skip if up-to-date) the group LogReg model from
-                  all available pretrain participants.  Run OFFLINE, before
-                  any session.  Not needed for the default deployment path.
+Fits SelectKBest(k=35) + StandardScaler + SVC(linear, C=1.0) on the
+participant's own MATB calibration XDF data and saves deployment artefacts.
 
-    calibrate     Compute resting-baseline norm stats, fit own SelectKBest +
-                  StandardScaler + LogReg on the participant's MATB calibration
-                  XDFs, and save deployment artefacts.  Run DURING session —
-                  must be fast (no group training).
+Classifier selection (2026-03-27, sweep_scratch_models.py / selectk_sweep):
+  SVM-linear (k=35, C=1.0) gives best AUC3 and stable P(HIGH) at baseline.
+  SVM-RBF overfit.  LogReg showed P(HIGH)≈0 saturation at resting baseline.
 
-Deployment strategy (validated 2026-03-27, PSELF pilot)
----------------------------------------------------------
-Use ``--scratch`` (3-class, no group model).  Fits SelectKBest(k=30) +
-StandardScaler + LogReg(C=0.003, l2) directly on this participant's MATB
-calibration data:
-
-  Metric            ws_bin   ws_3cls   scratch_bin   scratch_3cls (*)
-  AUC               0.725    0.702     0.700         0.713
-  Acc@0.5           54.4%    57.5%     56.8%         63.3%
-  r_within_high     0.159    0.277     0.317         0.408
-  r_partial         0.198    0.170     0.249         0.264
-
-(*) warm-start variants failed due to TSST->MATB cross-task domain shift
-    causing P(HIGH) saturation; scratch_3cls wins on every metric.
-
-Classifier sweep (2026-03-27, scripts/sweep_scratch_models.py)
---------------------------------------------------------------
-LogReg, SVM-linear, and SVM-RBF were compared using the same cal->adaptation
-split.  Primary metric: 3-class macro OvR AUC.  Key findings:
-
-  Model              AUC3   AUCbin  P(H)|LOW  P(H)|HIGH
-  LR_C0.003         0.638    0.713     0.542      0.796   <- deployed
-  SVM_lin_C0.1      0.658    0.743     0.681      0.988
-  SVM_rbf (best*)   0.686    0.758     0.350      0.350
-
-  (*) SVM-RBF best AUC3 came from a model with 25% accuracy (degenerate)
-      and flat P(H)=0.35 across all levels — not usable.
-
-LR_C0.003 retained: SVM-linear gains <0.03 AUCbin but P(H)|LOW jumps to
-0.68, which would saturate the adaptation scheduler at baseline.  SVM-RBF
-overfits the 3-minute cal blocks (94%+ training accuracy) and generalises
-poorly to 8-minute adaptation blocks recorded ~30 min later — the tight
-non-linear boundaries do not survive within-session EEG drift.
-
-Deployment artefacts (consumed by mwl_estimator.py)
----------------------------------------------------
-    pipeline.pkl    joblib — sklearn Pipeline (StandardScaler + SVC linear)
-    selector.pkl    joblib — SelectKBest (k=40)
-    norm_stats.json {"mean": [...], "std": [...], "n_classes": 3}  (54 floats each)
+Deployment artefacts (consumed by mwl_estimator.py):
+    pipeline.pkl      — sklearn Pipeline(StandardScaler + SVC linear)
+    selector.pkl      — SelectKBest(k=35)
+    norm_stats.json   — {mean, std, n_classes}
+    model_config.json — threshold (10-fold CV Youden J), diagnostic metadata
 
 Usage
 -----
-    # Offline — train / update the group model (only needed for warm-start experiments)
-    python scripts/calibrate_participant.py train-group \\
-        --data-dir  D:/adaptive_matb_2026_data/processed/pretrain/continuous \\
-        --model-dir D:/adaptive_matb_2026_data/models/group
-
-    # During session — calibrate one participant (scratch 3-class, recommended)
-    python scripts/calibrate_participant.py calibrate \\
-        --scratch \\
-        --xdf-dir   D:/adaptive_matb_2026_data/raw/training/P001 \\
+    python scripts/session/calibrate_participant.py calibrate \\
+        --xdf-dir   D:/data/physiology/P001 \\
         --pid       P001 \\
-        --out-dir   D:/adaptive_matb_2026_data/models/P001
+        --out-dir   D:/data/models/P001
 """
 
 from __future__ import annotations
@@ -81,8 +36,8 @@ import joblib
 import numpy as np
 import yaml
 from sklearn.feature_selection import SelectKBest, f_classif
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
@@ -90,7 +45,7 @@ from sklearn.svm import SVC
 # ---------------------------------------------------------------------------
 # src/ on sys.path
 # ---------------------------------------------------------------------------
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from eeg.extract_features import (  # noqa: E402
@@ -104,9 +59,7 @@ from ml.pretrain_loader import (  # noqa: E402
     calibration_norm_features,
 )
 
-# Reuse XDF helpers from the dataset builder
-sys.path.insert(0, str(_REPO_ROOT / "scripts"))
-from build_mwl_training_dataset import (  # noqa: E402
+from eeg.xdf_loader import (  # noqa: E402
     PREPROCESSING_CONFIG,
     WINDOW_CONFIG,
     _detect_level,
@@ -129,141 +82,16 @@ _MATB_SCENARIO_OFFSET_S = 12.0
 # ---------------------------------------------------------------------------
 _CAL_K = 35             # SelectKBest k — S005 +block01 selectk sweep (2026-04-10)
 _CAL_C = 1.0            # SVM-linear C — SVM-linear sweep winner
-# Legacy LogReg constants retained for warm-start / group-model path only
-_LOGREG_K = 30
-_LOGREG_C = 0.003
-_LOGREG_PENALTY = "elasticnet"
-_LOGREG_L1_RATIO = 0.5
-_WARM_C = 0.1              # weak warm-start C (WS-weak winner)
 SEED = 42
-_LORO_MIN_J = 0.10         # minimum LORO Youden J to prefer LORO threshold over training-set
+_LORO_MIN_J = 0.10         # minimum LORO Youden J for quality gate (warn if below)
+_CV_N_SPLITS = 10          # stratified k-fold CV splits for threshold selection
 
 # Region config — shared ANT Neuro NA-271 cap layout
 _DEFAULT_REGION_CFG = Path(__file__).resolve().parent.parent / "config" / "eeg_feature_extraction.yaml"
-_QC_CONFIG = _REPO_ROOT / "config" / "pretrain_qc.yaml"
 _ANALYSIS_SRATE = 128.0
 
 
-def _load_exclude() -> set[str]:
-    """Load excluded participant IDs from pretrain QC config."""
-    cfg = yaml.safe_load(_QC_CONFIG.read_text())
-    excluded = cfg.get("excluded_participants") or {}
-    return set(excluded.keys())
 
-
-# ===================================================================
-# train-group subcommand
-# ===================================================================
-
-def _is_group_model_current(model_dir: Path, n_available: int) -> bool:
-    """Return True if a saved group model exists with the right participant count."""
-    meta_path = model_dir / "group_meta.json"
-    if not meta_path.exists():
-        return False
-    try:
-        meta = json.loads(meta_path.read_text())
-        return meta.get("n_participants", 0) == n_available
-    except (json.JSONDecodeError, OSError):
-        return False
-
-
-def train_group(
-    data_dir: Path,
-    model_dir: Path,
-    region_cfg: Path = _DEFAULT_REGION_CFG,
-) -> None:
-    """Train the group LogReg on ALL available pretrain participants.
-
-    Lazy: skips training if the saved model already has the same
-    participant count.  Re-trains automatically when new participants
-    are added to the data directory.
-
-    Saves to *model_dir*:
-        group_pipeline.pkl   — Pipeline(StandardScaler + LogReg)
-        group_selector.pkl   — SelectKBest(k=30)
-        group_meta.json      — {n_participants, pids, built_at}
-    """
-    data = PretrainDataDir(data_dir)
-    exclude = _load_exclude()
-    all_pids = [p for p in data.available_pids() if p not in exclude]
-
-    if not all_pids:
-        sys.exit("ERROR: No participants found after exclusion.")
-
-    # Lazy check — skip if model already matches
-    if _is_group_model_current(model_dir, len(all_pids)):
-        print(f"Group model already up-to-date ({len(all_pids)} participants). "
-              "Skipping training.")
-        return
-
-    print(f"Training group LogReg on {len(all_pids)} participants")
-    print(f"  Config: K={_LOGREG_K}, C={_LOGREG_C}, {_LOGREG_PENALTY}(l1_ratio={_LOGREG_L1_RATIO}), StandardScaler")
-    print(f"  Data:   {data_dir}")
-    print()
-
-    # --- Load & extract features (uses disk cache) ---
-    ch_names = data.channel_names()
-    region_map = _build_region_map(region_cfg, ch_names)
-    feat_data = load_all_features(data, all_pids, _ANALYSIS_SRATE, region_map)
-
-    # --- Calibration-normalise every participant (ADR-0004) ---
-    X_parts: list[np.ndarray] = []
-    y_parts: list[np.ndarray] = []
-    for pid in all_pids:
-        d = feat_data[pid]
-        X_norm = calibration_norm_features(
-            d["task_X"], d["fix_X"], d["forest_X"], d["forest_bidx"],
-        )
-        X_parts.append(X_norm)
-        y_parts.append(d["task_y"])
-
-    X_all = np.concatenate(X_parts)
-    y_all = np.concatenate(y_parts)
-    print(f"\n  Total windows: {len(y_all)}  "
-          f"(class 0: {(y_all == 0).sum()}, class 1: {(y_all == 1).sum()})")
-
-    # --- Feature selection ---
-    t0 = time.time()
-    selector = SelectKBest(f_classif, k=_LOGREG_K)
-    X_sel = selector.fit_transform(X_all, y_all)
-
-    # --- Pipeline: StandardScaler + LogReg ---
-    pipe = Pipeline([
-        ("sc", StandardScaler()),
-        ("clf", LogisticRegression(
-            C=_LOGREG_C, solver="saga",
-            l1_ratio=_LOGREG_L1_RATIO, max_iter=2000,
-            class_weight="balanced", random_state=SEED)),
-    ])
-    pipe.fit(X_sel, y_all)
-    elapsed = time.time() - t0
-    print(f"  Trained in {elapsed:.1f}s")
-
-    # --- Save artefacts ---
-    model_dir.mkdir(parents=True, exist_ok=True)
-    joblib.dump(pipe, model_dir / "group_pipeline.pkl")
-    joblib.dump(selector, model_dir / "group_selector.pkl")
-
-    meta = {
-        "n_participants": len(all_pids),
-        "pids": sorted(all_pids),
-        "built_at": datetime.now(timezone.utc).isoformat(),
-        "config": {
-            "K": _LOGREG_K,
-            "C": _LOGREG_C,
-            "penalty": _LOGREG_PENALTY,
-            "l1_ratio": _LOGREG_L1_RATIO,
-            "scaler": "standard",
-            "seed": SEED,
-        },
-        "n_windows": int(len(y_all)),
-        "n_features_raw": int(X_all.shape[1]),
-    }
-    (model_dir / "group_meta.json").write_text(
-        json.dumps(meta, indent=2), encoding="utf-8")
-
-    print(f"\n  Saved group model to {model_dir}")
-    print(f"  Participants: {len(all_pids)}  Features selected: {_LOGREG_K}")
 # ===================================================================
 # calibrate subcommand — helpers
 # ===================================================================
@@ -355,7 +183,7 @@ def _load_xdf_block(
 
     # Preprocess once -- all blocks share the same filtered signal.
     preprocessor = EegPreprocessor(PREPROCESSING_CONFIG)
-    preprocessor.initialize_filters(eeg_data.shape[0])
+    preprocessor.initialize_filters(eeg_data.shape[0], prewarm=eeg_data[:, 0])
     preprocessed = preprocessor.process(eeg_data)
 
     # --- Primary: extract every labelled block from the marker stream ---
@@ -476,7 +304,7 @@ def _load_rest_xdf_block(
     end_idx = int(np.searchsorted(eeg_ts, end_ts))
 
     preprocessor = EegPreprocessor(PREPROCESSING_CONFIG)
-    preprocessor.initialize_filters(eeg_data.shape[0])
+    preprocessor.initialize_filters(eeg_data.shape[0], prewarm=eeg_data[:, 0])
     preprocessed = preprocessor.process(eeg_data)
 
     block = slice_block(preprocessed, start_idx, end_idx, WINDOW_CONFIG)
@@ -486,6 +314,53 @@ def _load_rest_xdf_block(
         return None
 
     print(f"OK  epochs={epochs.shape[0]}")
+
+    # --- 25 Hz spike check (non-blocking, diagnostic only) ---
+    # Computes the 25 Hz spike ratio across channels on the rest EEG.
+    # A UK mains sub-harmonic (25 Hz = 50/2) can contaminate the beta band
+    # and cause extreme FM_Beta z-scores during calibration and inference.
+    # This check runs on the already-preprocessed signal and prints a loud
+    # warning if the spike is present so the operator can address the source
+    # before proceeding to calibration.
+    try:
+        import scipy.signal as _sp_sig
+        _rest_seg = preprocessed[:, start_idx:end_idx]
+        _nperseg  = min(int(_ANALYSIS_SRATE * 4), _rest_seg.shape[1] // 2)
+        if _nperseg >= int(_ANALYSIS_SRATE * 2):
+            _freqs, _pxx = _sp_sig.welch(
+                _rest_seg, fs=_ANALYSIS_SRATE, nperseg=_nperseg,
+                noverlap=_nperseg // 2, window="hann", axis=1,
+            )
+            _i25    = int(np.argmin(np.abs(_freqs - 25.0)))
+            _fmask  = (
+                ((_freqs >= 22.0) & (_freqs <= 24.0))
+                | ((_freqs >= 26.0) & (_freqs <= 28.0))
+            )
+            _p25    = _pxx[:, _i25]
+            _pfloor = _pxx[:, _fmask].mean(axis=1)
+            _valid  = _pfloor > 0
+            _ratios = np.where(_valid, _p25 / np.where(_valid, _pfloor, 1.0), np.nan)
+            _p90    = float(np.nanpercentile(_ratios, 90))
+            _worst  = int(np.nanargmax(_ratios))
+            _wname  = expected_channels[_worst] if _worst < len(expected_channels) else str(_worst)
+            if _p90 >= 3.0:
+                print()
+                print("!" * 72)
+                print("!  WARNING: 25 Hz SPIKE IN REST EEG (p90 spike_ratio = "
+                      f"{_p90:.1f}x, worst channel: {_wname})")
+                print("!  This sits in the beta band and will contaminate FM_Beta")
+                print("!  norm_stats and calibration features.")
+                print("!  Likely cause: 50 Hz mains sub-harmonic from a powered")
+                print("!  device (monitor, laptop charger, LED dimmer).")
+                print("!  ACTION: identify and switch off the source, then")
+                print("!  re-record the rest baseline before proceeding.")
+                print("!" * 72)
+                print()
+            else:
+                print(f"  [25 Hz check: p90 ratio={_p90:.2f} — OK]")
+    except Exception:
+        pass   # never block the rest of calibration on a diagnostic check
+
     return epochs
 
 
@@ -574,71 +449,80 @@ def _compute_loro_threshold(
 
 
 # ===================================================================
+# Stratified k-fold CV threshold helper
+# ===================================================================
+
+def _compute_kfold_threshold(
+    cal_X_norm: np.ndarray,
+    cal_y: np.ndarray,
+    cal_k: int,
+    cal_c: float,
+    seed: int,
+    n_splits: int = _CV_N_SPLITS,
+) -> tuple[float | None, float | None]:
+    """Stratified k-fold CV threshold for Youden J (primary threshold method).
+
+    Pools held-out p_high predictions across all folds and returns the
+    Youden-optimal threshold from the pooled ROC curve.
+
+    Returns (kfold_thr, kfold_j).  Returns (None, None) when data has
+    fewer than 2 classes or fewer samples than n_splits.
+    """
+    y_binary = (cal_y == cal_y.max()).astype(int)
+    if len(np.unique(y_binary)) < 2 or len(cal_y) < n_splits:
+        return None, None
+
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    pool_p = np.zeros(len(cal_y))
+
+    for tr_idx, te_idx in cv.split(cal_X_norm, cal_y):
+        Xtr = cal_X_norm[tr_idx]; ytr = cal_y[tr_idx]
+        Xte = cal_X_norm[te_idx]
+
+        k = min(cal_k, Xtr.shape[1])
+        sel = SelectKBest(f_classif, k=k)
+        Xtr_s = sel.fit_transform(Xtr, ytr)
+        sc = StandardScaler()
+        Xtr_s = sc.fit_transform(Xtr_s)
+        svc = SVC(
+            kernel="linear", C=cal_c,
+            class_weight="balanced", probability=True, random_state=seed,
+        )
+        svc.fit(Xtr_s, ytr)
+        pool_p[te_idx] = svc.predict_proba(sc.transform(sel.transform(Xte)))[:, -1]
+
+    fpr, tpr, thr = roc_curve(y_binary, pool_p)
+    j_scores = tpr - fpr
+    best_idx = int(np.argmax(j_scores))
+    return float(thr[best_idx]), float(j_scores[best_idx])
+
+
+# ===================================================================
 # calibrate subcommand — main function
 # ===================================================================
 
 def calibrate(
-    group_dir: Path | None,
     xdf_dir: Path,
     pid: str,
     out_dir: Path,
     resting_xdf: Path | None = None,
     region_cfg: Path = _DEFAULT_REGION_CFG,
     binary: bool = False,
-    scratch: bool = False,
 ) -> None:
-    """Fit and save a deployment MWL model for one participant.
+    """Fit and save a personalised SVM MWL deployment model for one participant.
 
-    Recommended call: ``scratch=True, binary=False`` (validated 2026-03-27).
-
-    Steps (scratch=True, default for live sessions):
-      1. Skip group model entirely.
-      2. Load participant's MATB calibration XDFs -> extract features.
-      3. Compute resting-baseline norm stats (from ``resting_xdf`` if given,
+    Steps:
+      1. Load participant's MATB calibration XDFs, extract features.
+      2. Compute resting-baseline norm stats (from ``resting_xdf`` if given,
          else LOW block fallback).
-      4. Z-normalise features using those stats.
-      5. Fit own SelectKBest(k=30, f_classif) on normalised cal data.
-      6. Fit StandardScaler + fresh LogReg(3-class, l2) on selected features.
-      7. Save: pipeline.pkl, selector.pkl, norm_stats.json.
-
-    Steps (scratch=False, warm-start, kept for reference only):
-      1. Load pre-built group model (group_pipeline.pkl, group_selector.pkl).
-      2. Load participant's calibration XDFs -> extract features.
-      3. Compute resting-baseline norm stats.
-      4. Calibration-normalise the task features.
-      5. Warm-start LogReg from group weights, refit with C=0.1.
-      6. Save: pipeline.pkl, selector.pkl, norm_stats.json.
-
-    Note: warm-start was superseded after empirical comparison on PSELF pilot
-    data showed TSST->MATB cross-task domain shift causing P(HIGH) saturation.
-    scratch_3cls r_within_high=0.408 vs ws_bin=0.159.  Use scratch=True.
+      3. Z-normalise features; fit SelectKBest(k=35) + StandardScaler + SVC(linear, C=1.0).
+      4. Compute Youden J threshold via 10-fold CV.
+      5. Save: pipeline.pkl, selector.pkl, norm_stats.json, model_config.json.
     """
     from ml.dataset import LABEL_MAP
     from sklearn.preprocessing import StandardScaler
 
-    # --- 1. Load group model (warm-start) OR note scratch mode ---
-    if scratch:
-        group_pipe = None
-        group_selector = None
-        group_clf = None
-        group_sc = None
-        print("Scratch mode: no group model — will fit own selector + scaler.")
-    else:
-        if group_dir is None:
-            sys.exit("ERROR: --group-dir is required unless --scratch is set.")
-        group_pipe_path = group_dir / "group_pipeline.pkl"
-        group_sel_path = group_dir / "group_selector.pkl"
-        for p in (group_pipe_path, group_sel_path):
-            if not p.exists():
-                sys.exit(f"ERROR: Group model not found: {p}\n"
-                         "       Run 'train-group' first.")
-        group_pipe = joblib.load(group_pipe_path)
-        group_selector = joblib.load(group_sel_path)
-        group_clf = group_pipe.named_steps["clf"]
-        group_sc = group_pipe.named_steps["sc"]
-        print(f"Loaded group model from {group_dir}")
-
-    # --- 2. Load calibration XDFs ---
+    # --- 1. Load calibration XDFs ---
     expected_channels = _load_eeg_metadata(_REPO_ROOT)
     # Only use the latest version of each acquisition: exclude files whose stem
     # ends with _old1, _old2, etc.  Those are superseded recordings created when
@@ -646,7 +530,7 @@ def calibrate(
     # offset with no Markers stream, producing mislabelled training windows.
     import re as _re
     _all_xdf = sorted(Path(xdf_dir).glob("*.xdf"))
-    xdf_files = [f for f in _all_xdf if not _re.search(r"_old\d+$", f.stem)]
+    xdf_files = [f for f in _all_xdf if not _re.search(r"_old\d+$", f.stem) and "_acq-cal_" in f.stem]
     if not xdf_files:
         sys.exit(f"ERROR: No .xdf files found in {xdf_dir}")
 
@@ -743,47 +627,22 @@ def calibrate(
     _loro_split_pts = np.cumsum(_xdf_window_counts[:-1]).tolist() if len(_xdf_window_counts) > 1 else []
     xdf_X_norm_loro: list[np.ndarray] = list(np.split(cal_X_norm, _loro_split_pts))
 
-    if scratch:
-        # Fit own SelectKBest and StandardScaler on this participant's data.
-        k = min(_CAL_K, cal_X_norm.shape[1])
-        own_selector = SelectKBest(f_classif, k=k)
-        cal_X_sel = own_selector.fit_transform(cal_X_norm, cal_y)
-        own_sc = StandardScaler()
-        cal_X_sc = own_sc.fit_transform(cal_X_sel)
-        clf = SVC(
-            kernel="linear", C=_CAL_C,
-            class_weight="balanced", probability=True, random_state=SEED,
-        )
-        clf.fit(cal_X_sc, cal_y)
-        deploy_selector = own_selector
-        deploy_pipe = Pipeline([
-            ("sc", own_sc),
-            ("clf", clf),
-        ])
-        print(f"  Scratch: fitted own SelectKBest(k={k}) + StandardScaler + SVC(linear, C={_CAL_C}) on cal data.")
-    else:
-        cal_X_sel = group_selector.transform(cal_X_norm)
-        cal_X_sc = group_sc.transform(cal_X_sel)
-        n_train_classes = len(np.unique(cal_y))
-        clf = LogisticRegression(
-            C=_WARM_C, max_iter=2000, warm_start=True,
-            class_weight="balanced", random_state=SEED,
-        )
-        if n_train_classes == len(group_clf.classes_):
-            clf.classes_ = group_clf.classes_.copy()
-            clf.coef_ = group_clf.coef_.copy()
-            clf.intercept_ = group_clf.intercept_.copy()
-        else:
-            print(f"  NOTE: group model has {len(group_clf.classes_)} classes, "
-                  f"calibration has {n_train_classes} — "
-                  f"skipping weight warm-start (feature preprocessing reused).")
-        clf.fit(cal_X_sc, cal_y)
-        deploy_selector = group_selector
-        # Build deployment pipeline (same scaler as group, new clf)
-        deploy_pipe = Pipeline([
-            ("sc", group_sc),
-            ("clf", clf),
-        ])
+    k = min(_CAL_K, cal_X_norm.shape[1])
+    own_selector = SelectKBest(f_classif, k=k)
+    cal_X_sel = own_selector.fit_transform(cal_X_norm, cal_y)
+    own_sc = StandardScaler()
+    cal_X_sc = own_sc.fit_transform(cal_X_sel)
+    clf = SVC(
+        kernel="linear", C=_CAL_C,
+        class_weight="balanced", probability=True, random_state=SEED,
+    )
+    clf.fit(cal_X_sc, cal_y)
+    deploy_selector = own_selector
+    deploy_pipe = Pipeline([
+        ("sc", own_sc),
+        ("clf", clf),
+    ])
+    print(f"  Fitted SelectKBest(k={k}) + StandardScaler + SVC(linear, C={_CAL_C}).")
 
     # --- 6. Youden's J threshold (binary HIGH vs NOT-HIGH) ---
     # P(HIGH) is the last probability column — matches mwl_estimator.py behaviour
@@ -805,32 +664,36 @@ def calibrate(
     train_youden_thr = float(thr[best_idx])
     train_youdens_j = float(j_scores[best_idx])
 
-    # LORO CV threshold (scratch + ≥2 XDFs only)
+    # LORO CV (quality gate) + 10-fold CV (primary threshold method)
     loro_thr: float | None = None
     loro_j: float | None = None
     loro_fold_j: list[float] = []
+    kfold_thr: float | None = None
+    kfold_j: float | None = None
     threshold_method = "train_set"
 
-    if scratch and len(xdf_files_loaded) >= 2:
-        loro_thr, loro_j, loro_fold_j = _compute_loro_threshold(
-            xdf_X_norm_loro, _xdf_y_loro, _CAL_K, _CAL_C, SEED,
-        )
-        if loro_thr is not None and loro_j is not None and loro_j >= _LORO_MIN_J:
-            youden_thr = loro_thr
-            youdens_j = loro_j
-            threshold_method = "loro"
-        else:
-            youden_thr = train_youden_thr
-            youdens_j = train_youdens_j
-            threshold_method = "train_set_fallback"
-            _reason = (
-                f"LORO J={loro_j:.4f}" if loro_j is not None else "LORO returned null"
-            )
-            print(f"  WARNING: LORO threshold rejected ({_reason} < min {_LORO_MIN_J:.2f}) "
-                  f"— falling back to training-set threshold ({train_youden_thr:.4f})")
+    # 10-fold stratified CV — primary threshold
+    kfold_thr, kfold_j = _compute_kfold_threshold(
+        cal_X_norm, cal_y, _CAL_K, _CAL_C, SEED,
+    )
+    if kfold_thr is not None:
+        youden_thr = kfold_thr
+        youdens_j = kfold_j
+        threshold_method = "10fold_cv"
     else:
         youden_thr = train_youden_thr
         youdens_j = train_youdens_j
+        threshold_method = "train_set_fallback"
+        print("  WARNING: 10-fold CV failed — falling back to training-set threshold")
+
+    # LORO — quality gate only
+    if len(xdf_files_loaded) >= 2:
+        loro_thr, loro_j, loro_fold_j = _compute_loro_threshold(
+            xdf_X_norm_loro, _xdf_y_loro, _CAL_K, _CAL_C, SEED,
+        )
+        if loro_j is not None and loro_j < _LORO_MIN_J:
+            print(f"  WARNING: LORO J={loro_j:.4f} < {_LORO_MIN_J:.2f} "
+                  f"— low cross-run transfer; model may not generalise across sessions")
 
     # --- 7. Save deployment artefacts ---
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -851,12 +714,15 @@ def calibrate(
         "threshold_method": threshold_method,
         "train_youden_threshold": round(train_youden_thr, 6),
         "train_youdens_j": round(train_youdens_j, 6),
+        "kfold_youden_threshold": round(kfold_thr, 6) if kfold_thr is not None else None,
+        "kfold_youdens_j": round(kfold_j, 6) if kfold_j is not None else None,
+        "kfold_n_splits": _CV_N_SPLITS if kfold_thr is not None else None,
         "loro_youden_threshold": round(loro_thr, 6) if loro_thr is not None else None,
         "loro_youdens_j": round(loro_j, 6) if loro_j is not None else None,
         "loro_n_folds": len(loro_fold_j) if loro_fold_j else None,
         "loro_fold_j_scores": [round(v, 6) for v in loro_fold_j] if loro_fold_j else None,
         "n_classes": int(len(np.unique(cal_y))),
-        "model_k": int(deploy_selector.k) if hasattr(deploy_selector, "k") else _LOGREG_K,
+        "model_k": int(deploy_selector.k),
         "calibrated_at": datetime.now(timezone.utc).isoformat(),
     }
     (out_dir / "model_config.json").write_text(
@@ -867,9 +733,11 @@ def calibrate(
     cal_acc = float(np.mean(cal_preds == cal_y))
     print(f"\n  Calibration accuracy: {cal_acc:.1%}")
     print(f"  Train-set threshold:  {train_youden_thr:.4f}  (J={train_youdens_j:.4f})")
+    if kfold_thr is not None:
+        print(f"  10-fold CV threshold: {kfold_thr:.4f}  (J={kfold_j:.4f})")
     if loro_thr is not None:
         print(f"  LORO threshold:       {loro_thr:.4f}  (J={loro_j:.4f}, "
-              f"folds={len(loro_fold_j)}, fold_J={[round(v,3) for v in loro_fold_j]})")
+              f"folds={len(loro_fold_j)}, fold_J={[round(v,3) for v in loro_fold_j]})  [quality gate]")
     print(f"  Deployed threshold:   {youden_thr:.4f}  [method={threshold_method}]")
     print(f"  Saved deployment artefacts to {out_dir}/")
     print(f"    pipeline.pkl, selector.pkl, norm_stats.json, model_config.json")
@@ -881,30 +749,16 @@ def calibrate(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Train group LogReg and calibrate per-participant deployment model.",
+        description="Calibrate a per-participant SVM MWL deployment model.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # ---- train-group ----
-    tg = sub.add_parser(
-        "train-group",
-        help="Build (or skip if current) the group LogReg model.",
-    )
-    tg.add_argument("--data-dir", type=Path, required=True,
-                     help="Pretrain continuous HDF5 directory.")
-    tg.add_argument("--model-dir", type=Path, required=True,
-                     help="Where to save group_pipeline.pkl etc.")
-    tg.add_argument("--region-cfg", type=Path, default=_DEFAULT_REGION_CFG,
-                     help="EEG region YAML config.")
-
     # ---- calibrate ----
     cal = sub.add_parser(
         "calibrate",
-        help="Fine-tune group model for one participant (fast).",
+        help="Fit personalised SVM model for one participant.",
     )
-    cal.add_argument("--group-dir", type=Path, required=False, default=None,
-                      help="Directory with group_pipeline.pkl etc. (not needed with --scratch).")
     cal.add_argument("--xdf-dir", type=Path, required=True,
                       help="Directory with calibration .xdf files for this participant.")
     cal.add_argument("--pid", type=str, required=True,
@@ -917,28 +771,17 @@ def main() -> None:
                       help="EEG region YAML config.")
     cal.add_argument("--binary", action="store_true",
                       help="Train binary (LOW vs HIGH) instead of 3-class.")
-    cal.add_argument("--scratch", action="store_true",
-                      help="Ignore group model; fit own SelectKBest + StandardScaler on cal data.")
 
     args = parser.parse_args()
 
-    if args.command == "train-group":
-        train_group(
-            data_dir=args.data_dir,
-            model_dir=args.model_dir,
-            region_cfg=args.region_cfg,
-        )
-    elif args.command == "calibrate":
-        calibrate(
-            group_dir=args.group_dir if not args.scratch else None,
-            xdf_dir=args.xdf_dir,
-            pid=args.pid,
-            out_dir=args.out_dir,
-            resting_xdf=args.resting_xdf,
-            region_cfg=args.region_cfg,
-            binary=args.binary,
-            scratch=args.scratch,
-        )
+    calibrate(
+        xdf_dir=args.xdf_dir,
+        pid=args.pid,
+        out_dir=args.out_dir,
+        resting_xdf=args.resting_xdf,
+        region_cfg=args.region_cfg,
+        binary=args.binary,
+    )
 
 
 if __name__ == "__main__":

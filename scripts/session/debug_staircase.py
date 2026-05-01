@@ -8,14 +8,14 @@ without running OpenMATB.
 
 Usage
 -----
-    python scripts/debug_staircase.py                      # defaults
-    python scripts/debug_staircase.py --score perfect      # score=1.0 → d must rise
-    python scripts/debug_staircase.py --score poor         # score=0.0 → d must fall
-    python scripts/debug_staircase.py --score converge     # noisy around target
-    python scripts/debug_staircase.py --score alternating  # oscillates → tests reversal count
-    python scripts/debug_staircase.py --score custom --custom-value 0.85
-    python scripts/debug_staircase.py --seed 99 --duration 300 --window 30
-    python scripts/debug_staircase.py --help
+    python scripts/session/debug_staircase.py                      # defaults
+    python scripts/session/debug_staircase.py --score perfect      # score=1.0 → d must rise
+    python scripts/session/debug_staircase.py --score poor         # score=0.0 → d must fall
+    python scripts/session/debug_staircase.py --score converge     # noisy around target
+    python scripts/session/debug_staircase.py --score alternating  # oscillates → tests reversal count
+    python scripts/session/debug_staircase.py --score custom --custom-value 0.85
+    python scripts/session/debug_staircase.py --seed 99 --duration 300 --window 30
+    python scripts/session/debug_staircase.py --help
 
 Output
 ------

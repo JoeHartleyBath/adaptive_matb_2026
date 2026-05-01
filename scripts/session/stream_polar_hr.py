@@ -14,11 +14,11 @@ Requirements:
   pip install bleak pylsl
 
 Usage:
-  python scripts/stream_polar_hr.py
-  python scripts/stream_polar_hr.py --device XX:XX:XX:XX:XX:XX
-  python scripts/stream_polar_hr.py --prefix PolarH10 --scan-timeout 15
-  python scripts/stream_polar_hr.py --probe              # connect, print info, exit
-  python scripts/stream_polar_hr.py --test               # check deps, exit
+  python scripts/session/stream_polar_hr.py
+  python scripts/session/stream_polar_hr.py --device XX:XX:XX:XX:XX:XX
+  python scripts/session/stream_polar_hr.py --prefix PolarH10 --scan-timeout 15
+  python scripts/session/stream_polar_hr.py --probe              # connect, print info, exit
+  python scripts/session/stream_polar_hr.py --test               # check deps, exit
 
 Press Ctrl+C to stop streaming.
 
@@ -509,11 +509,11 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/stream_polar_hr.py
-  python scripts/stream_polar_hr.py --device XX:XX:XX:XX:XX:XX
-  python scripts/stream_polar_hr.py --prefix PolarH10 --scan-timeout 15
-  python scripts/stream_polar_hr.py --probe    # connect + print info, then exit
-  python scripts/stream_polar_hr.py --test     # dependency check, then exit
+  python scripts/session/stream_polar_hr.py
+  python scripts/session/stream_polar_hr.py --device XX:XX:XX:XX:XX:XX
+  python scripts/session/stream_polar_hr.py --prefix PolarH10 --scan-timeout 15
+  python scripts/session/stream_polar_hr.py --probe    # connect + print info, then exit
+  python scripts/session/stream_polar_hr.py --test     # dependency check, then exit
 
 Streams created (with default --prefix Polar):
   PolarHR   type=HR   1 ch  ~1 Hz       beats/min  int32
