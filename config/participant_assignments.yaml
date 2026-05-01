@@ -129,6 +129,12 @@ participants:
     adaptation_first: true
     last_run: null
     sessions_completed: []
+    notes: >-
+      TRUE HUMAN RUN (dry run cohort). Completed full pipeline including
+      rest_baseline x4, all practice blocks, and both calibration blocks
+      (c1 + c2, ~10 min each, 2026-04-22). XDF files present but empty
+      (~74 KB each, no EEG channels recorded — LabRecorder not streaming
+      EEG at the time). No adaptation block run. Pipeline otherwise intact.
   PDRY02:
     adaptation_first: false
     last_run: null
@@ -143,6 +149,32 @@ participants:
     sessions_completed: []
   PDRY05:
     adaptation_first: true
+    last_run: null
+    sessions_completed: []
+    notes: >-
+      TRUE HUMAN RUN (dry run cohort). Failed during fixation cross at start
+      of rest_baseline (session lasted ~6 s, 2026-04-23 15:20). practice_low
+      also immediately aborted (~16 s). No XDF file recorded at all
+      (sub-PDRY05 physiology folder absent). Root cause: likely participant
+      discomfort or setup issue before recording began.
+  PDRY06:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PDRY07:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PDRY08:
+    adaptation_first: false
+    last_run: null
+    sessions_completed: []
+  PDRY09:
+    adaptation_first: true
+    last_run: null
+    sessions_completed: []
+  PDRY10:
+    adaptation_first: false
     last_run: null
     sessions_completed: []
   PPILOT01:
@@ -187,11 +219,11 @@ participants:
     sessions_completed: []
   PSELF:
     adaptation_first: true
-    last_run: '2026-04-09T15:42:31.233102'
+    last_run: '2026-04-08T14:14:48.616173'
     sessions_completed:
     - S001
     - S002
     - S003
     - S004
-    - STEST
+    - S005
     skip_practice: true

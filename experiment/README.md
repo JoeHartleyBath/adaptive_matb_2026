@@ -6,7 +6,7 @@ Experiment asset files for the adaptive MATB 2026 study.
 
 - `scenarios/` — OpenMATB scenario `.txt` files. These are the **source of truth** for
   the Pilot 1 task sequence. Do **not** regenerate them casually; changes here directly
-  affect what participants experience. Use `scripts/generate_pilot_scenarios.py` to
+  affect what participants experience. Use `scripts/generate_scenarios/generate_pilot_scenarios.py` to
   produce new files, then review carefully before replacing any locked scenario.
 
 - `instructions/` — Participant-facing instruction screen text files. These are copied

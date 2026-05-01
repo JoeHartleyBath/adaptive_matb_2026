@@ -1,8 +1,13 @@
 # Pilot Familiarization Scenario
 # Introduces tasks one by one, following OpenMATB default.txt pattern
 # Format: TIME;EVENT;ACTION;ARGUMENTS
+#
+# Timing: each section has a 25-second window before the next fires.
+# The participant can press SPACE to dismiss the instruction early and
+# interact with the task — the next section will not start until 25 s
+# from the previous section's timestamp regardless.
 
-# --- Welcome and full environment view ---
+# --- Welcome and full environment view (20s) ---
 0:00:00;instructions;filename;../../../../assets/instructions/pilot_en/1_welcome.txt
 0:00:00;instructions;start
 0:00:00;sysmon;start
@@ -12,71 +17,71 @@
 0:00:00;communications;voicegender;male
 0:00:00;resman;start
 
-# --- SysMon Demo (20 seconds) ---
-0:00:10;resman;hide
-0:00:10;resman;pause
-0:00:10;track;hide
-0:00:10;track;pause
-0:00:10;communications;hide
-0:00:10;communications;pause
-0:00:10;instructions;filename;../../../../assets/instructions/pilot_en/2_sysmon.txt
-0:00:10;instructions;start
+# --- SysMon Demo (25-second window) ---
+0:00:20;resman;hide
+0:00:20;resman;pause
+0:00:20;track;hide
+0:00:20;track;pause
+0:00:20;communications;hide
+0:00:20;communications;pause
+0:00:20;instructions;filename;../../../../assets/instructions/pilot_en/2_sysmon.txt
+0:00:20;instructions;start
 
 # Trigger sysmon failures during demo
-0:00:15;sysmon;scales-1-failure;True
-0:00:20;sysmon;lights-1-failure;True
+0:00:25;sysmon;scales-1-failure;True
+0:00:30;sysmon;lights-1-failure;True
 
-# --- Tracking Demo (20 seconds) ---
-0:00:30;track;show
-0:00:30;track;resume
-0:00:30;sysmon;hide
-0:00:30;sysmon;pause
-0:00:30;instructions;filename;../../../../assets/instructions/pilot_en/3_track.txt
-0:00:30;instructions;start
+# --- Tracking Demo (25-second window) ---
+0:00:45;track;show
+0:00:45;track;resume
+0:00:45;sysmon;hide
+0:00:45;sysmon;pause
+0:00:45;instructions;filename;../../../../assets/instructions/pilot_en/3_track.txt
+0:00:45;instructions;start
 
-# --- Communications Demo (20 seconds) ---
-0:00:50;communications;show
-0:00:50;communications;resume
-0:00:50;track;hide
-0:00:50;track;pause
-0:00:50;instructions;filename;../../../../assets/instructions/pilot_en/4_comm.txt
-0:00:50;instructions;start
+# --- Communications Demo (25-second window) ---
+0:01:10;communications;show
+0:01:10;communications;resume
+0:01:10;track;hide
+0:01:10;track;pause
+0:01:10;instructions;filename;../../../../assets/instructions/pilot_en/4_comm.txt
+0:01:10;instructions;start
 
 # Trigger comm prompt during demo
-0:00:51;communications;radioprompt;own
+0:01:11;communications;radioprompt;own
 
-# --- ResMan Demo (25 seconds) ---
-0:01:30;resman;show
-0:01:30;resman;resume
-0:01:30;communications;hide
-0:01:30;communications;pause
-0:01:30;instructions;filename;../../../../assets/instructions/pilot_en/5_resman.txt
-0:01:30;instructions;start
+# --- ResMan Demo (25-second window) ---
+0:01:35;resman;show
+0:01:35;resman;resume
+0:01:35;communications;hide
+0:01:35;communications;pause
+0:01:35;instructions;filename;../../../../assets/instructions/pilot_en/5_resman.txt
+0:01:35;instructions;start
 
 # Trigger pump failure during demo
-0:01:35;resman;pump-1-state;failure
-0:01:45;resman;pump-1-state;off
+0:01:40;resman;pump-1-state;failure
+0:01:50;resman;pump-1-state;off
 
-# --- All Together (2 minutes practice) ---
-0:01:55;sysmon;show
-0:01:55;sysmon;resume
-0:01:55;track;show
-0:01:55;track;resume
-0:01:55;communications;show
-0:01:55;communications;resume
-0:01:55;instructions;filename;../../../../assets/instructions/pilot_en/6_all_tasks.txt
-0:01:55;instructions;start
+# --- All Together (25 seconds practice) ---
+0:02:00;sysmon;show
+0:02:00;sysmon;resume
+0:02:00;track;show
+0:02:00;track;resume
+0:02:00;communications;show
+0:02:00;communications;resume
+0:02:00;instructions;filename;../../../../assets/instructions/pilot_en/6_all_tasks.txt
+0:02:00;instructions;start
 
 # Practice events during full task period
 0:02:05;sysmon;lights-2-failure;true
-0:02:10;communications;radioprompt;own
-0:02:15;resman;pump-6-state;failure
-0:02:20;sysmon;scales-3-failure;true
-0:02:25;resman;pump-6-state;off
-0:02:30;communications;radioprompt;own
+0:02:08;communications;radioprompt;own
+0:02:12;resman;pump-6-state;failure
+0:02:16;sysmon;scales-3-failure;true
+0:02:18;resman;pump-6-state;off
+0:02:21;communications;radioprompt;own
 
 # --- End ---
-0:04:05;sysmon;stop
-0:04:05;track;stop
-0:04:05;communications;stop
-0:04:05;resman;stop
+0:02:25;sysmon;stop
+0:02:25;track;stop
+0:02:25;communications;stop
+0:02:25;resman;stop
