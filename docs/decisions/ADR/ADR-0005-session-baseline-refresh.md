@@ -64,7 +64,7 @@ protocol:
 
 1. At the start of each adaptation session, record a fresh **60-second
    eyes-open resting baseline** via a short scenario marker segment.
-2. After recording, run `scripts/update_session_baseline.py --xdf <xdf>
+2. After recording, run `scripts/session/update_session_baseline.py --xdf <xdf>
    --model-dir <model>` to recompute `norm_mean` and `norm_std` from this
    fresh resting data and overwrite `norm_stats.json`.
 3. `mwl_estimator.py` then loads the updated `norm_stats.json` as usual —
@@ -153,7 +153,7 @@ updated from it alone.
 
 ## Implementation
 
-- New utility script: `scripts/update_session_baseline.py`
+- New utility script: `scripts/session/update_session_baseline.py`
 - No changes to `pipeline.pkl`, `selector.pkl`, or model training code.
 - `mwl_estimator.py` already reads `norm_stats.json` on startup — no
   changes needed if the file is updated before the estimator is launched.

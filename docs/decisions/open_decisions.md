@@ -23,6 +23,7 @@ Rules:
 - OD-09: Tracking difficulty operationalisation — Pilot 1
 - OD-10: Experience sampling during calibration — **pre-Pilot 1**
 - OD-11: MODERATE placement — Pilot 1
+- OD-12: PTP gate + slow-EMA drift correction in MWL inference pipeline — dry-run review
 
 Note: the **full-study calibration structure is locked** (post-Pilot 1). See the committed design choice:
 - `docs/decisions/design_choices/study_design/dc_full_study_calibration_structure.md`
@@ -512,3 +513,70 @@ Affects scenario parameterisation for all scaled subtasks, event-rate totals (OD
 
 **References**  
 - (Add Pontiggia et al., 2024 and any primary sources if they explicitly discuss multi-level scaling practices.)
+
+---
+
+### OD-12: PTP gate + slow-EMA drift correction in MWL inference pipeline
+
+**Decision question**  
+Should the real-time MWL inference pipeline (`src/mwl_estimator.py`) be extended with:
+1. A **per-channel peak-to-peak (PTP) amplitude gate** to suppress transient EEG artifacts during task runs, and
+2. A **slow exponential moving average (EMA) drift correction** to absorb gradual feature-space drift from calibration to task?
+
+**Why this is open**  
+The pipeline currently applies no online artifact rejection; it relies entirely on the offline-cleaned calibration data to define the feature space.  In dry runs and early sessions, two failure modes have been observed:
+- **PDRY06 adaptation run**: P25 per-channel PTP ≈ 382 µV (P99 ≈ 581 µV), with 25.6% of windows containing >5% of channels above 500 µV.  The classifier score collapsed toward zero, likely due to artifact-driven feature distortion rather than genuine low workload.
+- **PDRY06 control run**: P(HIGH MWL) stuck at ceiling (~0.96) throughout the run.  Slow-EMA correction (τ≈20 min) pulled it to ~0.5, suggesting the feature space had drifted significantly from calibration rather than the workload genuinely being high the entire time.
+
+Neither EA (Euclidean Alignment) nor an Euclidean Potato with a calibration reference improved things.  EA distorts `norm_stats`; the Potato flags 98–100% of task windows when the reference is the calibration covariance.
+
+**Proposed implementation (simulation confirmed)**  
+
+*Phase 1 — PTP gate (hold-last-good):*
+- Per window (2 s / 256 samples), compute per-channel PTP across the 128 raw (post-filter) channels.
+- Flag if >5% of channels (>~6/128) exceed 500 µV = 5 × 10⁻⁴ V.
+- If flagged: hold the last good P(HIGH) value; increment a consecutive-bad counter.
+- If consecutive bad windows > 20 (5 s): reset held value to 0.5 (neutral) to avoid indefinitely stale outputs.
+- Emit a `ptp_bad` flag for logging.
+
+*Phase 2 — Slow-EMA drift correction:*
+- Maintain an EMA of raw (un-normalised) features with α = 1/4800 (τ ≈ 20 min at 4 Hz).
+- Initialise EMA from `norm_mean` (calibration baseline) so correction starts at zero.
+- After 30 s warm-up (120 windows), apply correction: `feats_corrected = raw_feats − (ema_state − norm_mean)`.
+- This removes slow drift while preserving workload-driven variance (whose timescale is 1–3 min, much faster than τ).
+
+**Simulation evidence**  
+Offline simulation on PDRY06 S001 and PSELF S005 (`scripts/_tmp_ptp_ema_sim.py`):
+- Clean PSELF data: 0.6–1.4% windows flagged by PTP; EMA changes mean P(HIGH) by ≤0.03. Minimal disruption. ✓
+- PDRY06 adaptation: 25.6% windows flagged (genuine artifact); EMA drift correction changes mean P(HIGH) from 0.24 to 0.04 — consistent with artifact contamination rather than true classification.
+- PDRY06 control: ceiling problem confirmed; correction brings P(HIGH) from 0.96 → 0.56, suggesting calibration-to-task drift is the root cause.  This warrants further investigation independent of this OD.
+
+See figure: `results/figures/ptp_ema_sim_mwl.png`
+
+**What evidence resolves this decision**  
+- **Signal quality varies**: if ≥3 dry runs show <2% PTP-flagged windows with clean EEG (like PSELF S005), benefit of gate is minimal; the gate is still low-risk and recommended.
+- **Drift is present**: if ≥1 participant shows sustained ceiling/floor P(HIGH) during a run that corrects with EMA, Phase 2 should be included.
+- **Alternative**: if the ceiling problem in PDRY06 is traced to a different root cause (e.g. bad calibration data quality), Phase 2 may not be needed.
+
+**Decision trigger**  
+Review after the next 2–3 dry runs once real participant physiology is available.  Specifically check:
+- Fraction of windows flagged per condition (expect <5% for clean data).
+- Whether P(HIGH) exhibits ceiling/floor behaviour at session start (drift signature).
+
+**What to implement if approved**  
+- Edit `src/mwl_estimator.py`: add `_ptp_check()` method and EMA state to `MwlEstimator.__init__()` / `.update()`.
+- No changes to calibration scripts or `norm_stats.json` format required.
+- Add `ptp_bad` and `ema_drift_magnitude` fields to the estimator output for offline audit.
+
+**Risk if not implemented**  
+- Artifact windows produce garbage P(HIGH) values that may incorrectly trigger adaptation level changes.
+- Slow calibration drift may permanently bias the classifier toward one class in longer participants.
+
+**Risk if implemented**  
+- PTP gate suppresses valid windows if threshold is too low (mitigated: 500 µV is well above clean-EEG P99).
+- EMA correction reduces workload sensitivity if τ is too short (mitigated: τ=20 min >> 8-min session length).
+
+**Files**  
+- Simulation scripts: `scripts/_tmp_ptp_ema_sim.py`, `scripts/_tmp_ptp_units_check.py`
+- Ruled-out alternatives: `scripts/_tmp_ea_potato_sim_pdry06.py`
+- Figure: `results/figures/ptp_ema_sim_mwl.png`

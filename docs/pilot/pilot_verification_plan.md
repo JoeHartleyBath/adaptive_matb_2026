@@ -183,7 +183,7 @@ Run `--mwl-adaptation` with the pilot's deployed model from Phase 5. Debrief the
   - Key internal checks: 0 cooldown violations (14.5 s threshold), schema correct.
 - Toggle count per session: flag if 0 (MWL never crossed threshold — model not discriminating in real time).
 - Signal quality: flag if >50% of audit ticks have quality < 0.5 (real-time estimation unreliable).
-- `scripts/analyse_adaptation_session.py` output written cleanly.
+- `scripts/analysis/analyse_adaptation_session.py` output written cleanly.
 - Qualitative debrief: could the participant notice the automation? Did it feel appropriate or jarring?
 
 ### N needed

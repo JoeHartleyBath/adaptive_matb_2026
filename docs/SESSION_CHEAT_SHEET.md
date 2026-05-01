@@ -31,6 +31,29 @@
 
 ---
 
+### 25 Hz environment check
+
+A 25 Hz electrical artifact (50 Hz mains half-harmonic) has been observed in several recordings.
+It sits in the middle of the beta band and directly contaminates the MWL model's most-selected
+features. It couples more strongly when electrode impedance is high.
+
+**Do this once before fitting the cap, while the net is soaking:**
+
+1. With the EEG amplifier on and eego streaming, open a fresh LabRecorder recording for ~30 s (no participant needed — just the amplifier idling).
+2. Power everything on as it will be during the session: both monitors, the task PC, your laptop if it will be open, chargers plugged in.
+3. After the session, run the sweep from the analysis PC to confirm the recording is clean:
+   ```
+   .\.venv\Scripts\python.exe scripts/_tmp_25hz_sweep_all_xdfs.py
+   ```
+   A `spike_p90 < 3.0` for that file means the environment is clean.
+4. If a spike is found, turn off equipment one item at a time (laptop charger, second monitor, overhead light dimmer) until the spike disappears. Note the culprit and keep it off during the session.
+
+> **The rest-baseline step also checks automatically.** If the 25 Hz spike is present in the
+> participant's rest recording, calibrate_participant.py will print a `WARNING: 25 Hz SPIKE`
+> banner in the terminal. Do not proceed past that point — re-record rest after fixing the source.
+
+---
+
 ### Hardware startup checklist
 
 Work through this list in order before the participant arrives.
@@ -38,6 +61,8 @@ Work through this list in order before the participant arrives.
 - [ ] Ethernet cable plugged into lab PC (required for EEG — without it, signal is very noisy)
 - [ ] ANTneuro eego software open; both amplifiers connected and battery level shown
 - [ ] LabRecorder.exe open (`C:\LabRecorder\LabRecorder.exe`); RCS indicator shows "Listening"
+- [ ] **Confirm both EEG data streams visible in LabRecorder** — click *Update* in LabRecorder's stream list; you must see **2 streams of type `EEG`** (one per amplifier, named `EE225-...-eego_laptop`) before proceeding. If only 1 or 0 appear: restart eego software, check USB cables.
+- [ ] **25 Hz environment check** — do this before fitting the cap (see box below)
 - [ ] EEG net placed in saline solution (see timing guide above)
 - [ ] Joystick plugged into USB port and detected by Windows
 - [ ] Polar H10 HR strap electrodes moistened with water
@@ -226,6 +251,20 @@ Double-click the **Full Session** icon, enter the same participant number, then 
 → Check both amplifiers are on (battery lights visible) and USB cables are connected.
 → Restart eego software.
 → If still failing after 2 attempts: call developer.
+
+**Session script prints EEG stream check failed before a calibration or condition run**
+→ The script checks both EEG streams are live immediately before each task launches. If this check fails mid-session, the streams have dropped since the last task.
+→ In eego software, check that both amplifiers show a live signal trace. If not:
+  1. Close eego, unplug both USB amplifier cables, wait 5 s, re-plug, reopen eego.
+  2. Confirm both amps show live traces in eego.
+  3. Press **R** in the session script to retry the stream check — do not press C.
+→ Do **not** press C (continue) — a run that launches without live EEG streams will record only task markers, not EEG data, and cannot be recovered.
+
+**EEG data file is very short (< 2 min) despite task completing fully**
+→ This means the EEG data streams dropped from LSL while LabRecorder was running. The task markers are recorded but the EEG time series is gone.
+→ The root cause is usually: Ethernet adapter entered power-saving mode (cuts the TCP stream carrying 500 Hz × 66ch × 2 amps), or eego lost its USB connection briefly.
+→ The affected XDF is **not recoverable** — the calibration or condition run must be repeated.
+→ To prevent recurrence: on the EEG laptop, set the Ethernet adapter's Power Management to **"Do not allow the computer to turn off this device to save power"** (Device Manager → Network Adapters → adapter Properties → Power Management tab). Also set the Power Plan to **High Performance**.
 
 ---
 

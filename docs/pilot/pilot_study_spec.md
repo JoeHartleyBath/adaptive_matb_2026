@@ -263,7 +263,7 @@ python src/python/verification/verify_xdf_alignment.py \
 ### Recording Stack
 
 - **EEG**: ANTneuro Waveguard → LSL outlet (via Eego)
-- **EDA**: Shimmer GSR3 → LSL outlet (via `scripts/stream_shimmer_eda.py`)
+- **EDA**: Shimmer GSR3 → LSL outlet (via `scripts/session/stream_shimmer_eda.py`)
 - **Markers**: OpenMATB → LSL outlet (via `labstreaminglayer` plugin)
 - **Recording**: LabRecorder captures all streams to single `.xdf` file
 
@@ -272,7 +272,7 @@ python src/python/verification/verify_xdf_alignment.py \
 1. Pair Shimmer GSR3 via Bluetooth (note COM port)
 2. Start EDA streamer:
    ```powershell
-   python scripts/stream_shimmer_eda.py --port COM5
+   python scripts/session/stream_shimmer_eda.py --port COM5
    ```
 3. Verify stream appears in LabRecorder (name: `ShimmerEDA`, type: `EDA`)
 4. Start LabRecorder recording

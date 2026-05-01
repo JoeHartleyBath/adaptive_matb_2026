@@ -15,3 +15,4 @@ Entry points for this repository’s decision logging.
 | ADR-0003 | Real-time EEG adaptation architecture | Accepted |
 | ADR-0004 | Calibration-based causal normalisation strategy | Accepted |
 | ADR-0005 | Session-level resting baseline refresh before adaptation | Accepted — 2026-03-27 |
+| ADR-0006 | SPACE-gated instruction timing in familiarisation scenario | Accepted — 2026-04-22 |

@@ -532,7 +532,7 @@ This run manifest must live outside git, under a configured external root (see `
 3. Compute participant-specific normalization statistics (mean, std) from baseline
 4. Optionally: run short calibration task (e.g., 1 block each of LOW/HIGH) to fit output scale/bias
 
-**Calibration script:** `scripts/calibrate_participant.py`
+**Calibration script:** `scripts/session/calibrate_participant.py`
 
 **Outputs:**
 - `{data_root}/calibration/{participant}/norm_stats.json`
@@ -756,7 +756,7 @@ mwl_estimate = model.predict(features_norm)
 ### PR 10: `feat(calib): add per-participant calibration protocol`
 
 **Files to add/change:**
-- `scripts/calibrate_participant.py` (new)
+- `scripts/session/calibrate_participant.py` (new)
 - `scenarios/calibration_baseline.txt` (new)
 - `docs/pilot/CALIBRATION_PROTOCOL_V0.md` (new)
 

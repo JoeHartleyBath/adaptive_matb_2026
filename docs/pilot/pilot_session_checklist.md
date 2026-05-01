@@ -74,9 +74,9 @@ The runner will:
 Fallback (manual control):
 
 ```powershell
-python scripts/control_labrecorder_rcs.py start-bids --participant P001 --session S001 --print-expected-path
+python scripts/session/control_labrecorder_rcs.py start-bids --participant P001 --session S001 --print-expected-path
 python src/python/run_openmatb.py --pilot1 --no-python-recorder --xdf-path <PATH_PRINTED_ABOVE> --eda-port COM5
-python scripts/control_labrecorder_rcs.py stop
+python scripts/session/control_labrecorder_rcs.py stop
 ```
 
 ---
@@ -117,7 +117,7 @@ C:\data\adaptive_matb\
 ### Add a new participant
 
 ```powershell
-python scripts/generate_participant_assignments.py \
+python scripts/generate_scenarios/generate_participant_assignments.py \
     --participant-ids P001 P002 P003 \
     --sequences SEQ1 SEQ2 SEQ3
 ```
