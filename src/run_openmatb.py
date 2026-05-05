@@ -46,8 +46,6 @@ os.environ["LSL_LOGLEVEL"] = "-3"
 # ---------------------------------------------------------------------------
 # Subprocess management (global state for crash-safe cleanup)
 # ---------------------------------------------------------------------------
-_eda_subprocess: Optional[subprocess.Popen] = None
-_hr_subprocess: Optional[subprocess.Popen] = None
 _lsl_recorder_subprocess: Optional[subprocess.Popen] = None
 _lsl_recording_path: Optional[Path] = None
 _mwl_subprocess: Optional[subprocess.Popen] = None
@@ -154,40 +152,6 @@ def _ensure_openmatb_runtime_dependencies(openmatb_dir: Path) -> None:
         ) from exc
 
 
-def _cleanup_eda_subprocess() -> None:
-    """Terminate EDA subprocess if running. Called via atexit or signal handlers."""
-    global _eda_subprocess
-    if _eda_subprocess is not None and _eda_subprocess.poll() is None:
-        print("Terminating EDA streamer subprocess...", file=sys.stderr)
-        try:
-            _eda_subprocess.terminate()
-            _eda_subprocess.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            print("EDA streamer did not terminate, killing...", file=sys.stderr)
-            _eda_subprocess.kill()
-            _eda_subprocess.wait()
-        except Exception as e:
-            print(f"Error cleaning up EDA subprocess: {e}", file=sys.stderr)
-        _eda_subprocess = None
-
-
-def _cleanup_hr_subprocess() -> None:
-    """Terminate HR streamer subprocess if running. Called via atexit or signal handlers."""
-    global _hr_subprocess
-    if _hr_subprocess is not None and _hr_subprocess.poll() is None:
-        print("Terminating HR streamer subprocess...", file=sys.stderr)
-        try:
-            _hr_subprocess.terminate()
-            _hr_subprocess.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            print("HR streamer did not terminate, killing...", file=sys.stderr)
-            _hr_subprocess.kill()
-            _hr_subprocess.wait()
-        except Exception as e:
-            print(f"Error cleaning up HR subprocess: {e}", file=sys.stderr)
-        _hr_subprocess = None
-
-
 def _cleanup_lsl_recorder_subprocess() -> None:
     """Terminate Python LSL recorder subprocess if running."""
     global _lsl_recorder_subprocess
@@ -248,8 +212,6 @@ def _cleanup_mwl_subprocess() -> None:
 def _signal_handler(signum, frame):
     """Handle SIGINT/SIGTERM by cleaning up subprocesses then re-raising."""
     _cleanup_mwl_subprocess()
-    _cleanup_eda_subprocess()
-    _cleanup_hr_subprocess()
     _cleanup_lsl_recorder_subprocess()
     _cleanup_labrecorder_rcs_recording()
     # Re-raise the signal to allow normal exit behavior
@@ -258,8 +220,6 @@ def _signal_handler(signum, frame):
 
 # Register cleanup handlers
 atexit.register(_cleanup_mwl_subprocess)
-atexit.register(_cleanup_eda_subprocess)
-atexit.register(_cleanup_hr_subprocess)
 atexit.register(_cleanup_lsl_recorder_subprocess)
 atexit.register(_cleanup_labrecorder_rcs_recording)
 signal.signal(signal.SIGINT, _signal_handler)
@@ -507,331 +467,6 @@ def _stop_labrecorder_xdf_recording_rcs(*, host: str, port: int, timeout_s: floa
     return {"stopped": True, "error": None}
 
 
-def _start_eda_streamer(
-    repo_root: Path,
-    eda_port: Optional[str],
-    eda_stream_name: str = "ShimmerEDA",
-    health_check_timeout: float = 15.0,
-    min_battery_pct: Optional[float] = None,
-    auto_port: bool = False,
-) -> dict:
-    """Start EDA streamer subprocess and verify LSL stream appears.
-
-    If min_battery_pct is set, runs a quick --probe-json before spawning the
-    full streamer and blocks if battery is below the threshold.
-
-    Returns:
-        dict with keys:
-            - started: bool
-            - pid: int or None
-            - stream_name: str
-            - stream_type: str
-            - battery_pct: float or None
-            - health_check_passed: bool
-            - error: str or None
-    """
-    global _eda_subprocess
-
-    result = {
-        "started": False,
-        "pid": None,
-        "stream_name": eda_stream_name,
-        "stream_type": "EDA",
-        "battery_pct": None,
-        "health_check_passed": False,
-        "error": None,
-    }
-
-    # Build command to run EDA streamer
-    streamer_script = repo_root / "scripts" / "stream_shimmer_eda.py"
-    if not streamer_script.exists():
-        result["error"] = f"EDA streamer script not found: {streamer_script}"
-        return result
-
-    # --- Battery pre-check ---
-    if min_battery_pct is not None:
-        if auto_port:
-            print("Probing Shimmer battery (auto-detecting port)...")
-            probe_cmd = [sys.executable, str(streamer_script), "--auto-port", "--probe-json"]
-        else:
-            print(f"Probing Shimmer battery (port {eda_port})...")
-            probe_cmd = [sys.executable, str(streamer_script), "--port", eda_port, "--probe-json"]
-        batt_info = _probe_device_battery(probe_cmd, timeout=45.0)
-        result["battery_pct"] = batt_info["battery_pct"]
-
-        if batt_info["ok"]:
-            batt = batt_info["battery_pct"]
-            if batt is not None:
-                level_str = f"{batt:.0f}%"
-                if batt < min_battery_pct:
-                    result["error"] = (
-                        f"Shimmer battery too low: {level_str} "
-                        f"(minimum required: {min_battery_pct:.0f}%). "
-                        f"Charge device before starting session."
-                    )
-                    return result
-                print(f"  Shimmer battery: {level_str}")
-                if batt < min_battery_pct + 10:
-                    print(
-                        f"  WARNING: Shimmer battery is low ({level_str}). "
-                        f"Consider charging before a long session.",
-                        file=sys.stderr,
-                    )
-            else:
-                print("  Shimmer battery level not reported by device.")
-        else:
-            print(
-                f"  WARNING: Could not read Shimmer battery: {batt_info.get('error', 'unknown')}",
-                file=sys.stderr,
-            )
-
-    if auto_port:
-        cmd = [
-            sys.executable,
-            str(streamer_script),
-            "--auto-port",
-            "--name", eda_stream_name,
-        ]
-    else:
-        cmd = [
-            sys.executable,
-            str(streamer_script),
-            "--port", eda_port,
-            "--name", eda_stream_name,
-        ]
-
-    print(f"Starting EDA streamer: {' '.join(cmd)}")
-
-    try:
-        _eda_subprocess = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        result["started"] = True
-        result["pid"] = _eda_subprocess.pid
-        print(f"EDA streamer started (PID: {_eda_subprocess.pid})")
-    except Exception as e:
-        result["error"] = f"Failed to start EDA streamer: {e}"
-        return result
-    
-    # Wait a moment for the subprocess to initialize
-    time.sleep(2.0)
-    
-    # Check if subprocess crashed immediately
-    if _eda_subprocess.poll() is not None:
-        stderr_output = _eda_subprocess.stderr.read() if _eda_subprocess.stderr else ""
-        result["error"] = f"EDA streamer exited immediately (code {_eda_subprocess.returncode}): {stderr_output}"
-        result["started"] = False
-        _eda_subprocess = None
-        return result
-    
-    # Health check: resolve LSL stream
-    print(f"Waiting for LSL stream '{eda_stream_name}' (timeout: {health_check_timeout}s)...")
-    
-    try:
-        import pylsl
-        
-        start_time = time.time()
-        streams = []
-        
-        while time.time() - start_time < health_check_timeout:
-            # Look for streams with matching name
-            streams = pylsl.resolve_byprop("name", eda_stream_name, timeout=2.0)
-            if streams:
-                break
-            
-            # Check if subprocess is still running
-            if _eda_subprocess.poll() is not None:
-                stderr_output = _eda_subprocess.stderr.read() if _eda_subprocess.stderr else ""
-                result["error"] = f"EDA streamer crashed during health check: {stderr_output}"
-                result["started"] = False
-                _eda_subprocess = None
-                return result
-        
-        if streams:
-            result["health_check_passed"] = True
-            print(f"✓ LSL stream '{eda_stream_name}' found ({len(streams)} stream(s))")
-        else:
-            result["error"] = f"LSL stream '{eda_stream_name}' not found within {health_check_timeout}s"
-            
-    except ImportError:
-        result["error"] = "pylsl not installed; cannot verify EDA stream"
-    except Exception as e:
-        result["error"] = f"LSL health check failed: {e}"
-    
-    return result
-
-
-def _stop_eda_streamer() -> None:
-    """Stop EDA streamer subprocess."""
-    _cleanup_eda_subprocess()
-
-
-def _start_hr_streamer(
-    repo_root: Path,
-    hr_device: Optional[str],
-    hr_name_prefix: str = "Polar",
-    health_check_timeout: float = 20.0,
-    enable_ecg: bool = True,
-    min_battery_pct: Optional[float] = None,
-) -> dict:
-    """Start Polar HR streamer subprocess and verify LSL streams appear.
-
-    If min_battery_pct is set, runs a quick --probe-json before spawning the
-    full streamer and blocks if battery is below the threshold.
-
-    Returns dict with keys:
-        started, pid, stream_names, battery_pct, health_check_passed, error.
-    """
-    global _hr_subprocess
-
-    # HR and RR appear immediately on BLE connection.  ECG requires an extra
-    # ~30 s of PMD protocol negotiation, so it is excluded from the health
-    # check and verified only during the preflight check (as advisory).
-    required_stream_names = [f"{hr_name_prefix}HR", f"{hr_name_prefix}RR"]
-    all_stream_names = required_stream_names.copy()
-    if enable_ecg:
-        all_stream_names.append(f"{hr_name_prefix}ECG")
-
-    result: dict = {
-        "started": False,
-        "pid": None,
-        "stream_names": all_stream_names,
-        "battery_pct": None,
-        "health_check_passed": False,
-        "error": None,
-    }
-
-    streamer_script = repo_root /  "scripts" / "session" / "stream_polar_hr.py"
-    if not streamer_script.exists():
-        result["error"] = f"HR streamer script not found: {streamer_script}"
-        return result
-
-    # --- Battery pre-check ---
-    if min_battery_pct is not None:
-        print(f"Probing Polar H10 battery...")
-        probe_cmd = [sys.executable, str(streamer_script), "--probe-json"]
-        if hr_device:
-            probe_cmd += ["--device", hr_device]
-        batt_info = _probe_device_battery(probe_cmd, timeout=30.0)
-        result["battery_pct"] = batt_info["battery_pct"]
-
-        if batt_info["ok"]:
-            batt = batt_info["battery_pct"]
-            if batt is not None:
-                level_str = f"{batt:.0f}%"
-                if batt < min_battery_pct:
-                    result["error"] = (
-                        f"Polar H10 battery too low: {level_str} "
-                        f"(minimum required: {min_battery_pct:.0f}%). "
-                        f"Charge device before starting session."
-                    )
-                    return result
-                print(f"  Polar H10 battery: {level_str}")
-                if batt < min_battery_pct + 10:
-                    print(
-                        f"  WARNING: Polar H10 battery is low ({level_str}). "
-                        f"Consider charging before a long session.",
-                        file=sys.stderr,
-                    )
-            else:
-                print("  Polar H10 battery level not reported by device.")
-        else:
-            print(
-                f"  WARNING: Could not read Polar H10 battery: {batt_info.get('error', 'unknown')}",
-                file=sys.stderr,
-            )
-
-    cmd = [
-        sys.executable,
-        str(streamer_script),
-        "--prefix", hr_name_prefix,
-    ]
-    if hr_device:
-        cmd += ["--device", hr_device]
-    if not enable_ecg:
-        cmd.append("--no-ecg")
-
-    print(f"Starting HR streamer: {' '.join(cmd)}")
-
-    try:
-        _hr_subprocess = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        result["started"] = True
-        result["pid"] = _hr_subprocess.pid
-        print(f"HR streamer started (PID: {_hr_subprocess.pid})")
-    except Exception as e:
-        result["error"] = f"Failed to start HR streamer: {e}"
-        return result
-
-    # Wait for BLE scan + connect (can take several seconds)
-    time.sleep(3.0)
-
-    if _hr_subprocess.poll() is not None:
-        stderr_output = _hr_subprocess.stderr.read() if _hr_subprocess.stderr else ""
-        result["error"] = f"HR streamer exited immediately (code {_hr_subprocess.returncode}): {stderr_output}"
-        result["started"] = False
-        _hr_subprocess = None
-        return result
-
-    # Health check: verify HR and RR appear on the LSL network (ECG excluded —
-    # it takes ~30 s of BLE PMD negotiation and is checked as advisory in preflight).
-    print(f"Waiting for LSL HR/RR streams (timeout: {health_check_timeout}s)...")
-
-    try:
-        import pylsl
-
-        start_time = time.time()
-        found_names: set[str] = set()
-
-        while time.time() - start_time < health_check_timeout:
-            if _hr_subprocess.poll() is not None:
-                stderr_output = _hr_subprocess.stderr.read() if _hr_subprocess.stderr else ""
-                result["error"] = f"HR streamer crashed during health check: {stderr_output}"
-                result["started"] = False
-                _hr_subprocess = None
-                return result
-
-            try:
-                discovered = pylsl.resolve_streams(wait_time=1.0)
-            except Exception:
-                discovered = []
-
-            for info in discovered:
-                if info.name() in required_stream_names:
-                    found_names.add(info.name())
-
-            if found_names >= set(required_stream_names):
-                break
-
-        if found_names >= set(required_stream_names):
-            result["health_check_passed"] = True
-            print(f"\u2713 HR/RR LSL streams confirmed: {sorted(found_names)}")
-        else:
-            missing = set(required_stream_names) - found_names
-            result["error"] = (
-                f"HR/RR streams not found within {health_check_timeout}s. "
-                f"Missing: {sorted(missing)}"
-            )
-
-    except ImportError:
-        result["error"] = "pylsl not installed; cannot verify HR streams"
-    except Exception as e:
-        result["error"] = f"LSL health check failed: {e}"
-
-    return result
-
-
-def _stop_hr_streamer() -> None:
-    """Stop HR streamer subprocess."""
-    _cleanup_hr_subprocess()
-
 
 def _start_python_lsl_recorder(
     *,
@@ -921,49 +556,6 @@ def _stop_python_lsl_recorder() -> Optional[Path]:
     path = _lsl_recording_path
     _lsl_recording_path = None
     return path
-
-
-def _probe_device_battery(cmd: list, timeout: float = 40.0) -> dict:
-    """Run a --probe-json subprocess and extract battery info from its JSON output.
-
-    Returns dict with keys: ok, battery_pct (float|None), firmware (str|None),
-    device_name_or_address (str|None), error (str|None).
-    """
-    result: dict = {
-        "ok": False,
-        "battery_pct": None,
-        "firmware": None,
-        "device_label": None,
-        "error": None,
-    }
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        # Parse first JSON-looking line from stdout
-        for line in proc.stdout.splitlines():
-            line = line.strip()
-            if line.startswith("{"):
-                data = json.loads(line)
-                result["ok"]         = bool(data.get("ok", False))
-                result["battery_pct"] = data.get("battery_pct")  # float or None
-                result["firmware"]    = data.get("firmware")
-                # Polar uses 'address', Shimmer uses 'port'
-                result["device_label"] = data.get("address") or data.get("port")
-                return result
-        rc = proc.returncode
-        stderr_snippet = (proc.stderr or "")[:500]
-        result["error"] = f"Probe exited with code {rc} and no JSON output. stderr: {stderr_snippet}"
-    except subprocess.TimeoutExpired:
-        result["error"] = f"Probe timed out after {timeout:.0f}s"
-    except json.JSONDecodeError as exc:
-        result["error"] = f"JSON parse error from probe: {exc}"
-    except Exception as exc:
-        result["error"] = str(exc)
-    return result
 
 
 def _audio_check_play(sounds_dir: Path) -> bool:
@@ -2712,69 +2304,17 @@ def main() -> int:
         help="Don't update participant_assignments.yaml.",
     )
 
-    # EDA streamer
-    parser.add_argument(
-        "--eda-port",
-        default=None,
-        help="Shimmer Bluetooth COM port (e.g., COM5). Use --eda-auto-port to detect automatically.",
-    )
-    parser.add_argument(
-        "--eda-auto-port",
-        action="store_true",
-        help="Auto-detect the Shimmer COM port by scanning available serial ports. Overrides --eda-port.",
-    )
+    # EDA / HR streams (started on EEG laptop; detected here via LSL over Ethernet)
     parser.add_argument(
         "--eda-stream-name",
         default="ShimmerEDA",
         help="LSL stream name for EDA data (default: ShimmerEDA).",
     )
     parser.add_argument(
-        "--eda-health-timeout",
-        type=float,
-        default=15.0,
-        help="Seconds to wait for EDA LSL stream before failing (default: 15).",
-    )
-    parser.add_argument(
-        "--eda-min-battery",
-        type=float,
-        default=25.0,
-        metavar="PCT",
-        help="Minimum Shimmer battery %% required to start a session (default: 25). Set 0 to disable.",
-    )
-
-    # Polar H10 HR streamer
-    parser.add_argument(
-        "--hr-device",
-        default=None,
-        metavar="ADDRESS",
-        help=(
-            "BLE address of the Polar H10 (e.g. XX:XX:XX:XX:XX:XX). "
-            "If omitted, the first Polar device found during BLE scanning is used."
-        ),
-    )
-    parser.add_argument(
         "--hr-name-prefix",
         default="Polar",
         metavar="PREFIX",
         help="LSL stream name prefix for HR streams (default: Polar → PolarHR, PolarRR, PolarECG).",
-    )
-    parser.add_argument(
-        "--hr-health-timeout",
-        type=float,
-        default=20.0,
-        help="Seconds to wait for Polar HR LSL streams before failing (default: 20). BLE scan can take ~10s.",
-    )
-    parser.add_argument(
-        "--hr-min-battery",
-        type=float,
-        default=20.0,
-        metavar="PCT",
-        help="Minimum Polar H10 battery %% required to start a session (default: 20). Set 0 to disable.",
-    )
-    parser.add_argument(
-        "--hr-ecg",
-        action="store_true",
-        help="Enable raw ECG stream from the Polar H10 (HR+RR only by default; ECG causes BLE disconnect on some firmware).",
     )
     parser.add_argument(
         "--skip-stream-check",
@@ -2949,8 +2489,6 @@ def main() -> int:
         return 2
     
     # Subprocess state
-    eda_info: Optional[dict] = None
-    hr_info:  Optional[dict] = None
     lsl_recorder_info: Optional[dict] = None
     labrecorder_info: Optional[dict] = None
     physiology_recording_path: Optional[Path] = Path(args.xdf_path) if args.xdf_path else None
@@ -2963,81 +2501,19 @@ def main() -> int:
     # Use --skip-stream-check only for automated/verification runs.
     run_preflight = not args.verification and not args.skip_stream_check
 
-    # Start EDA streamer before preflight so the stream check can verify it is live.
-    # Only auto-detect EDA port when --eda-auto-port is explicitly passed.
-    _eda_auto_port = getattr(args, "eda_auto_port", False)
-    if run_preflight and (args.eda_port or _eda_auto_port):
-        print("\n" + "=" * 60)
-        print("Starting EDA streamer before preflight checks...")
-        print("=" * 60)
-
-        eda_info = _start_eda_streamer(
-            repo_root=repo_root,
-            eda_port=args.eda_port,
-            eda_stream_name=args.eda_stream_name,
-            health_check_timeout=args.eda_health_timeout,
-            min_battery_pct=args.eda_min_battery if args.eda_min_battery > 0 else None,
-            auto_port=_eda_auto_port,
-        )
-
-        if not eda_info["health_check_passed"]:
-            print(f"\n[!] EDA streamer did not start: {eda_info.get('error', 'unknown error')}", file=sys.stderr)
-            print("    EDA will appear as NOT FOUND in preflight — use [r] to retry after fixing.", file=sys.stderr)
-            _stop_eda_streamer()
-        else:
-            print(f"EDA streamer ready (PID: {eda_info['pid']}, stream: {eda_info['stream_name']})")
-    elif run_preflight:
-        print("\n[!] --eda-port not provided — EDA streamer will not be started and EDA checks will be skipped.")
-
-    # Same for HR streamer: start before preflight so the check can verify live streams.
+    # EDA and HR streamers run on the EEG laptop and arrive via LSL over Ethernet.
+    # The preflight check below verifies they are visible on the network.
     if run_preflight:
-        print("\n" + "=" * 60)
-        print("Starting Polar HR streamer before preflight checks...")
-        print("=" * 60)
-
-        hr_info = _start_hr_streamer(
-            repo_root=repo_root,
-            hr_device=args.hr_device,
-            hr_name_prefix=args.hr_name_prefix,
-            health_check_timeout=args.hr_health_timeout,
-            enable_ecg=getattr(args, 'hr_ecg', False),
-            min_battery_pct=args.hr_min_battery if args.hr_min_battery > 0 else None,
-        )
-
-        if not hr_info["health_check_passed"]:
-            print(f"\n[!] HR streamer did not start: {hr_info.get('error', 'unknown error')}", file=sys.stderr)
-            print("    HR/RR will appear as NOT FOUND in preflight — use [r] to retry after fixing.", file=sys.stderr)
-            _stop_hr_streamer()
-        else:
-            print(f"HR streamer ready (PID: {hr_info['pid']}, streams: {hr_info['stream_names']})")
-
-    if run_preflight:
-        # Build battery data (structured: label, pct, warn_below)
-        _battery_data: list[dict] = []
-        if eda_info is not None:
-            _battery_data.append({
-                "label": "Shimmer EDA",
-                "pct": eda_info.get("battery_pct"),
-                "warn_below": args.eda_min_battery + 10.0,
-            })
-        if hr_info is not None:
-            _battery_data.append({
-                "label": "Polar H10",
-                "pct": hr_info.get("battery_pct"),
-                "warn_below": args.hr_min_battery + 10.0,
-            })
-
         if not _run_preflight_checks(
             check_eeg=True,
-            check_eda=eda_info is not None,
-            check_hr=hr_info is not None,
+            check_eda=True,
+            check_hr=True,
             check_joystick=not getattr(args, "skip_joystick_check", False),
             eeg_stream_type=args.eeg_stream_type,
             eeg_stream_count=args.eeg_stream_count,
             eda_stream_name=args.eda_stream_name,
             hr_stream_prefix=args.hr_name_prefix,
             timeout=5.0,
-            battery_data=_battery_data or None,
             extra_required_streams=extra_required_streams or None,
         ):
             print("Session cancelled by user.", file=sys.stderr)

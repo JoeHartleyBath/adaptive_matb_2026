@@ -237,8 +237,7 @@ if ($StaircaseOnly) {
     $ScriptArgs = @(
         $ScriptPath,
         "--participant", $ParticipantID,
-        "--labrecorder-rcs",
-        "--eda-auto-port"
+        "--labrecorder-rcs"
     )
     if ($Phase -gt 1) {
         $ScriptArgs += "--start-phase"

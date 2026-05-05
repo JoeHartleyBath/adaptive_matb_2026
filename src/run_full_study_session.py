@@ -354,8 +354,6 @@ def _openmatb_base_cmd(ctx: dict) -> list[str]:
         cmd += ["--skip-stream-check"]
     if ctx["labrecorder_rcs"]:
         cmd += ["--labrecorder-rcs"]
-    if ctx.get("eda_auto_port"):
-        cmd += ["--eda-auto-port"]
     return cmd
 
 
@@ -553,7 +551,7 @@ def phase_staircase(ctx: dict) -> None:
     ]
     # Strip physiology/recording flags — sensors are not fitted during staircase.
     # --pilot1 enforces a physiology artifact check at run end; remove it entirely.
-    cmd = [a for a in cmd if a not in ("--labrecorder-rcs", "--pilot1", "--eda-auto-port")]
+    cmd = [a for a in cmd if a not in ("--labrecorder-rcs", "--pilot1")]
     result = _run(cmd, "Staircase calibration", allow_fail=True)
 
     # Extract d_final from the staircase session CSV regardless of exit code.
@@ -574,7 +572,7 @@ def phase_staircase(ctx: dict) -> None:
                 f"  This is expected if post-run checks require physiology data.\n"
                 f"  You can continue from Phase 3 with:\n"
                 f"    python src/run_full_study_session.py --participant {ctx['pid']}"
-                f" --labrecorder-rcs --eda-auto-port --post-phase-verify --start-phase 3"
+                f" --labrecorder-rcs --post-phase-verify --start-phase 3"
             )
     except Exception as exc:
         print(f"\n  ERROR: Could not extract d_final from staircase CSV: {exc}")
@@ -1551,10 +1549,6 @@ def main() -> int:
         help="Fast-forward speed (only with --verification).",
     )
     parser.add_argument(
-        "--eda-auto-port", action="store_true",
-        help="Auto-detect the Shimmer COM port (passes --eda-auto-port to run_openmatb.py).",
-    )
-    parser.add_argument(
         "--skip-stream-check", action="store_true",
         help="Skip preflight LSL stream checks (passes --skip-stream-check to run_openmatb.py).",
     )
@@ -1732,7 +1726,6 @@ def main() -> int:
         "adaptation_first": adaptation_first,
         "condition_order": condition_order,
         "labrecorder_rcs": args.labrecorder_rcs,
-        "eda_auto_port": args.eda_auto_port,
         "skip_stream_check": args.skip_stream_check,
         "skip_smoke_test": args.skip_smoke_test,
         "verification": args.verification,
