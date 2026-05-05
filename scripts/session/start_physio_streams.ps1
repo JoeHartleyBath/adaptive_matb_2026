@@ -14,25 +14,23 @@ if (-not $PythonExe) {
 }
 
 Write-Host ""
-Write-Host "  ================================================" -ForegroundColor Cyan
-Write-Host "  EEG LAPTOP — PHYSIO STREAM LAUNCHER" -ForegroundColor Cyan
-Write-Host "  ================================================" -ForegroundColor Cyan
+Write-Host "EEG LAPTOP -- PHYSIO STREAM LAUNCHER" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Starting Shimmer EDA streamer in background..." -ForegroundColor White
+Write-Host "Starting Shimmer EDA streamer in background..." -ForegroundColor White
 $EdaJob = Start-Process $PythonExe -ArgumentList "`"$EdaScript`" --auto-port" -NoNewWindow -PassThru
-Write-Host "  EDA streamer PID: $($EdaJob.Id)" -ForegroundColor Green
+Write-Host "EDA streamer PID: $($EdaJob.Id)" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Starting Polar H10 HR streamer (foreground)..." -ForegroundColor White
-Write-Host "  Press Ctrl+C to stop both streamers." -ForegroundColor DarkGray
+Write-Host "Starting Polar H10 HR streamer (foreground)..." -ForegroundColor White
+Write-Host "Press Ctrl+C to stop both streamers." -ForegroundColor Gray
 Write-Host ""
 
 try {
     & $PythonExe $HrScript
 } finally {
     Write-Host ""
-    Write-Host "  Stopping EDA streamer..." -ForegroundColor Yellow
+    Write-Host "Stopping EDA streamer..." -ForegroundColor Yellow
     if (-not $EdaJob.HasExited) {
         Stop-Process -Id $EdaJob.Id -Force -ErrorAction SilentlyContinue
     }
-    Write-Host "  Streamers stopped." -ForegroundColor Yellow
+    Write-Host "Streamers stopped." -ForegroundColor Yellow
 }
