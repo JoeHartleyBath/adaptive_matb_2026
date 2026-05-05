@@ -2729,6 +2729,10 @@ def main() -> int:
             print(f" - {name}", file=sys.stderr)
         return 2
 
+    # EDA and HR streamers run remotely on the EEG laptop; they are never started by this process.
+    eda_info: dict | None = None
+    hr_info: dict | None = None
+
     # Start LabRecorder (XDF) recording via RCS for Pilot 1 when no physiology artifact is provided.
     if args.pilot1 and physiology_recording_path is None and args.labrecorder_rcs:
         print("\n" + "=" * 60)
@@ -2781,7 +2785,7 @@ def main() -> int:
             participant=participant,
             session=session,
             eda_stream_name=args.eda_stream_name,
-            hr_stream_prefix=args.hr_name_prefix if (hr_info and hr_info.get("started")) else None,
+            hr_stream_prefix=args.hr_name_prefix,  # stream is always remote (EEG laptop)
         )
 
         if not lsl_recorder_info["started"]:
